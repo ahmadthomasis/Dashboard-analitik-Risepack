@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, request, session, redirect, u
 from functools import wraps
 import mysql.connector
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,17 +18,24 @@ def get_db():
         database=os.getenv('DB_NAME'),
         user=os.getenv('DB_USER'),
         password=os.getenv('DB_PASSWORD'),
-        connection_timeout=30
+        connection_timeout=60,
+        autocommit=True,
     )
 
 def query(sql, params=None):
     conn = get_db()
-    cursor = conn.cursor(dictionary=True)
-    cursor.execute(sql, params or ())
-    rows = cursor.fetchall()
-    cursor.close()
-    conn.close()
-    return rows
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SET SESSION wait_timeout=300")
+        cursor.execute("SET SESSION interactive_timeout=300")
+        cursor.execute("SET SESSION net_read_timeout=300")
+        cursor.execute("SET SESSION net_write_timeout=300")
+        cursor.execute(sql, params or ())
+        rows = cursor.fetchall()
+        cursor.close()
+        return rows
+    finally:
+        conn.close()
 
 # ─── Auth ──────────────────────────────────────────────────────────────────────
 USERS = {
@@ -70,8 +77,8 @@ def index():
 @app.route('/api/filters')
 @login_required
 def api_filters():
-    pics     = query("SELECT DISTINCT PIC FROM view_salesorder WHERE PIC IS NOT NULL ORDER BY PIC")
-    divs     = query("SELECT DISTINCT sub_division FROM view_salesorder WHERE sub_division IS NOT NULL ORDER BY sub_division")
+    pics = query("SELECT DISTINCT PIC FROM view_salesorder WHERE PIC IS NOT NULL ORDER BY PIC")
+    divs = query("SELECT DISTINCT sub_division FROM view_salesorder WHERE sub_division IS NOT NULL ORDER BY sub_division")
     return jsonify({
         'pics': [r['PIC'] for r in pics],
         'sub_divisions': [r['sub_division'] for r in divs]
@@ -81,7 +88,7 @@ def api_filters():
 @app.route('/api/kpi')
 @login_required
 def api_kpi():
-    bulan  = request.args.get('bulan')   # format: YYYY-MM
+    bulan  = request.args.get('bulan')
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
 
@@ -89,35 +96,35 @@ def api_kpi():
 
     sql = f"""
         SELECT
-            COUNT(DISTINCT order_key)                                        AS total_order,
-            SUM(CASE WHEN status_deal='Deal' THEN total_harga ELSE 0 END)    AS total_omzet,
-            SUM(CASE WHEN status_deal='Deal' THEN modal_sales ELSE 0 END)    AS total_modal,
+            COUNT(DISTINCT order_key)                                            AS total_order,
+            SUM(CASE WHEN status_deal='Deal' THEN total_harga ELSE 0 END)        AS total_omzet,
+            SUM(CASE WHEN status_deal='Deal' THEN modal_sales ELSE 0 END)        AS total_modal,
             SUM(CASE WHEN status_deal='Deal' THEN (total_harga - modal_sales) ELSE 0 END) AS total_margin,
-            COUNT(DISTINCT CASE WHEN sumber='Repeat Order' THEN order_key END) AS total_repeat,
+            COUNT(DISTINCT CASE WHEN sumber='Repeat Order' THEN order_key END)   AS total_repeat,
             COUNT(DISTINCT CASE WHEN sumber != 'Repeat Order' THEN order_key END) AS total_new,
-            COUNT(DISTINCT CASE WHEN status_deal='Deal' THEN order_key END)  AS total_deal
+            COUNT(DISTINCT CASE WHEN status_deal='Deal' THEN order_key END)      AS total_deal
         FROM view_salesorder
         {where}
     """
     row = query(sql, params)[0]
 
-    omzet  = row['total_omzet']  or 0
-    modal  = row['total_modal']  or 0
-    margin = row['total_margin'] or 0
-    deal   = row['total_deal']   or 0
-    order  = row['total_order']  or 1
+    omzet  = float(row['total_omzet']  or 0)
+    modal  = float(row['total_modal']  or 0)
+    margin = float(row['total_margin'] or 0)
+    deal   = int(row['total_deal']     or 0)
+    order  = int(row['total_order']    or 1)
 
     return jsonify({
-        'total_omzet':      omzet,
-        'total_modal':      modal,
-        'total_margin':     margin,
-        'persen_margin':    round(margin / omzet * 100, 1) if omzet else 0,
-        'total_order':      row['total_order'],
-        'total_deal':       deal,
-        'total_repeat':     row['total_repeat'] or 0,
-        'total_new':        row['total_new'] or 0,
-        'closing_rate':     round(deal / order * 100, 1) if order else 0,
-        'persen_repeat':    round((row['total_repeat'] or 0) / deal * 100, 1) if deal else 0,
+        'total_omzet':   omzet,
+        'total_modal':   modal,
+        'total_margin':  margin,
+        'persen_margin': round(margin / omzet * 100, 1) if omzet else 0,
+        'total_order':   order,
+        'total_deal':    deal,
+        'total_repeat':  int(row['total_repeat'] or 0),
+        'total_new':     int(row['total_new']    or 0),
+        'closing_rate':  round(deal / order * 100, 1) if order else 0,
+        'persen_repeat': round(int(row['total_repeat'] or 0) / deal * 100, 1) if deal else 0,
     })
 
 # ─── API: Trend Omzet Bulanan ──────────────────────────────────────────────────
@@ -128,9 +135,8 @@ def api_trend_omzet():
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
 
-    extra = []
-    params = [tahun]
-    if pic:    extra.append("AND PIC = %s");         params.append(pic)
+    extra, params = [], [tahun]
+    if pic:    extra.append("AND PIC = %s");          params.append(pic)
     if divisi: extra.append("AND sub_division = %s"); params.append(divisi)
 
     sql = f"""
@@ -146,7 +152,7 @@ def api_trend_omzet():
         ORDER BY bulan
     """
     rows = query(sql, params)
-    return jsonify(rows)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 # ─── API: Top Sales Rep ────────────────────────────────────────────────────────
 @app.route('/api/top-sales')
@@ -154,22 +160,25 @@ def api_trend_omzet():
 def api_top_sales():
     bulan  = request.args.get('bulan')
     divisi = request.args.get('divisi')
-    where, params = build_where(bulan, None, divisi)
+    pic    = request.args.get('pic')
+    where, params = build_where(bulan, pic, divisi)
+    cond = where.replace('WHERE', 'AND') if where else ''
 
     sql = f"""
         SELECT
             PIC,
-            COUNT(DISTINCT order_key)  AS total_order,
-            SUM(total_harga)           AS total_omzet,
-            SUM(total_harga - modal_sales) AS total_margin
+            COUNT(DISTINCT order_key)            AS total_order,
+            SUM(total_harga)                     AS total_omzet,
+            SUM(total_harga - modal_sales)        AS total_margin
         FROM view_salesorder
         WHERE status_deal = 'Deal' AND PIC IS NOT NULL
-        {where.replace('WHERE','AND') if where else ''}
+        {cond}
         GROUP BY PIC
         ORDER BY total_omzet DESC
         LIMIT 10
     """
-    return jsonify(query(sql, params))
+    rows = query(sql, params)
+    return jsonify([{**r, 'total_omzet': float(r['total_omzet'] or 0), 'total_margin': float(r['total_margin'] or 0)} for r in rows])
 
 # ─── API: Sales by Sumber ──────────────────────────────────────────────────────
 @app.route('/api/sales-by-sumber')
@@ -179,15 +188,17 @@ def api_sales_by_sumber():
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     where, params = build_where(bulan, pic, divisi)
+    cond = where.replace('WHERE', 'AND') if where else ''
 
     sql = f"""
         SELECT sumber, COUNT(DISTINCT order_key) AS total, SUM(total_harga) AS omzet
         FROM view_salesorder
         WHERE status_deal = 'Deal'
-        {where.replace('WHERE','AND') if where else ''}
+        {cond}
         GROUP BY sumber ORDER BY omzet DESC
     """
-    return jsonify(query(sql, params))
+    rows = query(sql, params)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 # ─── API: Status Produksi ──────────────────────────────────────────────────────
 @app.route('/api/produksi')
@@ -197,6 +208,7 @@ def api_produksi():
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     where, params = build_where(bulan, pic, divisi)
+    cond = where.replace('WHERE', 'AND') if where else ''
 
     sql = f"""
         SELECT
@@ -205,7 +217,7 @@ def api_produksi():
             COUNT(CASE WHEN status_produksi='Belum SPK' THEN 1 END) AS belum_spk
         FROM view_salesorder
         WHERE status_deal = 'Deal'
-        {where.replace('WHERE','AND') if where else ''}
+        {cond}
     """
     return jsonify(query(sql, params)[0])
 
@@ -217,15 +229,17 @@ def api_kategori():
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     where, params = build_where(bulan, pic, divisi)
+    cond = where.replace('WHERE', 'AND') if where else ''
 
     sql = f"""
         SELECT kategori_produksi, SUM(total_harga) AS omzet, COUNT(DISTINCT order_key) AS total
         FROM view_salesorder
         WHERE status_deal = 'Deal' AND kategori_produksi IS NOT NULL
-        {where.replace('WHERE','AND') if where else ''}
+        {cond}
         GROUP BY kategori_produksi ORDER BY omzet DESC
     """
-    return jsonify(query(sql, params))
+    rows = query(sql, params)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 # ─── Helper ────────────────────────────────────────────────────────────────────
 def build_where(bulan, pic, divisi):
