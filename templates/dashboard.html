@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Risepack Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e5e7eb; }
+
+/* NAV */
+nav {
+  background: #1a1d27;
+  border-bottom: 1px solid #2a2d3a;
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  position: sticky; top: 0; z-index: 100;
+}
+.nav-logo { font-size: 20px; font-weight: 700; color: #fff; }
+.nav-logo span { color: #f97316; }
+.nav-right { display: flex; align-items: center; gap: 16px; }
+.nav-right a { color: #9ca3af; font-size: 14px; text-decoration: none; }
+.nav-right a:hover { color: #fff; }
+
+/* FILTERS */
+.filters {
+  background: #1a1d27;
+  border-bottom: 1px solid #2a2d3a;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.filters label { font-size: 13px; color: #9ca3af; }
+select, .btn-filter {
+  padding: 8px 14px;
+  background: #0f1117;
+  border: 1px solid #2a2d3a;
+  border-radius: 8px;
+  color: #e5e7eb;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+select:focus { border-color: #f97316; }
+.btn-filter {
+  background: #f97316;
+  border-color: #f97316;
+  color: #fff;
+  font-weight: 600;
+}
+.btn-filter:hover { background: #ea6c0a; }
+
+/* MAIN */
+main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+/* KPI CARDS */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.kpi-card {
+  background: #1a1d27;
+  border: 1px solid #2a2d3a;
+  border-radius: 12px;
+  padding: 20px;
+}
+.kpi-card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+.kpi-card .value { font-size: 26px; font-weight: 700; color: #fff; }
+.kpi-card .value.accent { color: #f97316; }
+.kpi-card .sub { font-size: 12px; color: #9ca3af; margin-top: 6px; }
+
+/* CHARTS GRID */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.charts-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.chart-card {
+  background: #1a1d27;
+  border: 1px solid #2a2d3a;
+  border-radius: 12px;
+  padding: 20px;
+}
+.chart-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+.chart-wrap { position: relative; height: 260px; }
+
+/* TOP SALES TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; padding: 10px 14px; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #2a2d3a; }
+td { padding: 12px 14px; border-bottom: 1px solid #1e2130; color: #d1d5db; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #1e2130; }
+.rank { color: #f97316; font-weight: 700; }
+
+/* LOADING */
+.loading { color: #6b7280; font-size: 14px; text-align: center; padding: 40px; }
+
+@media (max-width: 768px) {
+  .charts-grid, .charts-grid-3 { grid-template-columns: 1fr; }
+  main { padding: 16px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">Rise<span>pack</span> Dashboard</div>
+  <div class="nav-right">
+    <span id="last-update" style="font-size:12px;color:#6b7280"></span>
+    <a href="/logout">Keluar</a>
+  </div>
+</nav>
+
+<div class="filters">
+  <label>Bulan:</label>
+  <input type="month" id="f-bulan" style="padding:8px 14px;background:#0f1117;border:1px solid #2a2d3a;border-radius:8px;color:#e5e7eb;font-size:13px;outline:none;">
+  <label>PIC:</label>
+  <select id="f-pic"><option value="">Semua PIC</option></select>
+  <label>Divisi:</label>
+  <select id="f-divisi"><option value="">Semua Divisi</option></select>
+  <button class="btn-filter" onclick="loadAll()">Terapkan</button>
+  <button onclick="resetFilter()" style="padding:8px 14px;background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;color:#9ca3af;font-size:13px;cursor:pointer;">Reset</button>
+</div>
+
+<main>
+
+  <!-- KPI -->
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="loading">Memuat data...</div>
+  </div>
+
+  <!-- Chart Trend + Sumber -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Trend Omzet Bulanan</h3>
+      <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Sales by Sumber</h3>
+      <div class="chart-wrap"><canvas id="chart-sumber"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Chart Kategori + Produksi + Top Sales -->
+  <div class="charts-grid-3">
+    <div class="chart-card">
+      <h3>Kategori Produk</h3>
+      <div class="chart-wrap"><canvas id="chart-kategori"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Status Produksi</h3>
+      <div class="chart-wrap"><canvas id="chart-produksi"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Top 10 Sales Rep</h3>
+      <div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+let charts = {};
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  // Set bulan ke bulan ini
+  const now = new Date();
+  document.getElementById('f-bulan').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  // Load filter options
+  const f = await fetch('/api/filters').then(r => r.json());
+  const picSel = document.getElementById('f-pic');
+  f.pics.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; picSel.appendChild(o); });
+  const divSel = document.getElementById('f-divisi');
+  f.sub_divisions.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); });
+
+  loadAll();
+});
+
+function getParams() {
+  const p = new URLSearchParams();
+  const bulan = document.getElementById('f-bulan').value;
+  const pic   = document.getElementById('f-pic').value;
+  const divisi = document.getElementById('f-divisi').value;
+  if (bulan)  p.set('bulan', bulan);
+  if (pic)    p.set('pic', pic);
+  if (divisi) p.set('divisi', divisi);
+  return p.toString();
+}
+
+function resetFilter() {
+  const now = new Date();
+  document.getElementById('f-bulan').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('f-pic').value = '';
+  document.getElementById('f-divisi').value = '';
+  loadAll();
+}
+
+async function loadAll() {
+  const q = getParams();
+  document.getElementById('last-update').textContent = 'Memuat...';
+  await Promise.all([loadKpi(q), loadTrend(), loadSumber(q), loadKategori(q), loadProduksi(q), loadTopSales(q)]);
+  document.getElementById('last-update').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+}
+
+// ─── KPI ──────────────────────────────────────────────────────────────────────
+async function loadKpi(q) {
+  const d = await fetch('/api/kpi?' + q).then(r => r.json());
+  document.getElementById('kpi-grid').innerHTML = `
+    ${kpiCard('Total Omzet', formatRp(d.total_omzet), 'accent', 'Periode terpilih')}
+    ${kpiCard('Total Modal', formatRp(d.total_modal), '', '')}
+    ${kpiCard('Margin', formatRp(d.total_margin), '', d.persen_margin + '% dari omzet')}
+    ${kpiCard('Total Order', d.total_order, '', d.total_deal + ' deal closing')}
+    ${kpiCard('Closing Rate', d.closing_rate + '%', '', 'dari total order masuk')}
+    ${kpiCard('Repeat Order', d.total_repeat, '', d.persen_repeat + '% dari deal')}
+    ${kpiCard('New Customer', d.total_new, '', 'order baru periode ini')}
+  `;
+}
+
+function kpiCard(label, value, cls, sub) {
+  return `<div class="kpi-card">
+    <div class="label">${label}</div>
+    <div class="value ${cls}">${value}</div>
+    ${sub ? `<div class="sub">${sub}</div>` : ''}
+  </div>`;
+}
+
+// ─── Trend ────────────────────────────────────────────────────────────────────
+async function loadTrend() {
+  const tahun = document.getElementById('f-bulan').value?.slice(0,4) || new Date().getFullYear();
+  const pic   = document.getElementById('f-pic').value;
+  const divisi = document.getElementById('f-divisi').value;
+  const q = new URLSearchParams({tahun});
+  if (pic) q.set('pic', pic);
+  if (divisi) q.set('divisi', divisi);
+
+  const rows = await fetch('/api/trend-omzet?' + q).then(r => r.json());
+
+  // Pivot data
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const cats = [...new Set(rows.map(r => r.kategori_produksi))];
+  const colors = ['#f97316','#3b82f6','#10b981','#8b5cf6','#ef4444','#f59e0b','#06b6d4'];
+
+  const datasets = cats.map((cat, i) => ({
+    label: cat,
+    data: months.map((_, mi) => {
+      const r = rows.find(r => r.kategori_produksi === cat && parseInt(r.bulan?.slice(5)) === mi+1);
+      return r ? r.omzet : 0;
+    }),
+    borderColor: colors[i % colors.length],
+    backgroundColor: colors[i % colors.length] + '20',
+    tension: 0.4, fill: false, pointRadius: 4
+  }));
+
+  renderChart('chart-trend', 'line', { labels: months, datasets }, {
+    scales: { y: { ticks: { callback: v => formatRpShort(v), color: '#6b7280' }, grid: { color: '#1e2130' } },
+              x: { ticks: { color: '#6b7280' }, grid: { color: '#1e2130' } } }
+  });
+}
+
+// ─── Sumber ───────────────────────────────────────────────────────────────────
+async function loadSumber(q) {
+  const rows = await fetch('/api/sales-by-sumber?' + q).then(r => r.json());
+  const colors = ['#f97316','#3b82f6','#10b981','#8b5cf6','#ef4444'];
+  renderChart('chart-sumber', 'doughnut', {
+    labels: rows.map(r => r.sumber),
+    datasets: [{ data: rows.map(r => r.omzet), backgroundColor: colors, borderWidth: 0 }]
+  }, { plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 12 } } } } });
+}
+
+// ─── Kategori ─────────────────────────────────────────────────────────────────
+async function loadKategori(q) {
+  const rows = await fetch('/api/kategori?' + q).then(r => r.json());
+  renderChart('chart-kategori', 'bar', {
+    labels: rows.map(r => r.kategori_produksi),
+    datasets: [{ label: 'Omzet', data: rows.map(r => r.omzet),
+      backgroundColor: '#f97316', borderRadius: 6 }]
+  }, {
+    indexAxis: 'y',
+    scales: { x: { ticks: { callback: v => formatRpShort(v), color: '#6b7280' }, grid: { color: '#1e2130' } },
+              y: { ticks: { color: '#9ca3af' }, grid: { display: false } } }
+  });
+}
+
+// ─── Produksi ─────────────────────────────────────────────────────────────────
+async function loadProduksi(q) {
+  const d = await fetch('/api/produksi?' + q).then(r => r.json());
+  renderChart('chart-produksi', 'doughnut', {
+    labels: ['Berjalan', 'Tuntas', 'Belum SPK'],
+    datasets: [{ data: [d.berjalan, d.tuntas, d.belum_spk],
+      backgroundColor: ['#3b82f6','#10b981','#f59e0b'], borderWidth: 0 }]
+  }, { plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 12 } } } } });
+}
+
+// ─── Top Sales ────────────────────────────────────────────────────────────────
+async function loadTopSales(q) {
+  const rows = await fetch('/api/top-sales?' + q).then(r => r.json());
+  const html = `<table>
+    <thead><tr><th>#</th><th>Nama</th><th>Order</th><th>Omzet</th></tr></thead>
+    <tbody>${rows.map((r,i) => `<tr>
+      <td class="rank">${i+1}</td>
+      <td>${r.PIC}</td>
+      <td>${r.total_order}</td>
+      <td>${formatRpShort(r.total_omzet)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+  document.getElementById('tbl-top-sales').innerHTML = html;
+}
+
+// ─── Chart Helper ─────────────────────────────────────────────────────────────
+function renderChart(id, type, data, options = {}) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type, data,
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#9ca3af', font: { size: 12 } } } },
+      ...options
+    }
+  });
+}
+
+// ─── Format ───────────────────────────────────────────────────────────────────
+function formatRp(n) {
+  if (!n) return 'Rp 0';
+  if (n >= 1e9) return 'Rp ' + (n/1e9).toFixed(1) + 'M';
+  if (n >= 1e6) return 'Rp ' + (n/1e6).toFixed(1) + 'jt';
+  return 'Rp ' + Number(n).toLocaleString('id-ID');
+}
+function formatRpShort(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'M';
+  if (n >= 1e6) return (n/1e6).toFixed(0) + 'jt';
+  return n;
+}
+</script>
+</body>
+</html>
