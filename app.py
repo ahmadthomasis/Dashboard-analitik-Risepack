@@ -66,7 +66,6 @@ def logout():
 def index():
     return render_template('dashboard.html')
 
-# ─── Helper WHERE ──────────────────────────────────────────────────────────────
 def build_where(bulan, pic, divisi):
     clauses, params = [], []
     if bulan:
@@ -76,19 +75,18 @@ def build_where(bulan, pic, divisi):
         clauses.append("o.name = %s")
         params.append(pic)
     if divisi:
-        clauses.append("t.sub_division = %s")
+        clauses.append("""o.order_key IN (
+            SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s
+        )""")
         params.append(divisi)
     cond = (' AND ' + ' AND '.join(clauses)) if clauses else ''
     return cond, params
 
-# Join base query
-JOIN = """
+BASE = """
     FROM order_risepack o
-    LEFT JOIN tb_orders t ON o.order_key = t.order_key
     WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
 """
 
-# ─── API: Filters ──────────────────────────────────────────────────────────────
 @app.route('/api/filters')
 @login_required
 def api_filters():
@@ -99,7 +97,6 @@ def api_filters():
         'sub_divisions': [r['sub_division'] for r in divs]
     })
 
-# ─── API: KPI ──────────────────────────────────────────────────────────────────
 @app.route('/api/kpi')
 @login_required
 def api_kpi():
@@ -117,7 +114,7 @@ def api_kpi():
             COUNT(DISTINCT CASE WHEN o.sumber='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_repeat,
             COUNT(DISTINCT CASE WHEN o.sumber!='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_new,
             COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.order_key END) AS total_deal
-        {JOIN} {cond}
+        {BASE} {cond}
     """
     row = query(sql, params)[0]
     omzet  = float(row['total_omzet']  or 0)
@@ -135,7 +132,6 @@ def api_kpi():
         'persen_repeat': round(repeat/deal*100,1) if deal else 0,
     })
 
-# ─── API: Trend ────────────────────────────────────────────────────────────────
 @app.route('/api/trend-omzet')
 @login_required
 def api_trend_omzet():
@@ -143,21 +139,19 @@ def api_trend_omzet():
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     cond, params = build_where(None, pic, divisi)
-    params = [tahun] + params
 
     sql = f"""
         SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
                o.kategori_produksi, SUM(o.total_harga) AS omzet
-        {JOIN}
+        {BASE}
         AND o.status_deal='Deal'
-        AND YEAR(o.tgl_omzet_realtime)=%s
+        AND YEAR(o.tgl_omzet_realtime) = %s
         {cond}
         GROUP BY bulan, o.kategori_produksi ORDER BY bulan
     """
-    rows = query(sql, params)
+    rows = query(sql, params + [tahun])
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
-# ─── API: Top Sales ────────────────────────────────────────────────────────────
 @app.route('/api/top-sales')
 @login_required
 def api_top_sales():
@@ -171,7 +165,7 @@ def api_top_sales():
                COUNT(DISTINCT o.order_key) AS total_order,
                SUM(o.total_harga) AS total_omzet,
                SUM(o.total_harga-o.modal_sales) AS total_margin
-        {JOIN}
+        {BASE}
         AND o.status_deal='Deal' AND o.name IS NOT NULL AND o.name!=''
         {cond}
         GROUP BY o.name ORDER BY total_omzet DESC LIMIT 10
@@ -179,7 +173,6 @@ def api_top_sales():
     rows = query(sql, params)
     return jsonify([{**r, 'total_omzet': float(r['total_omzet'] or 0), 'total_margin': float(r['total_margin'] or 0)} for r in rows])
 
-# ─── API: Sales by Sumber ──────────────────────────────────────────────────────
 @app.route('/api/sales-by-sumber')
 @login_required
 def api_sales_by_sumber():
@@ -190,7 +183,7 @@ def api_sales_by_sumber():
 
     sql = f"""
         SELECT o.sumber, COUNT(DISTINCT o.order_key) AS total, SUM(o.total_harga) AS omzet
-        {JOIN}
+        {BASE}
         AND o.status_deal='Deal'
         {cond}
         GROUP BY o.sumber ORDER BY omzet DESC
@@ -198,7 +191,6 @@ def api_sales_by_sumber():
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
-# ─── API: Produksi ─────────────────────────────────────────────────────────────
 @app.route('/api/produksi')
 @login_required
 def api_produksi():
@@ -209,16 +201,15 @@ def api_produksi():
 
     sql = f"""
         SELECT
-            COUNT(CASE WHEN t.status_order='Berjalan'  THEN 1 END) AS berjalan,
-            COUNT(CASE WHEN t.status_order='Selesai Produksi' THEN 1 END) AS tuntas,
-            COUNT(CASE WHEN t.status_order='Belum SPK' THEN 1 END) AS belum_spk
-        {JOIN}
+            COUNT(CASE WHEN o.status_order='Berjalan' THEN 1 END) AS berjalan,
+            COUNT(CASE WHEN o.status_order='Selesai Produksi' THEN 1 END) AS tuntas,
+            COUNT(CASE WHEN o.status_order='Belum SPK' THEN 1 END) AS belum_spk
+        {BASE}
         AND o.status_deal='Deal'
         {cond}
     """
     return jsonify(query(sql, params)[0])
 
-# ─── API: Kategori ─────────────────────────────────────────────────────────────
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
@@ -229,7 +220,7 @@ def api_kategori():
 
     sql = f"""
         SELECT o.kategori_produksi, SUM(o.total_harga) AS omzet, COUNT(DISTINCT o.order_key) AS total
-        {JOIN}
+        {BASE}
         AND o.status_deal='Deal' AND o.kategori_produksi IS NOT NULL
         {cond}
         GROUP BY o.kategori_produksi ORDER BY omzet DESC
