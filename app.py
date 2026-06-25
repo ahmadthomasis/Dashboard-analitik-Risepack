@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from functools import wraps
 import mysql.connector
+from mysql.connector import pooling
 import os
 from datetime import datetime
 from dotenv import load_dotenv
@@ -10,19 +11,22 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'risepack-dashboard-secret-2025')
 
-def get_db():
-    return mysql.connector.connect(
-        host=os.getenv('DB_HOST'),
-        port=int(os.getenv('DB_PORT', 3306)),
-        database=os.getenv('DB_NAME'),
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        connection_timeout=60,
-        autocommit=True,
-    )
+# ─── Connection Pool ───────────────────────────────────────────────────────────
+pool = pooling.MySQLConnectionPool(
+    pool_name="risepack_pool",
+    pool_size=3,
+    pool_reset_session=True,
+    host=os.getenv('DB_HOST'),
+    port=int(os.getenv('DB_PORT', 3306)),
+    database=os.getenv('DB_NAME'),
+    user=os.getenv('DB_USER'),
+    password=os.getenv('DB_PASSWORD'),
+    connection_timeout=60,
+    autocommit=True,
+)
 
 def query(sql, params=None):
-    conn = get_db()
+    conn = pool.get_connection()
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(sql, params or ())
@@ -32,6 +36,7 @@ def query(sql, params=None):
     finally:
         conn.close()
 
+# ─── Auth ──────────────────────────────────────────────────────────────────────
 USERS = {
     os.getenv('MANAGER_EMAIL', 'manager@risepack.id'): os.getenv('MANAGER_PASSWORD', 'risepack2025')
 }
@@ -66,32 +71,40 @@ def logout():
 def index():
     return render_template('dashboard.html')
 
-def build_where(bulan, pic):
+# ─── Helper WHERE ──────────────────────────────────────────────────────────────
+def build_where(bulan, pic, divisi):
     clauses, params = [], []
     if bulan:
         clauses.append("DATE_FORMAT(tgl_omzet_realtime,'%Y-%m') = %s")
         params.append(bulan)
     if pic:
-        clauses.append("name = %s")
+        clauses.append("PIC = %s")
         params.append(pic)
+    if divisi:
+        clauses.append("sub_division = %s")
+        params.append(divisi)
     cond = (' AND ' + ' AND '.join(clauses)) if clauses else ''
     return cond, params
 
+# ─── API: Filters ──────────────────────────────────────────────────────────────
 @app.route('/api/filters')
 @login_required
 def api_filters():
-    pics = query("SELECT DISTINCT name AS PIC FROM order_risepack WHERE name IS NOT NULL AND name != '' ORDER BY name")
+    pics = query("SELECT DISTINCT PIC FROM view_salesorder WHERE PIC IS NOT NULL AND PIC != '' ORDER BY PIC")
+    divs = query("SELECT DISTINCT sub_division FROM view_salesorder WHERE sub_division IS NOT NULL ORDER BY sub_division")
     return jsonify({
         'pics': [r['PIC'] for r in pics],
-        'sub_divisions': []
+        'sub_divisions': [r['sub_division'] for r in divs]
     })
 
+# ─── API: KPI ──────────────────────────────────────────────────────────────────
 @app.route('/api/kpi')
 @login_required
 def api_kpi():
-    bulan = request.args.get('bulan')
-    pic   = request.args.get('pic')
-    cond, params = build_where(bulan, pic)
+    bulan  = request.args.get('bulan')
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(bulan, pic, divisi)
 
     sql = f"""
         SELECT
@@ -102,7 +115,7 @@ def api_kpi():
             COUNT(DISTINCT CASE WHEN sumber='Repeat Order' AND status_deal='Deal' THEN order_key END) AS total_repeat,
             COUNT(DISTINCT CASE WHEN sumber != 'Repeat Order' AND status_deal='Deal' THEN order_key END) AS total_new,
             COUNT(DISTINCT CASE WHEN status_deal='Deal' THEN order_key END) AS total_deal
-        FROM order_risepack
+        FROM view_salesorder
         WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL)
         {cond}
     """
@@ -126,88 +139,105 @@ def api_kpi():
         'persen_repeat': round(repeat / deal * 100, 1) if deal else 0,
     })
 
+# ─── API: Trend ────────────────────────────────────────────────────────────────
 @app.route('/api/trend-omzet')
 @login_required
 def api_trend_omzet():
-    tahun = request.args.get('tahun', str(datetime.now().year))
-    pic   = request.args.get('pic')
+    tahun  = request.args.get('tahun', str(datetime.now().year))
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
     extra, params = ["AND YEAR(tgl_omzet_realtime) = %s"], [tahun]
-    if pic:
-        extra.append("AND name = %s")
-        params.append(pic)
+    if pic:    extra.append("AND PIC = %s");          params.append(pic)
+    if divisi: extra.append("AND sub_division = %s"); params.append(divisi)
+
     sql = f"""
         SELECT DATE_FORMAT(tgl_omzet_realtime,'%Y-%m') AS bulan,
                kategori_produksi, SUM(total_harga) AS omzet
-        FROM order_risepack
-        WHERE status_deal='Deal' AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
+        FROM view_salesorder
+        WHERE status_deal='Deal'
+          AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
           {' '.join(extra)}
         GROUP BY bulan, kategori_produksi ORDER BY bulan
     """
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
+# ─── API: Top Sales ────────────────────────────────────────────────────────────
 @app.route('/api/top-sales')
 @login_required
 def api_top_sales():
-    bulan = request.args.get('bulan')
-    pic   = request.args.get('pic')
-    cond, params = build_where(bulan, pic)
+    bulan  = request.args.get('bulan')
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(bulan, pic, divisi)
+
     sql = f"""
-        SELECT name AS PIC,
+        SELECT PIC,
                COUNT(DISTINCT order_key) AS total_order,
                SUM(total_harga) AS total_omzet,
                SUM(total_harga - modal_sales) AS total_margin
-        FROM order_risepack
-        WHERE status_deal='Deal' AND name IS NOT NULL AND name != ''
+        FROM view_salesorder
+        WHERE status_deal='Deal' AND PIC IS NOT NULL AND PIC != ''
           AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
           {cond}
-        GROUP BY name ORDER BY total_omzet DESC LIMIT 10
+        GROUP BY PIC ORDER BY total_omzet DESC LIMIT 10
     """
     rows = query(sql, params)
     return jsonify([{**r, 'total_omzet': float(r['total_omzet'] or 0), 'total_margin': float(r['total_margin'] or 0)} for r in rows])
 
+# ─── API: Sales by Sumber ──────────────────────────────────────────────────────
 @app.route('/api/sales-by-sumber')
 @login_required
 def api_sales_by_sumber():
-    bulan = request.args.get('bulan')
-    pic   = request.args.get('pic')
-    cond, params = build_where(bulan, pic)
+    bulan  = request.args.get('bulan')
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(bulan, pic, divisi)
+
     sql = f"""
         SELECT sumber, COUNT(DISTINCT order_key) AS total, SUM(total_harga) AS omzet
-        FROM order_risepack
-        WHERE status_deal='Deal' AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
+        FROM view_salesorder
+        WHERE status_deal='Deal'
+          AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
           {cond}
         GROUP BY sumber ORDER BY omzet DESC
     """
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
+# ─── API: Produksi ─────────────────────────────────────────────────────────────
 @app.route('/api/produksi')
 @login_required
 def api_produksi():
-    bulan = request.args.get('bulan')
-    pic   = request.args.get('pic')
-    cond, params = build_where(bulan, pic)
+    bulan  = request.args.get('bulan')
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(bulan, pic, divisi)
+
     sql = f"""
         SELECT
-            COUNT(CASE WHEN status_order='Berjalan' THEN 1 END) AS berjalan,
-            COUNT(CASE WHEN status_order='Selesai Produksi' THEN 1 END) AS tuntas,
-            COUNT(CASE WHEN status_order='Belum SPK' THEN 1 END) AS belum_spk
-        FROM order_risepack
-        WHERE status_deal='Deal' AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
+            COUNT(CASE WHEN status_produksi='Berjalan'  THEN 1 END) AS berjalan,
+            COUNT(CASE WHEN status_produksi='Tuntas'    THEN 1 END) AS tuntas,
+            COUNT(CASE WHEN status_produksi='Belum SPK' THEN 1 END) AS belum_spk
+        FROM view_salesorder
+        WHERE status_deal='Deal'
+          AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
           {cond}
     """
     return jsonify(query(sql, params)[0])
 
+# ─── API: Kategori ─────────────────────────────────────────────────────────────
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
-    bulan = request.args.get('bulan')
-    pic   = request.args.get('pic')
-    cond, params = build_where(bulan, pic)
+    bulan  = request.args.get('bulan')
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(bulan, pic, divisi)
+
     sql = f"""
         SELECT kategori_produksi, SUM(total_harga) AS omzet, COUNT(DISTINCT order_key) AS total
-        FROM order_risepack
+        FROM view_salesorder
         WHERE status_deal='Deal' AND kategori_produksi IS NOT NULL
           AND (flag_dummy != 'dummy' OR flag_dummy IS NULL)
           {cond}
