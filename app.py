@@ -283,28 +283,26 @@ def api_kategori():
 @app.route('/api/_schema')
 @login_required
 def api_schema():
-    """Tampilkan kolom order_risepack + contoh isi kolom teks.
+    """Daftar kolom order_risepack + beberapa baris contoh (1 koneksi, ringan).
     Dipakai sekali untuk identifikasi kolom produk & customer, lalu dihapus."""
-    cols = query("SHOW COLUMNS FROM order_risepack")
-    out = []
-    for c in cols:
-        field = c['Field']
-        ctype = str(c['Type'])
-        info = {'kolom': field, 'tipe': ctype}
-        if any(t in ctype.lower() for t in ['char', 'text', 'enum']):
-            try:
-                dc = query(f"SELECT COUNT(DISTINCT `{field}`) AS c FROM order_risepack")[0]['c']
-                vals = query(
-                    f"SELECT `{field}` AS v, COUNT(*) AS n FROM order_risepack "
-                    f"WHERE `{field}` IS NOT NULL AND `{field}` != '' "
-                    f"GROUP BY `{field}` ORDER BY n DESC LIMIT 8"
-                )
-                info['jumlah_nilai_unik'] = dc
-                info['contoh_nilai'] = [f"{v['v']} ({v['n']})" for v in vals]
-            except Exception as e:
-                info['error'] = str(e)
-        out.append(info)
-    return jsonify(out)
+    conn = mysql.connector.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SHOW COLUMNS FROM order_risepack")
+        cols = [r['Field'] for r in cur.fetchall()]
+        cur.execute(
+            "SELECT * FROM order_risepack "
+            "WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL) "
+            "LIMIT 6"
+        )
+        rows = cur.fetchall()
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    # ubah semua nilai ke string supaya aman di-JSON-kan
+    sample = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in rows]
+    return jsonify({'kolom': cols, 'contoh_baris': sample})
 
 
 if __name__ == '__main__':
