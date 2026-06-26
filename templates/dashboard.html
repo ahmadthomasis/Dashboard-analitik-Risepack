@@ -3,179 +3,202 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Risepack Dashboard</title>
+<title>Risepack Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f1117; color: #e5e7eb; }
+:root{
+  --bg:#f4f5f7;
+  --surface:#ffffff;
+  --border:#e6e8ec;
+  --border-strong:#d6d9df;
+  --ink:#161a22;
+  --ink-2:#5a616e;
+  --ink-3:#8a909c;
+  --brand:#f97316;
+  --brand-soft:#fff2e8;
+  --blue:#2563eb;
+  --green:#059669;
+  --violet:#7c3aed;
+  --red:#dc2626;
+  --amber:#d97706;
+  --shadow:0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+  --shadow-md:0 4px 12px rgba(16,24,40,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+}
 
-/* NAV */
-nav {
-  background: #1a1d27;
-  border-bottom: 1px solid #2a2d3a;
-  padding: 0 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 60px;
-  position: sticky; top: 0; z-index: 100;
+/* ── NAV ─────────────────────────────────────────── */
+nav{
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;display:flex;align-items:center;justify-content:space-between;
+  height:62px;position:sticky;top:0;z-index:100;
 }
-.nav-logo { font-size: 20px; font-weight: 700; color: #fff; }
-.nav-logo span { color: #f97316; }
-.nav-right { display: flex; align-items: center; gap: 16px; }
-.nav-right a { color: #9ca3af; font-size: 14px; text-decoration: none; }
-.nav-right a:hover { color: #fff; }
+.nav-logo{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--ink);display:flex;align-items:center;gap:10px;}
+.nav-logo .mark{width:30px;height:30px;border-radius:8px;background:var(--brand);display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;}
+.nav-logo span{color:var(--brand);}
+.nav-logo small{font-weight:500;font-size:12px;color:var(--ink-3);margin-left:4px;letter-spacing:0;}
+.nav-right{display:flex;align-items:center;gap:18px;}
+.nav-right #last-update{font-size:12px;color:var(--ink-3);}
+.nav-right a{color:var(--ink-2);font-size:13px;font-weight:500;text-decoration:none;padding:7px 14px;border:1px solid var(--border);border-radius:8px;}
+.nav-right a:hover{color:var(--ink);border-color:var(--border-strong);}
 
-/* FILTERS */
-.filters {
-  background: #1a1d27;
-  border-bottom: 1px solid #2a2d3a;
-  padding: 14px 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+/* ── FILTERS ─────────────────────────────────────── */
+.filters{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:14px 28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
-.filters label { font-size: 13px; color: #9ca3af; }
-select, .btn-filter {
-  padding: 8px 14px;
-  background: #0f1117;
-  border: 1px solid #2a2d3a;
-  border-radius: 8px;
-  color: #e5e7eb;
-  font-size: 13px;
-  cursor: pointer;
-  outline: none;
+.filters label{font-size:12px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+select,input[type=month],.btn-filter,.btn-reset{
+  padding:9px 14px;background:var(--surface);border:1px solid var(--border-strong);
+  border-radius:9px;color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer;outline:none;
 }
-select:focus { border-color: #f97316; }
-.btn-filter {
-  background: #f97316;
-  border-color: #f97316;
-  color: #fff;
-  font-weight: 600;
-}
-.btn-filter:hover { background: #ea6c0a; }
+select:focus,input[type=month]:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);}
+.btn-filter{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;}
+.btn-filter:hover{background:#ea6c0a;}
+.btn-reset{background:var(--surface);color:var(--ink-2);}
+.btn-reset:hover{border-color:var(--border-strong);color:var(--ink);}
 
-/* MAIN */
-main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+/* ── MAIN ────────────────────────────────────────── */
+main{padding:28px;max-width:1440px;margin:0 auto;}
+.section-head{display:flex;align-items:baseline;gap:12px;margin:6px 0 16px;}
+.section-head h2{font-size:16px;font-weight:700;letter-spacing:-.01em;}
+.section-head .hint{font-size:12px;color:var(--ink-3);}
+.section-head:not(:first-child){margin-top:30px;}
 
-/* KPI CARDS */
-.kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+/* ── KPI CARDS ───────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:16px;}
+.kpi-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:18px 18px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;
 }
-.kpi-card {
-  background: #1a1d27;
-  border: 1px solid #2a2d3a;
-  border-radius: 12px;
-  padding: 20px;
-}
-.kpi-card .label { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
-.kpi-card .value { font-size: 26px; font-weight: 700; color: #fff; }
-.kpi-card .value.accent { color: #f97316; }
-.kpi-card .sub { font-size: 12px; color: #9ca3af; margin-top: 6px; }
+.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--border-strong));}
+.kpi-card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.kpi-card .label{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+.kpi-card .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft,#f1f2f4);color:var(--accent,var(--ink-2));font-size:15px;}
+.kpi-card .value{font-size:25px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1.15;}
+.kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:7px;display:flex;align-items:center;gap:6px;}
+.pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1f2f4;color:var(--ink-2);}
+.pill.good{background:#e7f6ee;color:var(--green);}
+.pill.warn{background:#fdf0e1;color:var(--amber);}
 
-/* CHARTS GRID */
-.charts-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.charts-grid-3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.chart-card {
-  background: #1a1d27;
-  border: 1px solid #2a2d3a;
-  border-radius: 12px;
-  padding: 20px;
-}
-.chart-card h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 16px;
-}
-.chart-wrap { position: relative; height: 260px; }
+/* accent variants */
+.a-brand{--accent:var(--brand);--accent-soft:var(--brand-soft);}
+.a-blue{--accent:var(--blue);--accent-soft:#eaf0fe;}
+.a-green{--accent:var(--green);--accent-soft:#e7f6ee;}
+.a-violet{--accent:var(--violet);--accent-soft:#f1ebfd;}
+.a-amber{--accent:var(--amber);--accent-soft:#fdf0e1;}
+.a-slate{--accent:#475569;--accent-soft:#eef1f5;}
 
-/* TOP SALES TABLE */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { text-align: left; padding: 10px 14px; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #2a2d3a; }
-td { padding: 12px 14px; border-bottom: 1px solid #1e2130; color: #d1d5db; }
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: #1e2130; }
-.rank { color: #f97316; font-weight: 700; }
-
-/* LOADING */
-.loading { color: #6b7280; font-size: 14px; text-align: center; padding: 40px; }
-
-@media (max-width: 768px) {
-  .charts-grid, .charts-grid-3 { grid-template-columns: 1fr; }
-  main { padding: 16px; }
+/* ── CHARTS ──────────────────────────────────────── */
+.charts-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;}
+.charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1.1fr;gap:16px;}
+.chart-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:14px;
+  padding:20px;box-shadow:var(--shadow);
 }
+.chart-card h3{font-size:13px;font-weight:700;color:var(--ink);letter-spacing:-.01em;margin-bottom:4px;}
+.chart-card .ch-sub{font-size:12px;color:var(--ink-3);margin-bottom:16px;}
+.chart-wrap{position:relative;height:268px;}
+
+/* ── TABLE ───────────────────────────────────────── */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:9px 12px;color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;border-bottom:1px solid var(--border);}
+th.num,td.num{text-align:right;}
+td{padding:11px 12px;border-bottom:1px solid var(--border);color:var(--ink);}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#fafbfc;}
+.rank{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#f1f2f4;color:var(--ink-2);font-weight:700;font-size:12px;}
+tbody tr:nth-child(1) .rank{background:var(--brand);color:#fff;}
+tbody tr:nth-child(2) .rank{background:#fde2cd;color:#b45309;}
+tbody tr:nth-child(3) .rank{background:#fdf0e1;color:#b45309;}
+
+.loading{color:var(--ink-3);font-size:13px;text-align:center;padding:40px;}
+
+@media (max-width:900px){.charts-grid,.charts-grid-3{grid-template-columns:1fr;}main{padding:18px;}}
 </style>
 </head>
 <body>
 
 <nav>
-  <div class="nav-logo">Rise<span>pack</span> Dashboard</div>
+  <div class="nav-logo">
+    <span class="mark">R</span>
+    <span style="color:var(--ink)">Rise<span>pack</span></span>
+    <small>Analytics</small>
+  </div>
   <div class="nav-right">
-    <span id="last-update" style="font-size:12px;color:#6b7280"></span>
+    <span id="last-update"></span>
     <a href="/logout">Keluar</a>
   </div>
 </nav>
 
 <div class="filters">
-  <label>Bulan:</label>
-  <input type="month" id="f-bulan" style="padding:8px 14px;background:#0f1117;border:1px solid #2a2d3a;border-radius:8px;color:#e5e7eb;font-size:13px;outline:none;">
-  <label>PIC:</label>
+  <label>Bulan</label>
+  <input type="month" id="f-bulan">
+  <label>PIC</label>
   <select id="f-pic"><option value="">Semua PIC</option></select>
-  <label>Divisi:</label>
+  <label>Divisi</label>
   <select id="f-divisi"><option value="">Semua Divisi</option></select>
   <button class="btn-filter" onclick="loadAll()">Terapkan</button>
-  <button onclick="resetFilter()" style="padding:8px 14px;background:#1a1d27;border:1px solid #2a2d3a;border-radius:8px;color:#9ca3af;font-size:13px;cursor:pointer;">Reset</button>
+  <button class="btn-reset" onclick="resetFilter()">Reset</button>
 </div>
 
 <main>
 
-  <!-- KPI -->
-  <div class="kpi-grid" id="kpi-grid">
+  <!-- ── SALES OVERVIEW ── -->
+  <div class="section-head" style="margin-top:0">
+    <h2>Sales Overview</h2>
+    <span class="hint">Ringkasan finansial periode terpilih</span>
+  </div>
+  <div class="kpi-grid" id="kpi-fin">
     <div class="loading">Memuat data...</div>
   </div>
 
-  <!-- Chart Trend + Sumber -->
+  <!-- ── REPEAT & CONVERSION ── -->
+  <div class="section-head">
+    <h2>Repeat Order &amp; Konversi Customer</h2>
+    <span class="hint">Closing rate, repeat order, dan akuisisi customer baru</span>
+  </div>
+  <div class="kpi-grid" id="kpi-cust"></div>
+
+  <!-- ── TREND + SUMBER ── -->
+  <div class="section-head"><h2>Analisis Penjualan</h2></div>
   <div class="charts-grid">
     <div class="chart-card">
       <h3>Trend Omzet Bulanan</h3>
+      <div class="ch-sub">Omzet per kategori produk sepanjang tahun</div>
       <div class="chart-wrap"><canvas id="chart-trend"></canvas></div>
     </div>
     <div class="chart-card">
       <h3>Sales by Sumber</h3>
+      <div class="ch-sub">Kontribusi omzet per channel</div>
       <div class="chart-wrap"><canvas id="chart-sumber"></canvas></div>
     </div>
   </div>
 
-  <!-- Chart Kategori + Produksi + Top Sales -->
-  <div class="charts-grid-3">
+  <!-- ── KATEGORI + PRODUKSI + TOP SALES ── -->
+  <div class="charts-grid-3" style="margin-top:16px">
     <div class="chart-card">
       <h3>Kategori Produk</h3>
+      <div class="ch-sub">Omzet per kategori</div>
       <div class="chart-wrap"><canvas id="chart-kategori"></canvas></div>
     </div>
     <div class="chart-card">
       <h3>Status Produksi</h3>
+      <div class="ch-sub">Distribusi order berdasarkan status</div>
       <div class="chart-wrap"><canvas id="chart-produksi"></canvas></div>
     </div>
     <div class="chart-card">
       <h3>Top 10 Sales Rep</h3>
+      <div class="ch-sub">Berdasarkan omzet</div>
       <div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div>
     </div>
   </div>
@@ -183,16 +206,17 @@ tr:hover td { background: #1e2130; }
 </main>
 
 <script>
-// ─── State ────────────────────────────────────────────────────────────────────
+// ─── State ───────────────────────────────────────────────
 let charts = {};
+const PALETTE = ['#f97316','#2563eb','#059669','#7c3aed','#dc2626','#d97706','#0891b2'];
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.color = '#5a616e';
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  // Set bulan ke bulan ini
   const now = new Date();
   document.getElementById('f-bulan').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
 
-  // Load filter options
   const f = await fetch('/api/filters').then(r => r.json());
   const picSel = document.getElementById('f-pic');
   f.pics.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; picSel.appendChild(o); });
@@ -204,8 +228,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function getParams() {
   const p = new URLSearchParams();
-  const bulan = document.getElementById('f-bulan').value;
-  const pic   = document.getElementById('f-pic').value;
+  const bulan  = document.getElementById('f-bulan').value;
+  const pic    = document.getElementById('f-pic').value;
   const divisi = document.getElementById('f-divisi').value;
   if (bulan)  p.set('bulan', bulan);
   if (pic)    p.set('pic', pic);
@@ -223,48 +247,56 @@ function resetFilter() {
 
 async function loadAll() {
   const q = getParams();
-  document.getElementById('last-update').textContent = 'Memuat...';
+  document.getElementById('last-update').textContent = 'Memuat…';
   await Promise.all([loadKpi(q), loadTrend(), loadSumber(q), loadKategori(q), loadProduksi(q), loadTopSales(q)]);
-  document.getElementById('last-update').textContent = 'Update: ' + new Date().toLocaleTimeString('id-ID');
+  document.getElementById('last-update').textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-// ─── KPI ──────────────────────────────────────────────────────────────────────
+// ─── KPI ─────────────────────────────────────────────────
 async function loadKpi(q) {
   const d = await fetch('/api/kpi?' + q).then(r => r.json());
-  document.getElementById('kpi-grid').innerHTML = `
-    ${kpiCard('Total Omzet', formatRp(d.total_omzet), 'accent', 'Periode terpilih')}
-    ${kpiCard('Total Modal', formatRp(d.total_modal), '', '')}
-    ${kpiCard('Margin', formatRp(d.total_margin), '', d.persen_margin + '% dari omzet')}
-    ${kpiCard('Total Order', d.total_order, '', d.total_deal + ' deal closing')}
-    ${kpiCard('Closing Rate', d.closing_rate + '%', '', 'dari total order masuk')}
-    ${kpiCard('Repeat Order', d.total_repeat, '', d.persen_repeat + '% dari deal')}
-    ${kpiCard('New Customer', d.total_new, '', 'order baru periode ini')}
+
+  // Sales Overview (finansial)
+  document.getElementById('kpi-fin').innerHTML = `
+    ${kpiCard('a-brand','💰','Total Omzet', formatRp(d.total_omzet), `<span class="pill">Periode terpilih</span>`)}
+    ${kpiCard('a-slate','📦','Total Modal', formatRp(d.total_modal), '')}
+    ${kpiCard('a-green','📈','Margin', formatRp(d.total_margin), `<span class="pill ${marginClass(d.persen_margin)}">${d.persen_margin}% dari omzet</span>`)}
+    ${kpiCard('a-blue','🧾','Total Order', fmtInt(d.total_order), `<span class="pill">${fmtInt(d.total_deal)} deal closing</span>`)}
+  `;
+
+  // Repeat & Conversion (customer)
+  document.getElementById('kpi-cust').innerHTML = `
+    ${kpiCard('a-violet','🎯','Closing Rate', d.closing_rate + '%', `<span class="pill ${rateClass(d.closing_rate)}">dari total order masuk</span>`)}
+    ${kpiCard('a-amber','🔁','Repeat Order', fmtInt(d.total_repeat), `<span class="pill">${d.persen_repeat}% dari deal</span>`)}
+    ${kpiCard('a-green','✨','New Customer', fmtInt(d.total_new), `<span class="pill">order baru periode ini</span>`)}
   `;
 }
 
-function kpiCard(label, value, cls, sub) {
-  return `<div class="kpi-card">
-    <div class="label">${label}</div>
-    <div class="value ${cls}">${value}</div>
+function kpiCard(accent, icon, label, value, sub) {
+  return `<div class="kpi-card ${accent}">
+    <div class="top">
+      <div class="label">${label}</div>
+      <div class="ic">${icon}</div>
+    </div>
+    <div class="value">${value}</div>
     ${sub ? `<div class="sub">${sub}</div>` : ''}
   </div>`;
 }
+function marginClass(p){ p=parseFloat(p); return p>=25?'good':(p<15?'warn':''); }
+function rateClass(p){ p=parseFloat(p); return p>=40?'good':(p<20?'warn':''); }
 
-// ─── Trend ────────────────────────────────────────────────────────────────────
+// ─── Trend ───────────────────────────────────────────────
 async function loadTrend() {
-  const tahun = document.getElementById('f-bulan').value?.slice(0,4) || new Date().getFullYear();
-  const pic   = document.getElementById('f-pic').value;
+  const tahun  = document.getElementById('f-bulan').value?.slice(0,4) || new Date().getFullYear();
+  const pic    = document.getElementById('f-pic').value;
   const divisi = document.getElementById('f-divisi').value;
   const q = new URLSearchParams({tahun});
   if (pic) q.set('pic', pic);
   if (divisi) q.set('divisi', divisi);
 
   const rows = await fetch('/api/trend-omzet?' + q).then(r => r.json());
-
-  // Pivot data
   const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
   const cats = [...new Set(rows.map(r => r.kategori_produksi))];
-  const colors = ['#f97316','#3b82f6','#10b981','#8b5cf6','#ef4444','#f59e0b','#06b6d4'];
 
   const datasets = cats.map((cat, i) => ({
     label: cat,
@@ -272,67 +304,68 @@ async function loadTrend() {
       const r = rows.find(r => r.kategori_produksi === cat && parseInt(r.bulan?.slice(5)) === mi+1);
       return r ? r.omzet : 0;
     }),
-    borderColor: colors[i % colors.length],
-    backgroundColor: colors[i % colors.length] + '20',
-    tension: 0.4, fill: false, pointRadius: 4
+    borderColor: PALETTE[i % PALETTE.length],
+    backgroundColor: PALETTE[i % PALETTE.length] + '22',
+    tension: 0.35, fill: false, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2
   }));
 
   renderChart('chart-trend', 'line', { labels: months, datasets }, {
-    scales: { y: { ticks: { callback: v => formatRpShort(v), color: '#6b7280' }, grid: { color: '#1e2130' } },
-              x: { ticks: { color: '#6b7280' }, grid: { color: '#1e2130' } } }
+    plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:7, padding:14, font:{size:12} } } },
+    scales: {
+      y: { ticks: { callback: v => formatRpShort(v) }, grid: { color:'#eef0f3' }, border:{display:false} },
+      x: { ticks:{}, grid: { display:false } }
+    }
   });
 }
 
-// ─── Sumber ───────────────────────────────────────────────────────────────────
+// ─── Sumber ──────────────────────────────────────────────
 async function loadSumber(q) {
   const rows = await fetch('/api/sales-by-sumber?' + q).then(r => r.json());
-  const colors = ['#f97316','#3b82f6','#10b981','#8b5cf6','#ef4444'];
   renderChart('chart-sumber', 'doughnut', {
     labels: rows.map(r => r.sumber),
-    datasets: [{ data: rows.map(r => r.omzet), backgroundColor: colors, borderWidth: 0 }]
-  }, { plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 12 } } } } });
+    datasets: [{ data: rows.map(r => r.omzet), backgroundColor: PALETTE, borderWidth: 2, borderColor:'#fff' }]
+  }, { cutout:'62%', plugins: { legend: { position: 'bottom', labels: { usePointStyle:true, boxWidth:7, padding:14, font:{size:12} } } } });
 }
 
-// ─── Kategori ─────────────────────────────────────────────────────────────────
+// ─── Kategori ────────────────────────────────────────────
 async function loadKategori(q) {
   const rows = await fetch('/api/kategori?' + q).then(r => r.json());
   renderChart('chart-kategori', 'bar', {
     labels: rows.map(r => r.kategori_produksi),
-    datasets: [{ label: 'Omzet', data: rows.map(r => r.omzet),
-      backgroundColor: '#f97316', borderRadius: 6 }]
+    datasets: [{ label: 'Omzet', data: rows.map(r => r.omzet), backgroundColor: '#f97316', borderRadius: 5, barThickness:'flex', maxBarThickness:22 }]
   }, {
     indexAxis: 'y',
-    scales: { x: { ticks: { callback: v => formatRpShort(v), color: '#6b7280' }, grid: { color: '#1e2130' } },
-              y: { ticks: { color: '#9ca3af' }, grid: { display: false } } }
+    plugins:{ legend:{ display:false } },
+    scales: { x: { ticks: { callback: v => formatRpShort(v) }, grid: { color:'#eef0f3' }, border:{display:false} },
+              y: { ticks: {}, grid: { display:false } } }
   });
 }
 
-// ─── Produksi ─────────────────────────────────────────────────────────────────
+// ─── Produksi ────────────────────────────────────────────
 async function loadProduksi(q) {
   const d = await fetch('/api/produksi?' + q).then(r => r.json());
   renderChart('chart-produksi', 'doughnut', {
     labels: ['Berjalan', 'Tuntas', 'Belum SPK'],
-    datasets: [{ data: [d.berjalan, d.tuntas, d.belum_spk],
-      backgroundColor: ['#3b82f6','#10b981','#f59e0b'], borderWidth: 0 }]
-  }, { plugins: { legend: { position: 'bottom', labels: { color: '#9ca3af', font: { size: 12 } } } } });
+    datasets: [{ data: [d.berjalan, d.tuntas, d.belum_spk], backgroundColor: ['#2563eb','#059669','#d97706'], borderWidth: 2, borderColor:'#fff' }]
+  }, { cutout:'62%', plugins: { legend: { position: 'bottom', labels: { usePointStyle:true, boxWidth:7, padding:14, font:{size:12} } } } });
 }
 
-// ─── Top Sales ────────────────────────────────────────────────────────────────
+// ─── Top Sales ───────────────────────────────────────────
 async function loadTopSales(q) {
   const rows = await fetch('/api/top-sales?' + q).then(r => r.json());
   const html = `<table>
-    <thead><tr><th>#</th><th>Nama</th><th>Order</th><th>Omzet</th></tr></thead>
+    <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
     <tbody>${rows.map((r,i) => `<tr>
-      <td class="rank">${i+1}</td>
-      <td>${r.PIC}</td>
-      <td>${r.total_order}</td>
-      <td>${formatRpShort(r.total_omzet)}</td>
+      <td><span class="rank">${i+1}</span></td>
+      <td style="font-weight:500">${r.PIC}</td>
+      <td class="num">${fmtInt(r.total_order)}</td>
+      <td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td>
     </tr>`).join('')}</tbody>
   </table>`;
   document.getElementById('tbl-top-sales').innerHTML = html;
 }
 
-// ─── Chart Helper ─────────────────────────────────────────────────────────────
+// ─── Chart Helper ────────────────────────────────────────
 function renderChart(id, type, data, options = {}) {
   if (charts[id]) charts[id].destroy();
   const ctx = document.getElementById(id).getContext('2d');
@@ -340,17 +373,23 @@ function renderChart(id, type, data, options = {}) {
     type, data,
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#9ca3af', font: { size: 12 } } } },
+      plugins: { legend: { labels: { font: { size: 12 } } },
+        tooltip:{ backgroundColor:'#161a22', padding:10, cornerRadius:8, titleFont:{weight:'600'},
+          callbacks:{ label:c => {
+            const p = c.parsed;
+            let v = typeof p === 'object' ? (c.chart.options.indexAxis === 'y' ? p.x : p.y) : p;
+            return `${c.dataset.label ? c.dataset.label + ': ' : ''}${formatRp(v)}`;
+          } } } },
       ...options
     }
   });
 }
 
-// ─── Format ───────────────────────────────────────────────────────────────────
+// ─── Format ──────────────────────────────────────────────
 function formatRp(n) {
   if (!n) return 'Rp 0';
-  if (n >= 1e9) return 'Rp ' + (n/1e9).toFixed(1) + 'M';
-  if (n >= 1e6) return 'Rp ' + (n/1e6).toFixed(1) + 'jt';
+  if (n >= 1e9) return 'Rp ' + (n/1e9).toFixed(1) + ' M';
+  if (n >= 1e6) return 'Rp ' + (n/1e6).toFixed(1) + ' jt';
   return 'Rp ' + Number(n).toLocaleString('id-ID');
 }
 function formatRpShort(n) {
@@ -358,6 +397,7 @@ function formatRpShort(n) {
   if (n >= 1e6) return (n/1e6).toFixed(0) + 'jt';
   return n;
 }
+function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
 </script>
 </body>
 </html>
