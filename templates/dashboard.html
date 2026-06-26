@@ -116,6 +116,16 @@ tbody tr:nth-child(2) .rank{background:#f0d6bb;color:#8a5a2b;}
 tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .loading{color:var(--ink-3);font-size:13px;text-align:center;padding:50px;}
 
+/* Detail Order */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.toolbar .spacer-f{flex:1;}
+#detail-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 340px;max-width:60%;}
+#detail-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
+#detail-table table{font-size:12.5px;}
+#detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;}
+#detail-table td{white-space:nowrap;}
+#detail-table th:hover{color:var(--orange-600);}
+
 @media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
 </style>
@@ -131,6 +141,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <div class="nav-label">Menu</div>
     <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
     <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
+    <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
     <div class="spacer"></div>
     <div class="side-card">
@@ -212,6 +223,19 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         </div>
       </section>
 
+      <!-- DETAIL ORDER -->
+      <section id="view-detail" class="view">
+        <div class="toolbar">
+          <input id="detail-search" type="text" placeholder="🔎 Cari customer / SKO / produk…" oninput="onDetailSearch(this.value)">
+          <span class="muted" id="detail-count"></span>
+          <div class="spacer-f"></div>
+          <button class="btn-reset" onclick="exportDetailCSV()">⬇ Export CSV</button>
+        </div>
+        <div class="card" style="padding:8px">
+          <div class="table-wrap" id="detail-table" style="max-height:70vh;overflow:auto"><div class="loading">Memuat…</div></div>
+        </div>
+      </section>
+
       <!-- PRODUKSI -->
       <section id="view-produksi" class="view">
         <div class="grid-2">
@@ -230,6 +254,7 @@ const PALETTE = ['#e9852b','#7a5230','#3b6fb0','#4e9a3f','#cf4b3a','#d99327','#9
 const PAGE = {
   ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
   sales:['Sales','Analisis penjualan'],
+  detail:['Detail Order','Cek data cepat per order'],
   produksi:['Produksi','Status order produksi'],
 };
 const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan'};
@@ -330,7 +355,7 @@ async function loadAll(){
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], produksi:[['c-produksi',loadProduksi]] };
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], produksi:[['c-produksi',loadProduksi]] };
 const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
@@ -449,6 +474,66 @@ async function loadProduksi(q){
     {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
 }
 
+// ── Detail Order ──
+const DETAIL = { rows:[], term:'', key:'tanggal', dir:'desc' };
+const DCOLS = [
+  ['nama','Customer','str'],['sko','SKO','str'],['sumber','Sumber','str'],
+  ['nama_produk','Produk','str'],['tanggal','Tanggal','str'],['quantity','Qty','num'],
+  ['harga_modal','Harga Modal','rp'],['harga_jual','Harga Jual','rp'],
+  ['total_harga','Total Harga','rp'],['persen_margin','Margin %','pct'],
+];
+function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
+async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
+function onDetailSearch(v){ DETAIL.term = v.trim().toLowerCase(); renderDetail(); }
+function setSort(k){ if(DETAIL.key===k) DETAIL.dir = DETAIL.dir==='asc'?'desc':'asc'; else { DETAIL.key=k; DETAIL.dir='asc'; } renderDetail(); }
+function detailFiltered(){
+  let rows = DETAIL.rows.slice();
+  if(DETAIL.term) rows = rows.filter(r=>[r.nama,r.sko,r.nama_produk,r.sumber].join(' ').toLowerCase().includes(DETAIL.term));
+  const k=DETAIL.key, dir=DETAIL.dir==='asc'?1:-1, type=colType(k);
+  rows.sort((a,b)=>{
+    let x=a[k], y=b[k];
+    if(x==null) return 1; if(y==null) return -1;
+    if(type==='str'){ x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-dir:x>y?dir:0; }
+    return (x-y)*dir;
+  });
+  return rows;
+}
+function renderDetail(){
+  const rows = detailFiltered();
+  document.getElementById('detail-count').textContent = `${rows.length} baris`;
+  const head = DCOLS.map(([k,label])=>{
+    const arrow = DETAIL.key===k ? (DETAIL.dir==='asc'?' ▲':' ▼') : '';
+    const cls = colType(k)==='str' ? '' : 'num';
+    return `<th class="${cls}" onclick="setSort('${k}')">${label}${arrow}</th>`;
+  }).join('');
+  const body = rows.map(r=>`<tr>
+    <td style="font-weight:500">${r.nama||'-'}</td>
+    <td>${r.sko||'-'}</td>
+    <td>${r.sumber||'-'}</td>
+    <td>${r.nama_produk||'-'}</td>
+    <td>${r.tanggal||'-'}</td>
+    <td class="num">${fmtInt(r.quantity)}</td>
+    <td class="num">${formatRpFull(r.harga_modal)}</td>
+    <td class="num">${formatRpFull(r.harga_jual)}</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.total_harga)}</td>
+    <td class="num">${r.persen_margin}%</td>
+  </tr>`).join('');
+  document.getElementById('detail-table').innerHTML =
+    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="10" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportDetailCSV(){
+  const rows = detailFiltered();
+  const lines = [DCOLS.map(c=>c[1]).join(',')];
+  rows.forEach(r=>{
+    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.total_harga,r.persen_margin];
+    lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='detail-order-risepack.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Helpers ──
 function barH(id,labels,data,color){
   renderChart(id,'bar',{labels,datasets:[{label:'Omzet',data,backgroundColor:color,borderRadius:5,maxBarThickness:22}]},{
@@ -463,6 +548,7 @@ function renderChart(id,type,data,options={}){
 }
 function formatRp(n){ if(!n) return 'Rp 0'; if(n>=1e9) return 'Rp '+(n/1e9).toFixed(1)+' M'; if(n>=1e6) return 'Rp '+(n/1e6).toFixed(1)+' jt'; return 'Rp '+Number(n).toLocaleString('id-ID'); }
 function formatRpShort(n){ if(n>=1e9) return (n/1e9).toFixed(1)+'M'; if(n>=1e6) return (n/1e6).toFixed(0)+'jt'; return n; }
+function formatRpFull(n){ return 'Rp '+Number(n||0).toLocaleString('id-ID'); }
 function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
 </script>
 </body>
