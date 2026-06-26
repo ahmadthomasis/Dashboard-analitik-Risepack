@@ -85,6 +85,8 @@ main{padding:24px 26px;}
 .kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1ece6;color:var(--ink-2);}
 .pill.good{background:#e6f5ee;color:var(--green);}.pill.warn{background:#fdf0df;color:var(--amber);}
+.pill.bad{background:#fbeae8;color:var(--red);}
+.checkfilter{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);cursor:pointer;}
 .muted{color:var(--ink-3);font-size:11px;}
 .delta{font-weight:700;font-size:11px;white-space:nowrap;}
 .delta.good{color:var(--green);}.delta.bad{color:var(--red);}
@@ -155,6 +157,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
     <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
     <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
+    <button class="nav-item" data-view="monitoring" onclick="showView('monitoring')"><span class="i">🎯</span> Monitoring Potensi</button>
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
     <div class="spacer"></div>
     <div class="side-card">
@@ -249,6 +252,22 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         </div>
       </section>
 
+      <!-- MONITORING POTENSI -->
+      <section id="view-monitoring" class="view">
+        <div class="kpi-grid" id="mon-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))"><div class="loading">Memuat…</div></div>
+        <div class="section-head" style="margin-top:26px"><h2>Belum Diisi per Sales (PIC)</h2><span class="hint">Siapa yang perlu ditagih untuk melengkapi potensi</span></div>
+        <div class="card" style="padding:8px"><div class="table-wrap" id="mon-pic"></div></div>
+        <div class="section-head"><h2>Daftar Customer Baru Online</h2></div>
+        <div class="toolbar">
+          <input id="mon-search" type="text" placeholder="🔎 Cari customer / instansi / PIC…" oninput="onMonSearch(this.value)">
+          <label class="checkfilter"><input type="checkbox" id="mon-only" onchange="renderMon()"> Hanya yang belum diisi</label>
+          <span class="muted" id="mon-count"></span>
+          <div class="spacer-f"></div>
+          <button class="btn-reset" onclick="exportMonCSV()">⬇ Export CSV</button>
+        </div>
+        <div class="card" style="padding:8px"><div class="table-wrap" id="mon-table" style="max-height:60vh;overflow:auto"><div class="loading">Memuat…</div></div></div>
+      </section>
+
       <!-- PRODUKSI -->
       <section id="view-produksi" class="view">
         <div class="grid-2">
@@ -268,6 +287,7 @@ const PAGE = {
   ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
   sales:['Sales','Analisis penjualan'],
   detail:['Detail Order','Cek data cepat per order'],
+  monitoring:['Monitoring Potensi','Customer baru online & kelengkapan input potensi'],
   produksi:['Produksi','Status order produksi'],
 };
 const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan'};
@@ -368,7 +388,7 @@ async function loadAll(){
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], produksi:[['c-produksi',loadProduksi]] };
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
 const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
@@ -545,6 +565,78 @@ function exportDetailCSV(){
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='detail-order-risepack.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Monitoring Potensi ──
+const MON = { rows:[], term:'', key:'tgl_masuk', dir:'desc' };
+async function loadMonitoring(q){ MON.rows = await fetchJSON('/api/monitoring-potensi?'+q); renderMonAll(); }
+function renderMonAll(){ renderMonSummary(); renderMonPIC(); renderMon(); }
+function onMonSearch(v){ MON.term = v.trim().toLowerCase(); renderMon(); }
+
+function renderMonSummary(){
+  const rows = MON.rows;
+  const total = rows.length;
+  const terisi = rows.filter(r=>r.terisi).length;
+  const belum = total - terisi;
+  const pct = total ? Math.round(terisi/total*100) : 0;
+  document.getElementById('mon-summary').innerHTML = `
+    ${kpiCard('a-blue','👥','Customer Baru Online',fmtInt(total),`<span class="muted">periode terpilih</span>`)}
+    ${kpiCard('a-green','✅','Potensi Sudah Diisi',fmtInt(terisi),`<span class="pill good">${pct}% lengkap</span>`)}
+    ${kpiCard('a-orange','⚠️','Potensi Belum Diisi',fmtInt(belum),`<span class="pill ${belum>0?'bad':'good'}">${total?Math.round(belum/total*100):0}% kosong</span>`)}
+    ${kpiCard('a-amber','📊','Kelengkapan',pct+'%',`<span class="muted">${fmtInt(terisi)} dari ${fmtInt(total)}</span>`)}`;
+}
+function renderMonPIC(){
+  const map = {};
+  MON.rows.forEach(r=>{
+    const k = r.pic || '(tanpa PIC)';
+    if(!map[k]) map[k]={total:0,belum:0};
+    map[k].total++; if(!r.terisi) map[k].belum++;
+  });
+  const arr = Object.entries(map).map(([pic,v])=>({pic,...v,pct:v.total?Math.round(v.belum/v.total*100):0}))
+                    .sort((a,b)=>b.belum-a.belum);
+  document.getElementById('mon-pic').innerHTML = `<table>
+    <thead><tr><th>PIC / Sales</th><th class="num">Total Customer</th><th class="num">Belum Diisi</th><th class="num">% Belum</th></tr></thead>
+    <tbody>${arr.map(r=>`<tr>
+      <td style="font-weight:500">${esc(r.pic)}</td>
+      <td class="num">${fmtInt(r.total)}</td>
+      <td class="num" style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
+      <td class="num">${r.pct}%</td>
+    </tr>`).join('')||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function monFiltered(){
+  let rows = MON.rows.slice();
+  if(document.getElementById('mon-only').checked) rows = rows.filter(r=>!r.terisi);
+  if(MON.term) rows = rows.filter(r=>[r.nama,r.instansi,r.pic].join(' ').toLowerCase().includes(MON.term));
+  return rows;
+}
+function renderMon(){
+  const rows = monFiltered();
+  document.getElementById('mon-count').textContent = `${rows.length} customer`;
+  const body = rows.map(r=>`<tr>
+    <td>${r.tgl_masuk||'-'}</td>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
+    <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
+    <td class="num">${fmtInt(r.orders)}</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.potensi)}</td>
+    <td>${r.terisi?'<span class="pill good">Sudah diisi</span>':'<span class="pill bad">Belum diisi</span>'}</td>
+  </tr>`).join('');
+  document.getElementById('mon-table').innerHTML = `<table>
+    <thead><tr><th>Tgl Masuk</th><th>Customer</th><th>Instansi</th><th>PIC</th><th class="num">Order</th><th class="num">Potensi</th><th>Status</th></tr></thead>
+    <tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportMonCSV(){
+  const rows = monFiltered();
+  const head = ['Tgl Masuk','Customer','Instansi','PIC','Order','Potensi','Status'];
+  const lines = [head.join(',')];
+  rows.forEach(r=>{
+    const vals=[r.tgl_masuk,r.nama,r.instansi,r.pic,r.orders,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
+    lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='monitoring-potensi-risepack.csv'; a.click();
   URL.revokeObjectURL(url);
 }
 
