@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, request, session, redirect, u
 from functools import wraps
 import mysql.connector
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -66,11 +66,16 @@ def logout():
 def index():
     return render_template('dashboard.html')
 
-def build_where(bulan, pic, divisi):
+# ─── Helpers filter ──────────────────────────────────────────────
+def build_where(tgl_dari, tgl_sampai, pic, divisi):
+    """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""
     clauses, params = [], []
-    if bulan:
-        clauses.append("DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') = %s")
-        params.append(bulan)
+    if tgl_dari:
+        clauses.append("DATE(o.tgl_omzet_realtime) >= %s")
+        params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("DATE(o.tgl_omzet_realtime) <= %s")
+        params.append(tgl_sampai)
     if pic:
         clauses.append("o.name = %s")
         params.append(pic)
@@ -82,11 +87,40 @@ def build_where(bulan, pic, divisi):
     cond = (' AND ' + ' AND '.join(clauses)) if clauses else ''
     return cond, params
 
+def get_args():
+    return (
+        request.args.get('tgl_dari'),
+        request.args.get('tgl_sampai'),
+        request.args.get('pic'),
+        request.args.get('divisi'),
+    )
+
+def prev_range(tgl_dari, tgl_sampai):
+    """Periode pembanding: durasi sama persis tepat sebelum rentang terpilih."""
+    if not tgl_dari or not tgl_sampai:
+        return None, None
+    try:
+        d1 = datetime.strptime(tgl_dari, '%Y-%m-%d').date()
+        d2 = datetime.strptime(tgl_sampai, '%Y-%m-%d').date()
+    except ValueError:
+        return None, None
+    length = (d2 - d1).days + 1
+    p2 = d1 - timedelta(days=1)
+    p1 = p2 - timedelta(days=length - 1)
+    return p1.isoformat(), p2.isoformat()
+
+def pct(cur, prev):
+    """Persentase perubahan cur vs prev. None bila tak bisa dihitung."""
+    if not prev:
+        return None
+    return round((cur - prev) / prev * 100, 1)
+
 BASE = """
     FROM order_risepack o
     WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
 """
 
+# ─── API ─────────────────────────────────────────────────────────
 @app.route('/api/filters')
 @login_required
 def api_filters():
@@ -97,40 +131,65 @@ def api_filters():
         'sub_divisions': [r['sub_division'] for r in divs]
     })
 
-@app.route('/api/kpi')
-@login_required
-def api_kpi():
-    bulan  = request.args.get('bulan')
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(bulan, pic, divisi)
-
+def kpi_metrics(cond, params):
+    """Hitung seluruh metrik KPI untuk satu kondisi WHERE."""
     sql = f"""
         SELECT
             COUNT(DISTINCT o.order_key) AS total_order,
+            COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.order_key END) AS total_deal,
             SUM(CASE WHEN o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS total_omzet,
             SUM(CASE WHEN o.status_deal='Deal' THEN o.modal_sales ELSE 0 END) AS total_modal,
             SUM(CASE WHEN o.status_deal='Deal' THEN (o.total_harga-o.modal_sales) ELSE 0 END) AS total_margin,
             COUNT(DISTINCT CASE WHEN o.sumber='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_repeat,
             COUNT(DISTINCT CASE WHEN o.sumber!='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_new,
-            COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.order_key END) AS total_deal
+            COUNT(DISTINCT CASE WHEN o.sumber!='Repeat Order' THEN o.order_key END) AS new_order,
+            SUM(CASE WHEN o.sumber='Repeat Order' AND o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS repeat_omzet
         {BASE} {cond}
     """
-    row = query(sql, params)[0]
-    omzet  = float(row['total_omzet']  or 0)
-    modal  = float(row['total_modal']  or 0)
-    margin = float(row['total_margin'] or 0)
-    deal   = int(row['total_deal']     or 0)
-    order  = int(row['total_order']    or 1)
-    repeat = int(row['total_repeat']   or 0)
-    return jsonify({
-        'total_omzet':   omzet, 'total_modal': modal, 'total_margin': margin,
-        'persen_margin': round(margin/omzet*100,1) if omzet else 0,
-        'total_order':   order, 'total_deal': deal, 'total_repeat': repeat,
-        'total_new':     int(row['total_new'] or 0),
-        'closing_rate':  round(deal/order*100,1) if order else 0,
-        'persen_repeat': round(repeat/deal*100,1) if deal else 0,
-    })
+    r = query(sql, params)[0]
+    omzet     = float(r['total_omzet']  or 0)
+    modal     = float(r['total_modal']  or 0)
+    margin    = float(r['total_margin'] or 0)
+    deal      = int(r['total_deal']     or 0)
+    order     = int(r['total_order']    or 0)
+    repeat    = int(r['total_repeat']   or 0)
+    new       = int(r['total_new']      or 0)
+    new_order = int(r['new_order']      or 0)
+    rep_omzet = float(r['repeat_omzet'] or 0)
+    return {
+        'total_omzet': omzet, 'total_modal': modal, 'total_margin': margin,
+        'persen_margin': round(margin / omzet * 100, 1) if omzet else 0,
+        'total_order': order, 'total_deal': deal,
+        'total_repeat': repeat, 'total_new': new,
+        'closing_rate': round(deal / order * 100, 1) if order else 0,
+        'persen_repeat': round(repeat / deal * 100, 1) if deal else 0,
+        'avg_purchase': round(omzet / deal) if deal else 0,
+        'repeat_omzet': rep_omzet,
+        'persen_repeat_omzet': round(rep_omzet / omzet * 100, 1) if omzet else 0,
+        'closing_rate_new': round(new / new_order * 100, 1) if new_order else 0,
+    }
+
+@app.route('/api/kpi')
+@login_required
+def api_kpi():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    cur = kpi_metrics(cond, params)
+
+    # Perbandingan periode sebelumnya (durasi sama)
+    delta = {}
+    p1, p2 = prev_range(tgl_dari, tgl_sampai)
+    if p1 and p2:
+        pcond, pparams = build_where(p1, p2, pic, divisi)
+        prev = kpi_metrics(pcond, pparams)
+        for k in ['total_omzet', 'total_modal', 'total_margin', 'total_order',
+                  'total_deal', 'total_repeat', 'total_new', 'closing_rate',
+                  'avg_purchase', 'repeat_omzet', 'closing_rate_new', 'persen_repeat']:
+            delta[k] = pct(cur[k], prev[k])
+
+    cur['delta'] = delta
+    cur['prev_range'] = {'dari': p1, 'sampai': p2} if p1 else None
+    return jsonify(cur)
 
 @app.route('/api/trend-omzet')
 @login_required
@@ -138,7 +197,7 @@ def api_trend_omzet():
     tahun  = request.args.get('tahun', str(datetime.now().year))
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
-    cond, params = build_where(None, pic, divisi)
+    cond, params = build_where(None, None, pic, divisi)
 
     sql = f"""
         SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
@@ -155,10 +214,8 @@ def api_trend_omzet():
 @app.route('/api/top-sales')
 @login_required
 def api_top_sales():
-    bulan  = request.args.get('bulan')
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(bulan, pic, divisi)
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
     sql = f"""
         SELECT o.name AS PIC,
@@ -176,10 +233,8 @@ def api_top_sales():
 @app.route('/api/sales-by-sumber')
 @login_required
 def api_sales_by_sumber():
-    bulan  = request.args.get('bulan')
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(bulan, pic, divisi)
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
     sql = f"""
         SELECT o.sumber, COUNT(DISTINCT o.order_key) AS total, SUM(o.total_harga) AS omzet
@@ -194,10 +249,8 @@ def api_sales_by_sumber():
 @app.route('/api/produksi')
 @login_required
 def api_produksi():
-    bulan  = request.args.get('bulan')
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(bulan, pic, divisi)
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
     sql = f"""
         SELECT
@@ -213,10 +266,8 @@ def api_produksi():
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
-    bulan  = request.args.get('bulan')
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(bulan, pic, divisi)
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
     sql = f"""
         SELECT o.kategori_produksi, SUM(o.total_harga) AS omzet, COUNT(DISTINCT o.order_key) AS total
