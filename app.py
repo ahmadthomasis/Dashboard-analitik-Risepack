@@ -533,29 +533,36 @@ def api_monitoring_potensi():
 
 
 # ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_explore')
+@app.route('/api/_leadtest2')
 @login_required
-def api_explore():
-    """Penjelajah tb_orders: tahu kolom tanggal yang benar, nilai lead_prospek,
-    sumber, status_deal, dan apakah join ke tb_produksis match."""
-    d1, d2 = '2026-06-01', '2026-06-30 23:59:59'
+def api_leadtest2():
+    """Cocokkan 71 (Emas) / 11 (Deal) pakai waktu_kontak + kandidat definisi."""
+    d1 = request.args.get('tgl_dari', '2026-06-01')
+    d2 = request.args.get('tgl_sampai', '2026-06-30') + ' 23:59:59'
+    base = """
+        FROM tb_orders o JOIN tb_produksis p ON o.sko_key = p.sko_key
+        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
+          AND o.waktu_kontak >= %s AND o.waktu_kontak <= %s
+    """
     conn = mysql.connector.connect(**DB_CONFIG)
     out = {}
     try:
         cur = conn.cursor(dictionary=True)
-        def one(label, sql, params=()):
-            cur.execute(sql, params); out[label] = cur.fetchone()
-        def many(label, sql, params=()):
-            cur.execute(sql, params); out[label] = cur.fetchall()
-        one('tb_orders_total', "SELECT COUNT(*) n FROM tb_orders")
-        one('tb_produksis_total', "SELECT COUNT(*) n FROM tb_produksis")
-        one('june_by_tgl_order', "SELECT COUNT(*) n FROM tb_orders WHERE tgl_order>=%s AND tgl_order<=%s", (d1, d2))
-        one('june_by_waktu_kontak', "SELECT COUNT(*) n FROM tb_orders WHERE waktu_kontak>=%s AND waktu_kontak<=%s", (d1, d2))
-        one('join_match_total', "SELECT COUNT(*) n FROM tb_orders o JOIN tb_produksis p ON o.sko_key=p.sko_key")
-        many('lead_prospek_vals', "SELECT lead_prospek, COUNT(*) n FROM tb_orders GROUP BY lead_prospek ORDER BY n DESC")
-        many('sumber_vals', "SELECT sumber, COUNT(*) n FROM tb_orders GROUP BY sumber ORDER BY n DESC LIMIT 15")
-        many('status_deal_vals', "SELECT status_deal, COUNT(*) n FROM tb_orders GROUP BY status_deal ORDER BY n DESC LIMIT 15")
-        many('sample', "SELECT id_order, CAST(tgl_order AS CHAR) tgl_order, CAST(waktu_kontak AS CHAR) waktu_kontak, lead_prospek, sumber, status_deal, sko_key FROM tb_orders ORDER BY id_order DESC LIMIT 5")
+        def cnt(label, grain, extra):
+            col = 'o.id_customer' if grain == 'cust' else 'o.sko_key'
+            cur.execute(f"SELECT COUNT(DISTINCT {col}) AS n {base} {extra}", (d1, d2))
+            out[label] = cur.fetchone()['n']
+        ONL = "AND o.sumber = 'Online'"
+        ONLP = "AND o.sumber IN ('Online','Online Lintas')"
+        for g in ('cust', 'sko'):
+            cnt(f'{g}_online', g, ONL)
+            cnt(f'{g}_online_priced', g, ONL + " AND p.total_harga > 0")
+            cnt(f'{g}_online_unpriced', g, ONL + " AND (p.total_harga = 0 OR p.total_harga IS NULL)")
+            cnt(f'{g}_online_deal', g, ONL + " AND o.status_deal = 'Deal'")
+            cnt(f'{g}_online_notlost', g, ONL + " AND o.status_deal <> 'Lost'")
+            cnt(f'{g}_online_notlost_priced', g, ONL + " AND o.status_deal <> 'Lost' AND p.total_harga > 0")
+            cnt(f'{g}_onlineplus_priced', g, ONLP + " AND p.total_harga > 0")
+            cnt(f'{g}_onlineplus_deal', g, ONLP + " AND o.status_deal = 'Deal'")
         cur.close()
     finally:
         try: conn.close()
