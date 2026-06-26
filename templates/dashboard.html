@@ -257,7 +257,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         <div class="kpi-grid" id="mon-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))"><div class="loading">Memuat…</div></div>
         <div class="section-head" style="margin-top:26px"><h2>Belum Diisi per Sales (PIC)</h2><span class="hint">Siapa yang perlu ditagih untuk melengkapi potensi</span></div>
         <div class="card" style="padding:8px"><div class="table-wrap" id="mon-pic"></div></div>
-        <div class="section-head"><h2>Daftar Customer Baru Online</h2></div>
+        <div class="section-head"><h2>Daftar Lead Online Baru</h2></div>
         <div class="toolbar">
           <input id="mon-search" type="text" placeholder="🔎 Cari customer / instansi / PIC…" oninput="onMonSearch(this.value)">
           <label class="checkfilter"><input type="checkbox" id="mon-only" onchange="renderMon()"> Hanya yang belum diisi</label>
@@ -581,7 +581,7 @@ function renderMonSummary(){
   const belum = total - terisi;
   const pct = total ? Math.round(terisi/total*100) : 0;
   document.getElementById('mon-summary').innerHTML = `
-    ${kpiCard('a-blue','👥','Customer Baru Online',fmtInt(total),`<span class="muted">periode terpilih</span>`)}
+    ${kpiCard('a-blue','👥','Lead Online Baru',fmtInt(total),`<span class="muted">per waktu kontak</span>`)}
     ${kpiCard('a-green','✅','Potensi Sudah Diisi',fmtInt(terisi),`<span class="pill good">${pct}% lengkap</span>`)}
     ${kpiCard('a-orange','⚠️','Potensi Belum Diisi',fmtInt(belum),`<span class="pill ${belum>0?'bad':'good'}">${total?Math.round(belum/total*100):0}% kosong</span>`)}
     ${kpiCard('a-amber','📊','Kelengkapan',pct+'%',`<span class="muted">${fmtInt(terisi)} dari ${fmtInt(total)}</span>`)}`;
@@ -612,26 +612,26 @@ function monFiltered(){
 }
 function renderMon(){
   const rows = monFiltered();
-  document.getElementById('mon-count').textContent = `${rows.length} customer`;
+  document.getElementById('mon-count').textContent = `${rows.length} lead`;
   const body = rows.map(r=>`<tr>
-    <td>${r.tgl_masuk||'-'}</td>
+    <td>${r.tgl_kontak||'-'}</td>
     <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
     <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
     <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
-    <td class="num">${fmtInt(r.orders)}</td>
+    <td>${esc(r.status_deal)||'-'}</td>
     <td class="num" style="font-weight:600">${formatRpFull(r.potensi)}</td>
     <td>${r.terisi?'<span class="pill good">Sudah diisi</span>':'<span class="pill bad">Belum diisi</span>'}</td>
   </tr>`).join('');
   document.getElementById('mon-table').innerHTML = `<table>
-    <thead><tr><th>Tgl Masuk</th><th>Customer</th><th>Instansi</th><th>PIC</th><th class="num">Order</th><th class="num">Potensi</th><th>Status</th></tr></thead>
+    <thead><tr><th>Tgl Kontak</th><th>Customer</th><th>Instansi</th><th>PIC</th><th>Status Deal</th><th class="num">Potensi</th><th>Status Potensi</th></tr></thead>
     <tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportMonCSV(){
   const rows = monFiltered();
-  const head = ['Tgl Masuk','Customer','Instansi','PIC','Order','Potensi','Status'];
+  const head = ['Tgl Kontak','Customer','Instansi','PIC','Status Deal','Potensi','Status Potensi'];
   const lines = [head.join(',')];
   rows.forEach(r=>{
-    const vals=[r.tgl_masuk,r.nama,r.instansi,r.pic,r.orders,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
+    const vals=[r.tgl_kontak,r.nama,r.instansi,r.pic,r.status_deal,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
     lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
