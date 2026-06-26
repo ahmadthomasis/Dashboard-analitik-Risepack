@@ -569,10 +569,16 @@ function exportDetailCSV(){
 }
 
 // ── Monitoring Potensi ──
-const MON = { rows:[], term:'', key:'tgl_masuk', dir:'desc' };
+const MON = { rows:[], term:'', key:'tgl_kontak', dir:'desc' };
+const MCOLS = [
+  ['tgl_kontak','Tgl Kontak','str'],['nama','Customer','str'],['instansi','Instansi','str'],
+  ['pic','PIC','str'],['status_deal','Status Deal','str'],['potensi','Potensi','num'],['terisi','Status Potensi','bool'],
+];
+function monColType(k){ return (MCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
 async function loadMonitoring(q){ MON.rows = await fetchJSON('/api/monitoring-potensi?'+q); renderMonAll(); }
 function renderMonAll(){ renderMonSummary(); renderMonPIC(); renderMon(); }
 function onMonSearch(v){ MON.term = v.trim().toLowerCase(); renderMon(); }
+function setMonSort(k){ if(MON.key===k) MON.dir = MON.dir==='asc'?'desc':'asc'; else { MON.key=k; MON.dir='asc'; } renderMon(); }
 
 function renderMonSummary(){
   const rows = MON.rows;
@@ -580,8 +586,10 @@ function renderMonSummary(){
   const terisi = rows.filter(r=>r.terisi).length;
   const belum = total - terisi;
   const pct = total ? Math.round(terisi/total*100) : 0;
+  const totalPotensi = rows.reduce((s,r)=>s+(r.potensi||0),0);
   document.getElementById('mon-summary').innerHTML = `
     ${kpiCard('a-blue','👥','Lead Online Baru',fmtInt(total),`<span class="muted">per waktu kontak</span>`)}
+    ${kpiCard('a-brown','💰','Total Potensi',formatRp(totalPotensi),`<span class="muted">nilai semua lead</span>`)}
     ${kpiCard('a-green','✅','Potensi Sudah Diisi',fmtInt(terisi),`<span class="pill good">${pct}% lengkap</span>`)}
     ${kpiCard('a-orange','⚠️','Potensi Belum Diisi',fmtInt(belum),`<span class="pill ${belum>0?'bad':'good'}">${total?Math.round(belum/total*100):0}% kosong</span>`)}
     ${kpiCard('a-amber','📊','Kelengkapan',pct+'%',`<span class="muted">${fmtInt(terisi)} dari ${fmtInt(total)}</span>`)}`;
@@ -607,12 +615,25 @@ function renderMonPIC(){
 function monFiltered(){
   let rows = MON.rows.slice();
   if(document.getElementById('mon-only').checked) rows = rows.filter(r=>!r.terisi);
-  if(MON.term) rows = rows.filter(r=>[r.nama,r.instansi,r.pic].join(' ').toLowerCase().includes(MON.term));
+  if(MON.term) rows = rows.filter(r=>[r.nama,r.instansi,r.pic,r.status_deal].join(' ').toLowerCase().includes(MON.term));
+  const k=MON.key, dir=MON.dir==='asc'?1:-1, type=monColType(k);
+  rows.sort((a,b)=>{
+    let x=a[k], y=b[k];
+    if(type==='bool'){ return ((x?1:0)-(y?1:0))*dir; }
+    if(x==null) return 1; if(y==null) return -1;
+    if(type==='str'){ x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-dir:x>y?dir:0; }
+    return (x-y)*dir;
+  });
   return rows;
 }
 function renderMon(){
   const rows = monFiltered();
   document.getElementById('mon-count').textContent = `${rows.length} lead`;
+  const head = MCOLS.map(([k,label])=>{
+    const arrow = MON.key===k ? (MON.dir==='asc'?' ▲':' ▼') : '';
+    const cls = (k==='potensi') ? 'num' : '';
+    return `<th class="${cls}" style="cursor:pointer" onclick="setMonSort('${k}')">${label}${arrow}</th>`;
+  }).join('');
   const body = rows.map(r=>`<tr>
     <td>${r.tgl_kontak||'-'}</td>
     <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
@@ -623,7 +644,7 @@ function renderMon(){
     <td>${r.terisi?'<span class="pill good">Sudah diisi</span>':'<span class="pill bad">Belum diisi</span>'}</td>
   </tr>`).join('');
   document.getElementById('mon-table').innerHTML = `<table>
-    <thead><tr><th>Tgl Kontak</th><th>Customer</th><th>Instansi</th><th>PIC</th><th>Status Deal</th><th class="num">Potensi</th><th>Status Potensi</th></tr></thead>
+    <thead><tr>${head}</tr></thead>
     <tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportMonCSV(){
