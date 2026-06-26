@@ -279,57 +279,5 @@ def api_kategori():
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
-# ─── DIAGNOSTIK (SEMENTARA — hapus setelah dipakai) ──────────────
-@app.route('/api/_schema')
-@login_required
-def api_schema():
-    """Daftar kolom order_risepack + beberapa baris contoh (1 koneksi, ringan).
-    Dipakai sekali untuk identifikasi kolom produk & customer, lalu dihapus."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    try:
-        cur = conn.cursor(dictionary=True)
-        cur.execute("SHOW COLUMNS FROM order_risepack")
-        cols = [r['Field'] for r in cur.fetchall()]
-        cur.execute(
-            "SELECT * FROM order_risepack "
-            "WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL) "
-            "LIMIT 6"
-        )
-        rows = cur.fetchall()
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    # ubah semua nilai ke string supaya aman di-JSON-kan
-    sample = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in rows]
-    return jsonify({'kolom': cols, 'contoh_baris': sample})
-
-
-@app.route('/api/_values')
-@login_required
-def api_values():
-    """Distinct values + omzet untuk kolom kandidat produk. 1 koneksi, ringan."""
-    candidates = ['kategori_produksi', 'jenis_bahan', 'tipe_produk', 'jenis_kertas']
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        for col in candidates:
-            cur.execute(
-                f"SELECT `{col}` AS v, COUNT(DISTINCT order_key) AS orders, "
-                f"SUM(total_harga) AS omzet "
-                f"FROM order_risepack "
-                f"WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL) "
-                f"AND `{col}` IS NOT NULL AND `{col}` != '' "
-                f"GROUP BY `{col}` ORDER BY omzet DESC LIMIT 20"
-            )
-            out[col] = [f"{r['v']} — {r['orders']} order, omzet {r['omzet']}" for r in cur.fetchall()]
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    return jsonify(out)
-
-
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
