@@ -10,37 +10,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --brown:#2a201a;        /* sidebar */
-  --brown-2:#3a2d24;
-  --brown-line:#4a3a2e;
-  --cream:#f6f3ef;        /* main bg */
-  --surface:#ffffff;
-  --border:#ece5dd;
-  --border-strong:#dcd2c6;
-  --ink:#2a211b;
-  --ink-2:#6d6055;
-  --ink-3:#9d9085;
-  --orange:#e9852b;
-  --orange-soft:#fdeede;
-  --orange-600:#cf731c;
-  --leaf:#4e9a3f;
-  --blue:#3b6fb0;
-  --green:#2f9e6f;
-  --red:#cf4b3a;
-  --amber:#d99327;
+  --brown:#2a201a;--brown-2:#3a2d24;--brown-line:#4a3a2e;
+  --cream:#f6f3ef;--surface:#ffffff;--border:#ece5dd;--border-strong:#dcd2c6;
+  --ink:#2a211b;--ink-2:#6d6055;--ink-3:#9d9085;
+  --orange:#e9852b;--orange-soft:#fdeede;--orange-600:#cf731c;
+  --leaf:#4e9a3f;--blue:#3b6fb0;--green:#2f9e6f;--red:#cf4b3a;--amber:#d99327;
   --shadow:0 1px 2px rgba(60,40,20,.05), 0 1px 3px rgba(60,40,20,.07);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;}
-
 .app{display:flex;min-height:100vh;}
 
-/* ── SIDEBAR ─────────────────────────────────────── */
-.sidebar{
-  width:236px;flex-shrink:0;background:var(--brown);color:#e8ddd2;
-  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;
-  padding:20px 14px;
-}
+/* SIDEBAR */
+.sidebar{width:236px;flex-shrink:0;background:var(--brown);color:#e8ddd2;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:20px 14px;}
 .brand{display:flex;align-items:center;gap:11px;padding:6px 8px 18px;}
 .brand .mark{width:38px;height:38px;border-radius:50%;background:#1f1712;display:grid;place-items:center;font-weight:800;font-size:15px;flex-shrink:0;}
 .brand .mark b{color:#fff;}.brand .mark i{color:var(--orange);font-style:normal;}
@@ -48,10 +30,7 @@ body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;backgroun
 .brand .t span{color:var(--orange);}
 .brand .t small{display:block;font-size:10.5px;font-weight:500;color:#a08e7e;letter-spacing:.06em;margin-top:3px;}
 .nav-label{font-size:10px;font-weight:700;letter-spacing:.1em;color:#7d6c5d;text-transform:uppercase;padding:14px 10px 7px;}
-.nav-item{
-  display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;
-  color:#cdbfb1;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;font-family:inherit;
-}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;color:#cdbfb1;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;font-family:inherit;}
 .nav-item .i{font-size:16px;width:20px;text-align:center;}
 .nav-item:hover{background:var(--brown-2);color:#fff;}
 .nav-item.active{background:var(--orange);color:#fff;font-weight:600;}
@@ -62,27 +41,19 @@ body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;backgroun
 .side-logout{display:block;text-align:center;margin-top:10px;padding:9px;border-radius:10px;border:1px solid var(--brown-line);color:#cdbfb1;font-size:12.5px;text-decoration:none;}
 .side-logout:hover{background:var(--brown-2);color:#fff;}
 
-/* ── CONTENT ─────────────────────────────────────── */
+/* CONTENT */
 .content{flex:1;min-width:0;display:flex;flex-direction:column;}
-.topbar{
-  background:var(--surface);border-bottom:1px solid var(--border);
-  padding:16px 26px;display:flex;align-items:center;justify-content:space-between;gap:16px;
-  position:sticky;top:0;z-index:50;
-}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50;}
 .topbar h1{font-size:19px;font-weight:800;letter-spacing:-.02em;}
 .topbar h1 small{display:block;font-size:12px;font-weight:500;color:var(--ink-3);margin-top:2px;}
 .topbar .right{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--ink-3);}
-
-/* filter bar */
 .filters{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 26px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;position:sticky;top:69px;z-index:40;}
 .filters label{font-size:11px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
-select,input[type=date],.btn-filter,.btn-reset,.chip{
-  padding:8px 12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;color:var(--ink);font-size:12.5px;font-family:inherit;cursor:pointer;outline:none;}
+select,input[type=date],.btn-filter,.btn-reset,.chip{padding:8px 12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;color:var(--ink);font-size:12.5px;font-family:inherit;cursor:pointer;outline:none;}
 select:focus,input[type=date]:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
 .btn-filter{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600;}
 .btn-filter:hover{background:var(--orange-600);}
-.btn-reset{color:var(--ink-2);}
-.btn-reset:hover{border-color:var(--border-strong);color:var(--ink);}
+.btn-reset{color:var(--ink-2);}.btn-reset:hover{border-color:var(--border-strong);color:var(--ink);}
 .shortcuts{display:flex;gap:5px;flex-wrap:wrap;}
 .chip{padding:7px 11px;color:var(--ink-2);font-weight:600;font-size:12px;}
 .chip:hover{border-color:var(--orange);color:var(--orange);}
@@ -90,14 +61,20 @@ select:focus,input[type=date]:focus{border-color:var(--orange);box-shadow:0 0 0 
 .sep{width:1px;height:22px;background:var(--border);margin:0 2px;}
 
 main{padding:24px 26px;}
-.view{display:none;}
-.view.active{display:block;}
+.view{display:none;}.view.active{display:block;}
+
+/* SUB-TABS dalam Sales */
+.subtabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);}
+.subtab{padding:10px 16px;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px;}
+.subtab:hover{color:var(--ink);}
+.subtab.active{color:var(--orange-600);border-bottom-color:var(--orange);}
+.subview{display:none;}.subview.active{display:block;}
+
 .section-head{display:flex;align-items:baseline;gap:12px;margin:4px 0 16px;}
 .section-head:not(:first-child){margin-top:28px;}
 .section-head h2{font-size:15px;font-weight:700;letter-spacing:-.01em;}
 .section-head .hint{font-size:12px;color:var(--ink-3);}
 
-/* ── KPI ─────────────────────────────────────────── */
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:15px;}
 .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:17px 17px 15px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
 .kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--border-strong));}
@@ -107,8 +84,7 @@ main{padding:24px 26px;}
 .kpi-card .value{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.15;}
 .kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 .pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1ece6;color:var(--ink-2);}
-.pill.good{background:#e6f5ee;color:var(--green);}
-.pill.warn{background:#fdf0df;color:var(--amber);}
+.pill.good{background:#e6f5ee;color:var(--green);}.pill.warn{background:#fdf0df;color:var(--amber);}
 .muted{color:var(--ink-3);font-size:11px;}
 .delta{font-weight:700;font-size:11px;white-space:nowrap;}
 .delta.good{color:var(--green);}.delta.bad{color:var(--red);}
@@ -119,15 +95,12 @@ main{padding:24px 26px;}
 .a-leaf{--accent:var(--leaf);--accent-soft:#eaf5e7;}
 .a-amber{--accent:var(--amber);--accent-soft:#fdf0df;}
 
-/* ── CHARTS ──────────────────────────────────────── */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
 .grid-2-wide{display:grid;grid-template-columns:1.5fr 1fr;gap:15px;}
-.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:15px;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:19px;box-shadow:var(--shadow);}
 .card h3{font-size:13px;font-weight:700;letter-spacing:-.01em;}
 .card .ch-sub{font-size:11.5px;color:var(--ink-3);margin:2px 0 15px;}
 .chart-wrap{position:relative;height:280px;}
-.chart-wrap.sm{height:240px;}
 .chart-wrap[data-msg]::after{content:attr(data-msg);position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 20px;color:var(--ink-3);font-size:13px;background:var(--surface);border-radius:8px;}
 
 .table-wrap{overflow-x:auto;}
@@ -143,28 +116,22 @@ tbody tr:nth-child(2) .rank{background:#f0d6bb;color:#8a5a2b;}
 tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .loading{color:var(--ink-3);font-size:13px;text-align:center;padding:50px;}
 
-@media (max-width:1000px){.grid-3{grid-template-columns:1fr;}.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
+@media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
 </style>
 </head>
 <body>
 <div class="app">
 
-  <!-- ── SIDEBAR ── -->
   <aside class="sidebar">
     <div class="brand">
       <div class="mark"><b>R</b><i>p</i></div>
       <div class="t">Rise<span>pack</span><small>ANALYTICS</small></div>
     </div>
-
     <div class="nav-label">Menu</div>
     <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
-    <button class="nav-item" data-view="produk"   onclick="showView('produk')"><span class="i">📦</span> Produk</button>
-    <button class="nav-item" data-view="margin"   onclick="showView('margin')"><span class="i">📈</span> Margin</button>
-    <button class="nav-item" data-view="customer" onclick="showView('customer')"><span class="i">👥</span> Customer</button>
-    <button class="nav-item" data-view="penjualan" onclick="showView('penjualan')"><span class="i">💰</span> Penjualan</button>
+    <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
-
     <div class="spacer"></div>
     <div class="side-card">
       <div class="h">Risepack Analytics</div>
@@ -173,7 +140,6 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <a class="side-logout" href="/logout">Keluar</a>
   </aside>
 
-  <!-- ── CONTENT ── -->
   <div class="content">
     <div class="topbar">
       <h1 id="page-title">Ringkasan<small id="page-sub">Ikhtisar performa penjualan</small></h1>
@@ -206,38 +172,44 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         <div class="kpi-grid" id="kpi-cust"></div>
       </section>
 
-      <!-- PRODUK -->
-      <section id="view-produk" class="view">
-        <div class="grid-2-wide">
-          <div class="card"><h3>Monthly Trend by Produk</h3><div class="ch-sub">Omzet per jenis bahan sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend-bahan"></canvas></div></div>
-          <div class="card"><h3>Sales by Produk</h3><div class="ch-sub">Kontribusi omzet per jenis bahan</div><div class="chart-wrap"><canvas id="c-bahan"></canvas></div></div>
+      <!-- SALES (gabungan) -->
+      <section id="view-sales" class="view">
+        <div class="subtabs">
+          <button class="subtab active" data-sub="produk"    onclick="showSub('produk')">📦 Produk</button>
+          <button class="subtab" data-sub="margin"    onclick="showSub('margin')">📈 Margin</button>
+          <button class="subtab" data-sub="customer"  onclick="showSub('customer')">👥 Customer</button>
+          <button class="subtab" data-sub="penjualan" onclick="showSub('penjualan')">💰 Penjualan</button>
         </div>
-        <div class="card" style="margin-top:15px"><h3>Kategori Produk</h3><div class="ch-sub">Omzet per kategori produksi</div><div class="chart-wrap"><canvas id="c-kategori"></canvas></div></div>
-      </section>
 
-      <!-- MARGIN -->
-      <section id="view-margin" class="view">
-        <div class="grid-2">
-          <div class="card"><h3>Sales by Margin</h3><div class="ch-sub">Low &lt;10% · Medium 10-20% · High &gt;20%</div><div class="chart-wrap"><canvas id="c-margin"></canvas></div></div>
-          <div class="card"><h3>Persentase Margin (Setahun)</h3><div class="ch-sub">Rata-rata margin per bulan</div><div class="chart-wrap"><canvas id="c-margin-bulan"></canvas></div></div>
+        <div id="subview-produk" class="subview active">
+          <div class="grid-2-wide">
+            <div class="card"><h3>Monthly Trend by Produk</h3><div class="ch-sub">Omzet per jenis bahan sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend-bahan"></canvas></div></div>
+            <div class="card"><h3>Sales by Produk</h3><div class="ch-sub">Kontribusi omzet per jenis bahan</div><div class="chart-wrap"><canvas id="c-bahan"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>Kategori Produk</h3><div class="ch-sub">Omzet per kategori produksi</div><div class="chart-wrap"><canvas id="c-kategori"></canvas></div></div>
         </div>
-      </section>
 
-      <!-- CUSTOMER -->
-      <section id="view-customer" class="view">
-        <div class="grid-2">
-          <div class="card"><h3>Lifetime Value</h3><div class="ch-sub">Jumlah customer per frekuensi beli</div><div class="chart-wrap"><canvas id="c-ltv"></canvas></div></div>
-          <div class="card"><h3>Sales by Sumber</h3><div class="ch-sub">Kontribusi omzet per channel</div><div class="chart-wrap"><canvas id="c-sumber"></canvas></div></div>
+        <div id="subview-margin" class="subview">
+          <div class="grid-2">
+            <div class="card"><h3>Sales by Margin</h3><div class="ch-sub">Low &lt;10% · Medium 10-20% · High &gt;20%</div><div class="chart-wrap"><canvas id="c-margin"></canvas></div></div>
+            <div class="card"><h3>Persentase Margin (Setahun)</h3><div class="ch-sub">Rata-rata margin per bulan</div><div class="chart-wrap"><canvas id="c-margin-bulan"></canvas></div></div>
+          </div>
         </div>
-      </section>
 
-      <!-- PENJUALAN -->
-      <section id="view-penjualan" class="view">
-        <div class="grid-2-wide">
-          <div class="card"><h3>Trend Omzet Bulanan</h3><div class="ch-sub">Omzet per kategori sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend"></canvas></div></div>
-          <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
+        <div id="subview-customer" class="subview">
+          <div class="grid-2">
+            <div class="card"><h3>Lifetime Value</h3><div class="ch-sub">Jumlah customer per frekuensi beli</div><div class="chart-wrap"><canvas id="c-ltv"></canvas></div></div>
+            <div class="card"><h3>Sales by Sumber</h3><div class="ch-sub">Kontribusi omzet per channel</div><div class="chart-wrap"><canvas id="c-sumber"></canvas></div></div>
+          </div>
         </div>
-        <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
+
+        <div id="subview-penjualan" class="subview">
+          <div class="grid-2-wide">
+            <div class="card"><h3>Trend Omzet Bulanan</h3><div class="ch-sub">Omzet per kategori sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend"></canvas></div></div>
+            <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
+        </div>
       </section>
 
       <!-- PRODUKSI -->
@@ -252,11 +224,18 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
 <script>
 let charts = {};
-let state = { view: 'ringkasan' };
-let CACHE = {};               // cache hasil API per-URL (per kombinasi filter)
+let state = { view: 'ringkasan', subtab: 'produk' };
+let CACHE = {};
 const PALETTE = ['#e9852b','#7a5230','#3b6fb0','#4e9a3f','#cf4b3a','#d99327','#9b59b6','#16a085'];
+const PAGE = {
+  ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
+  sales:['Sales','Analisis penjualan'],
+  produksi:['Produksi','Status order produksi'],
+};
+const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan'};
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.color = '#6d6055';
 
-// fetch ber-cache + cek status; lempar error kalau bukan 200
 async function fetchJSON(url){
   if (url in CACHE) return CACHE[url];
   const r = await fetch(url);
@@ -265,27 +244,12 @@ async function fetchJSON(url){
   CACHE[url] = d;
   return d;
 }
-// tampilkan pesan loading/error di kartu (canvas → overlay, container → innerHTML)
 function setMsg(target, msg){
   const el = document.getElementById(target);
   if (!el) return;
-  if (el.tagName === 'CANVAS'){
-    const w = el.parentElement;
-    if (msg) w.dataset.msg = msg; else delete w.dataset.msg;
-  } else if (msg){
-    el.innerHTML = `<div class="loading">${msg}</div>`;
-  }
+  if (el.tagName === 'CANVAS'){ const w = el.parentElement; if (msg) w.dataset.msg = msg; else delete w.dataset.msg; }
+  else if (msg){ el.innerHTML = `<div class="loading">${msg}</div>`; }
 }
-const PAGE = {
-  ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
-  produk:['Produk','Analisis per jenis bahan & kategori'],
-  margin:['Margin','Distribusi & tren profitabilitas'],
-  customer:['Customer','Loyalitas & sumber pelanggan'],
-  penjualan:['Penjualan','Trend, nilai order & sales rep'],
-  produksi:['Produksi','Status order produksi'],
-};
-Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
-Chart.defaults.color = '#6d6055';
 
 // ── Tanggal ──
 function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
@@ -300,20 +264,33 @@ function setRange(type, load = true){
   markChip('sc-'+type);
   if (load) loadAll();
 }
-function markChip(id){
-  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
-  const el = id && document.getElementById(id); if (el) el.classList.add('active');
-}
+function markChip(id){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); const el=id&&document.getElementById(id); if(el)el.classList.add('active'); }
 
-// ── View switching ──
+// ── Navigasi ──
+function setTitle(){
+  const [t,s] = PAGE[state.view];
+  document.getElementById('page-title').firstChild.textContent = t;
+  document.getElementById('page-sub').textContent = state.view==='sales' ? ('Sales · '+SUBLABEL[state.subtab]) : s;
+}
 function showView(view){
   state.view = view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===view));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById('view-'+view).classList.add('active');
-  document.getElementById('page-title').firstChild.textContent = PAGE[view][0];
-  document.getElementById('page-sub').textContent = PAGE[view][1];
-  renderView(view);
+  if (view==='sales') syncSub();
+  setTitle();
+  renderView();
+}
+function showSub(sub){
+  state.subtab = sub;
+  syncSub();
+  setTitle();
+  renderView();
+}
+function syncSub(){
+  document.querySelectorAll('.subtab').forEach(t=>t.classList.toggle('active', t.dataset.sub===state.subtab));
+  document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+  document.getElementById('subview-'+state.subtab).classList.add('active');
 }
 
 // ── Init ──
@@ -344,37 +321,30 @@ function yearParams(){
   p.set('tahun',tahun); if(pic)p.set('pic',pic); if(divisi)p.set('divisi',divisi);
   return p.toString();
 }
-function resetFilter(){
-  document.getElementById('f-pic').value=''; document.getElementById('f-divisi').value='';
-  setRange('month');
-}
+function resetFilter(){ document.getElementById('f-pic').value=''; document.getElementById('f-divisi').value=''; setRange('month'); }
 
-// Terapkan filter → buang cache lama, render ulang view aktif
 async function loadAll(){
   CACHE = {};
   document.getElementById('last-update').textContent='Memuat…';
-  await renderView(state.view);
+  await renderView();
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-// daftar tugas per view: [targetId, loaderFn]
-const VIEW_TASKS = {
-  ringkasan:[['kpi-fin', loadKpi]],
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], produksi:[['c-produksi',loadProduksi]] };
+const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
   customer:[['c-ltv',loadLTV],['c-sumber',loadSumber]],
   penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
-  produksi:[['c-produksi',loadProduksi]],
 };
-
-async function renderView(view){
+async function renderView(){
   const q = getParams();
-  const tasks = VIEW_TASKS[view] || [];
+  const tasks = state.view==='sales' ? (SUB_TASKS[state.subtab]||[]) : (TOP_TASKS[state.view]||[]);
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
-    if (!(document.getElementById(target).tagName === 'CANVAS' && charts[target]))
-      setMsg(target, 'Memuat…');                 // tampilkan loading bila belum ada isi
-    try { await fn(q); setMsg(target, null); }
-    catch (e) { console.error(target, e); setMsg(target, '⚠️ Gagal memuat — coba klik Terapkan lagi'); }
+    const el = document.getElementById(target);
+    if (!(el.tagName==='CANVAS' && charts[target])) setMsg(target,'Memuat…');
+    try { await fn(q); setMsg(target,null); }
+    catch (e) { console.error(target,e); setMsg(target,'⚠️ Gagal memuat — coba klik Terapkan lagi'); }
   }));
 }
 
@@ -400,57 +370,39 @@ function trendSub(v){ if(v==null) return `<span class="muted">vs periode lalu</s
 function marginClass(p){p=parseFloat(p);return p>=25?'good':(p<15?'warn':'');}
 function rateClass(p){p=parseFloat(p);return p>=40?'good':(p<20?'warn':'');}
 
-// ── Produk: Sales by Bahan ──
+// ── Produk ──
 async function loadBahan(q){
   const rows=await fetchJSON('/api/sales-by-bahan?'+q);
-  renderChart('c-bahan','doughnut',{
-    labels:rows.map(r=>r.jenis_bahan),
-    datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
-  },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
+  renderChart('c-bahan','doughnut',{labels:rows.map(r=>r.jenis_bahan),datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
 }
-// ── Produk: Monthly Trend by Bahan ──
-async function loadTrendBahan(){
-  const rows=await fetchJSON('/api/trend-bahan?'+yearParams());
-  trendLine('c-trend-bahan',rows,'jenis_bahan');
-}
-// ── Penjualan: Trend Omzet by kategori ──
-async function loadTrend(){
-  const rows=await fetchJSON('/api/trend-omzet?'+yearParams());
-  trendLine('c-trend',rows,'kategori_produksi');
-}
+async function loadTrendBahan(){ trendLine('c-trend-bahan', await fetchJSON('/api/trend-bahan?'+yearParams()), 'jenis_bahan'); }
+async function loadTrend(){ trendLine('c-trend', await fetchJSON('/api/trend-omzet?'+yearParams()), 'kategori_produksi'); }
 function trendLine(id,rows,key){
   const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
   const cats=[...new Set(rows.map(r=>r[key]))];
-  const datasets=cats.map((cat,i)=>({
-    label:cat,
+  const datasets=cats.map((cat,i)=>({label:cat,
     data:months.map((_,mi)=>{const r=rows.find(r=>r[key]===cat&&parseInt(r.bulan?.slice(5))===mi+1);return r?r.omzet:0;}),
-    borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length]+'22',
-    tension:0.35,fill:false,pointRadius:3,pointHoverRadius:5,borderWidth:2
-  }));
+    borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length]+'22',tension:0.35,fill:false,pointRadius:3,pointHoverRadius:5,borderWidth:2}));
   renderChart(id,'line',{labels:months,datasets},{
     plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}},
-    scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}
-  });
+    scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
 }
-// ── Produk/Penjualan: Kategori (bar) ──
 async function loadKategori(q){
   const rows=await fetchJSON('/api/kategori?'+q);
   barH('c-kategori',rows.map(r=>r.kategori_produksi),rows.map(r=>r.omzet),'#e9852b');
 }
-// ── Margin: Sales by Margin ──
+// ── Margin ──
 async function loadSalesByMargin(q){
   const rows=await fetchJSON('/api/sales-by-margin?'+q);
   const order=['Low (<10%)','Medium (10-20%)','High (>20%)','Tidak diketahui'];
   const colMap={'Low (<10%)':'#cf4b3a','Medium (10-20%)':'#d99327','High (>20%)':'#2f9e6f','Tidak diketahui':'#b8a89a'};
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
-  renderChart('c-margin','bar',{
-    labels:rows.map(r=>r.bucket),
-    datasets:[{label:'Omzet',data:rows.map(r=>r.omzet),backgroundColor:rows.map(r=>colMap[r.bucket]||'#999'),borderRadius:6,maxBarThickness:70,
-      _orders:rows.map(r=>r.orders)}]
-  },{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Omzet: ${formatRp(c.parsed.y)} · ${c.dataset._orders[c.dataIndex]} order`}}},
+  renderChart('c-margin','bar',{labels:rows.map(r=>r.bucket),
+    datasets:[{label:'Omzet',data:rows.map(r=>r.omzet),backgroundColor:rows.map(r=>colMap[r.bucket]||'#999'),borderRadius:6,maxBarThickness:70,_orders:rows.map(r=>r.orders)}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Omzet: ${formatRp(c.parsed.y)} · ${c.dataset._orders[c.dataIndex]} order`}}},
      scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
 }
-// ── Margin: Persentase Margin bulanan ──
 async function loadMarginBulanan(){
   const rows=await fetchJSON('/api/margin-bulanan?'+yearParams());
   const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -459,36 +411,30 @@ async function loadMarginBulanan(){
     {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y}%`}}},
      scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
 }
-// ── Customer: LTV ──
+// ── Customer ──
 async function loadLTV(q){
   const rows=await fetchJSON('/api/lifetime-value?'+q);
   const order=['1x','2x','3x','>=4x']; const labelMap={'1x':'1x (Baru)','2x':'2x','3x':'3x','>=4x':'≥4x (Loyal)'};
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
-  renderChart('c-ltv','doughnut',{
-    labels:rows.map(r=>labelMap[r.bucket]||r.bucket),
-    datasets:[{data:rows.map(r=>r.customers),backgroundColor:['#3b6fb0','#e9852b','#d99327','#4e9a3f'],borderWidth:2,borderColor:'#fff'}]
-  },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},
-     tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} customer`}}}});
+  renderChart('c-ltv','doughnut',{labels:rows.map(r=>labelMap[r.bucket]||r.bucket),
+    datasets:[{data:rows.map(r=>r.customers),backgroundColor:['#3b6fb0','#e9852b','#d99327','#4e9a3f'],borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} customer`}}}});
 }
-// ── Customer: Sumber ──
 async function loadSumber(q){
   const rows=await fetchJSON('/api/sales-by-sumber?'+q);
-  renderChart('c-sumber','doughnut',{labels:rows.map(r=>r.sumber),
-    datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
-  },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
+  renderChart('c-sumber','doughnut',{labels:rows.map(r=>r.sumber),datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
 }
-// ── Penjualan: Kategori Omzet bucket ──
+// ── Penjualan ──
 async function loadKatOmzet(q){
   const rows=await fetchJSON('/api/kategori-omzet?'+q);
   const order=['>100 jt','50-100 jt','30-50 jt','<30 jt'];
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
-  renderChart('c-kat-omzet','bar',{
-    labels:rows.map(r=>r.bucket),
-    datasets:[{label:'Jumlah Order',data:rows.map(r=>r.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omzet:rows.map(r=>r.omzet)}]
-  },{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · omzet ${formatRp(c.dataset._omzet[c.dataIndex])}`}}},
+  renderChart('c-kat-omzet','bar',{labels:rows.map(r=>r.bucket),
+    datasets:[{label:'Jumlah Order',data:rows.map(r=>r.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omzet:rows.map(r=>r.omzet)}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · omzet ${formatRp(c.dataset._omzet[c.dataIndex])}`}}},
      scales:{y:{ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
 }
-// ── Penjualan: Top Sales ──
 async function loadTopSales(q){
   const rows=await fetchJSON('/api/top-sales?'+q);
   document.getElementById('tbl-top-sales').innerHTML=`<table>
@@ -499,12 +445,11 @@ async function loadTopSales(q){
 async function loadProduksi(q){
   const d=await fetchJSON('/api/produksi?'+q);
   renderChart('c-produksi','doughnut',{labels:['Berjalan','Tuntas','Belum SPK'],
-    datasets:[{data:[d.berjalan,d.tuntas,d.belum_spk],backgroundColor:['#3b6fb0','#2f9e6f','#d99327'],borderWidth:2,borderColor:'#fff'}]
-  },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},
-     tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
+    datasets:[{data:[d.berjalan,d.tuntas,d.belum_spk],backgroundColor:['#3b6fb0','#2f9e6f','#d99327'],borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
 }
 
-// ── Helpers chart ──
+// ── Helpers ──
 function barH(id,labels,data,color){
   renderChart(id,'bar',{labels,datasets:[{label:'Omzet',data,backgroundColor:color,borderRadius:5,maxBarThickness:22}]},{
     indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Omzet: ${formatRp(c.parsed.x)}`}}},
@@ -514,11 +459,8 @@ function renderChart(id,type,data,options={}){
   if(charts[id]) charts[id].destroy();
   const ctx=document.getElementById(id).getContext('2d');
   charts[id]=new Chart(ctx,{type,data,options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{labels:{font:{size:11.5}}},tooltip:{backgroundColor:'#2a211b',padding:10,cornerRadius:8,titleFont:{weight:'600'}}},
-    ...options}});
+    plugins:{legend:{labels:{font:{size:11.5}}},tooltip:{backgroundColor:'#2a211b',padding:10,cornerRadius:8,titleFont:{weight:'600'}}},...options}});
 }
-
-// ── Format ──
 function formatRp(n){ if(!n) return 'Rp 0'; if(n>=1e9) return 'Rp '+(n/1e9).toFixed(1)+' M'; if(n>=1e6) return 'Rp '+(n/1e6).toFixed(1)+' jt'; return 'Rp '+Number(n).toLocaleString('id-ID'); }
 function formatRpShort(n){ if(n>=1e9) return (n/1e9).toFixed(1)+'M'; if(n>=1e6) return (n/1e6).toFixed(0)+'jt'; return n; }
 function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
