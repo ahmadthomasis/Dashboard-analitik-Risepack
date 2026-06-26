@@ -128,6 +128,7 @@ main{padding:24px 26px;}
 .card .ch-sub{font-size:11.5px;color:var(--ink-3);margin:2px 0 15px;}
 .chart-wrap{position:relative;height:280px;}
 .chart-wrap.sm{height:240px;}
+.chart-wrap[data-msg]::after{content:attr(data-msg);position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 20px;color:var(--ink-3);font-size:13px;background:var(--surface);border-radius:8px;}
 
 .table-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -252,7 +253,29 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 <script>
 let charts = {};
 let state = { view: 'ringkasan' };
+let CACHE = {};               // cache hasil API per-URL (per kombinasi filter)
 const PALETTE = ['#e9852b','#7a5230','#3b6fb0','#4e9a3f','#cf4b3a','#d99327','#9b59b6','#16a085'];
+
+// fetch ber-cache + cek status; lempar error kalau bukan 200
+async function fetchJSON(url){
+  if (url in CACHE) return CACHE[url];
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  CACHE[url] = d;
+  return d;
+}
+// tampilkan pesan loading/error di kartu (canvas → overlay, container → innerHTML)
+function setMsg(target, msg){
+  const el = document.getElementById(target);
+  if (!el) return;
+  if (el.tagName === 'CANVAS'){
+    const w = el.parentElement;
+    if (msg) w.dataset.msg = msg; else delete w.dataset.msg;
+  } else if (msg){
+    el.innerHTML = `<div class="loading">${msg}</div>`;
+  }
+}
 const PAGE = {
   ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
   produk:['Produk','Analisis per jenis bahan & kategori'],
@@ -296,7 +319,7 @@ function showView(view){
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
   setRange('month', false);
-  const f = await fetch('/api/filters').then(r=>r.json());
+  const f = await fetchJSON('/api/filters');
   const picSel=document.getElementById('f-pic');
   f.pics.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;picSel.appendChild(o);});
   const divSel=document.getElementById('f-divisi');
@@ -326,25 +349,38 @@ function resetFilter(){
   setRange('month');
 }
 
+// Terapkan filter → buang cache lama, render ulang view aktif
 async function loadAll(){
+  CACHE = {};
   document.getElementById('last-update').textContent='Memuat…';
   await renderView(state.view);
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
+// daftar tugas per view: [targetId, loaderFn]
+const VIEW_TASKS = {
+  ringkasan:[['kpi-fin', loadKpi]],
+  produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
+  margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
+  customer:[['c-ltv',loadLTV],['c-sumber',loadSumber]],
+  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
+  produksi:[['c-produksi',loadProduksi]],
+};
+
 async function renderView(view){
-  const q=getParams();
-  if(view==='ringkasan') return loadKpi(q);
-  if(view==='produk')    return Promise.all([loadTrendBahan(), loadBahan(q), loadKategori(q)]);
-  if(view==='margin')    return Promise.all([loadSalesByMargin(q), loadMarginBulanan()]);
-  if(view==='customer')  return Promise.all([loadLTV(q), loadSumber(q)]);
-  if(view==='penjualan') return Promise.all([loadTrend(), loadKatOmzet(q), loadTopSales(q)]);
-  if(view==='produksi')  return loadProduksi(q);
+  const q = getParams();
+  const tasks = VIEW_TASKS[view] || [];
+  await Promise.allSettled(tasks.map(async ([target, fn]) => {
+    if (!(document.getElementById(target).tagName === 'CANVAS' && charts[target]))
+      setMsg(target, 'Memuat…');                 // tampilkan loading bila belum ada isi
+    try { await fn(q); setMsg(target, null); }
+    catch (e) { console.error(target, e); setMsg(target, '⚠️ Gagal memuat — coba klik Terapkan lagi'); }
+  }));
 }
 
 // ── KPI ──
 async function loadKpi(q){
-  const d=await fetch('/api/kpi?'+q).then(r=>r.json()); const D=d.delta||{};
+  const d=await fetchJSON('/api/kpi?'+q); const D=d.delta||{};
   document.getElementById('kpi-fin').innerHTML=`
     ${kpiCard('a-orange','💰','Total Omzet',formatRp(d.total_omzet),trendSub(D.total_omzet))}
     ${kpiCard('a-brown','📦','Total Modal',formatRp(d.total_modal),trendSub(D.total_modal))}
@@ -366,7 +402,7 @@ function rateClass(p){p=parseFloat(p);return p>=40?'good':(p<20?'warn':'');}
 
 // ── Produk: Sales by Bahan ──
 async function loadBahan(q){
-  const rows=await fetch('/api/sales-by-bahan?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/sales-by-bahan?'+q);
   renderChart('c-bahan','doughnut',{
     labels:rows.map(r=>r.jenis_bahan),
     datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
@@ -374,12 +410,12 @@ async function loadBahan(q){
 }
 // ── Produk: Monthly Trend by Bahan ──
 async function loadTrendBahan(){
-  const rows=await fetch('/api/trend-bahan?'+yearParams()).then(r=>r.json());
+  const rows=await fetchJSON('/api/trend-bahan?'+yearParams());
   trendLine('c-trend-bahan',rows,'jenis_bahan');
 }
 // ── Penjualan: Trend Omzet by kategori ──
 async function loadTrend(){
-  const rows=await fetch('/api/trend-omzet?'+yearParams()).then(r=>r.json());
+  const rows=await fetchJSON('/api/trend-omzet?'+yearParams());
   trendLine('c-trend',rows,'kategori_produksi');
 }
 function trendLine(id,rows,key){
@@ -398,12 +434,12 @@ function trendLine(id,rows,key){
 }
 // ── Produk/Penjualan: Kategori (bar) ──
 async function loadKategori(q){
-  const rows=await fetch('/api/kategori?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/kategori?'+q);
   barH('c-kategori',rows.map(r=>r.kategori_produksi),rows.map(r=>r.omzet),'#e9852b');
 }
 // ── Margin: Sales by Margin ──
 async function loadSalesByMargin(q){
-  const rows=await fetch('/api/sales-by-margin?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/sales-by-margin?'+q);
   const order=['Low (<10%)','Medium (10-20%)','High (>20%)','Tidak diketahui'];
   const colMap={'Low (<10%)':'#cf4b3a','Medium (10-20%)':'#d99327','High (>20%)':'#2f9e6f','Tidak diketahui':'#b8a89a'};
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
@@ -416,7 +452,7 @@ async function loadSalesByMargin(q){
 }
 // ── Margin: Persentase Margin bulanan ──
 async function loadMarginBulanan(){
-  const rows=await fetch('/api/margin-bulanan?'+yearParams()).then(r=>r.json());
+  const rows=await fetchJSON('/api/margin-bulanan?'+yearParams());
   const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
   const data=months.map((_,mi)=>{const r=rows.find(r=>parseInt(r.bulan?.slice(5))===mi+1);return r?r.persen_margin:null;});
   renderChart('c-margin-bulan','line',{labels:months,datasets:[{label:'% Margin',data,borderColor:'#4e9a3f',backgroundColor:'#4e9a3f22',tension:0.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
@@ -425,7 +461,7 @@ async function loadMarginBulanan(){
 }
 // ── Customer: LTV ──
 async function loadLTV(q){
-  const rows=await fetch('/api/lifetime-value?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/lifetime-value?'+q);
   const order=['1x','2x','3x','>=4x']; const labelMap={'1x':'1x (Baru)','2x':'2x','3x':'3x','>=4x':'≥4x (Loyal)'};
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
   renderChart('c-ltv','doughnut',{
@@ -436,14 +472,14 @@ async function loadLTV(q){
 }
 // ── Customer: Sumber ──
 async function loadSumber(q){
-  const rows=await fetch('/api/sales-by-sumber?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/sales-by-sumber?'+q);
   renderChart('c-sumber','doughnut',{labels:rows.map(r=>r.sumber),
     datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]
   },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
 }
 // ── Penjualan: Kategori Omzet bucket ──
 async function loadKatOmzet(q){
-  const rows=await fetch('/api/kategori-omzet?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/kategori-omzet?'+q);
   const order=['>100 jt','50-100 jt','30-50 jt','<30 jt'];
   rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
   renderChart('c-kat-omzet','bar',{
@@ -454,14 +490,14 @@ async function loadKatOmzet(q){
 }
 // ── Penjualan: Top Sales ──
 async function loadTopSales(q){
-  const rows=await fetch('/api/top-sales?'+q).then(r=>r.json());
+  const rows=await fetchJSON('/api/top-sales?'+q);
   document.getElementById('tbl-top-sales').innerHTML=`<table>
     <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:500">${r.PIC}</td><td class="num">${fmtInt(r.total_order)}</td><td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td></tr>`).join('')}</tbody></table>`;
 }
 // ── Produksi ──
 async function loadProduksi(q){
-  const d=await fetch('/api/produksi?'+q).then(r=>r.json());
+  const d=await fetchJSON('/api/produksi?'+q);
   renderChart('c-produksi','doughnut',{labels:['Berjalan','Tuntas','Belum SPK'],
     datasets:[{data:[d.berjalan,d.tuntas,d.belum_spk],backgroundColor:['#3b6fb0','#2f9e6f','#d99327'],borderWidth:2,borderColor:'#fff'}]
   },{cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},
