@@ -437,5 +437,44 @@ def api_kategori_omzet():
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 
+# ─── Detail Order (tabel cek cepat, per baris produk) ────────────
+@app.route('/api/detail')
+@login_required
+def api_detail():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT o.sko, o.nama, o.sumber,
+               TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,''))) AS nama_produk,
+               o.tgl_omzet_realtime AS tanggal,
+               o.jumlah_produk AS quantity,
+               o.harga_produk AS harga_jual,
+               o.modal_sales, o.total_harga
+        {BASE}
+        AND o.status_deal='Deal'
+        {cond}
+        ORDER BY o.tgl_omzet_realtime DESC
+        LIMIT 2000
+    """
+    rows = query(sql, params)
+    out = []
+    for r in rows:
+        qty   = float(r['quantity'] or 0)
+        total = float(r['total_harga'] or 0)
+        modal = float(r['modal_sales'] or 0)
+        tgl = r['tanggal']
+        out.append({
+            'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
+            'nama_produk': (r['nama_produk'] or '').strip(),
+            'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
+            'quantity': int(qty),
+            'harga_jual': float(r['harga_jual'] or 0),
+            'harga_modal': round(modal / qty) if qty else 0,
+            'total_harga': total,
+            'persen_margin': round((total - modal) / total * 100, 1) if total else 0,
+        })
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
