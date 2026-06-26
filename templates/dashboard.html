@@ -121,10 +121,23 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .toolbar .spacer-f{flex:1;}
 #detail-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 340px;max-width:60%;}
 #detail-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
-#detail-table table{font-size:12.5px;}
-#detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;}
-#detail-table td{white-space:nowrap;}
+#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;}
+#detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
+#detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #detail-table th:hover{color:var(--orange-600);}
+#detail-table tbody tr:nth-child(even) td{background:#faf8f5;}
+#detail-table tbody tr:hover td{background:#fdeede;}
+/* lebar kolom: Customer, SKO, Sumber, Produk, Tanggal, Qty, H.Modal, H.Jual, Total, Margin */
+#detail-table th:nth-child(1),#detail-table td:nth-child(1){width:130px;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:120px;}
+#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:105px;}
+#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:240px;}
+#detail-table th:nth-child(5),#detail-table td:nth-child(5){width:100px;}
+#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:80px;}
+#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:110px;}
+#detail-table th:nth-child(8),#detail-table td:nth-child(8){width:105px;}
+#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:130px;}
+#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:85px;}
 
 @media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
@@ -483,6 +496,7 @@ const DCOLS = [
   ['total_harga','Total Harga','rp'],['persen_margin','Margin %','pct'],
 ];
 function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
+function esc(s,attr){ s=(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); return attr?s.replace(/"/g,'&quot;'):s; }
 async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
 function onDetailSearch(v){ DETAIL.term = v.trim().toLowerCase(); renderDetail(); }
 function setSort(k){ if(DETAIL.key===k) DETAIL.dir = DETAIL.dir==='asc'?'desc':'asc'; else { DETAIL.key=k; DETAIL.dir='asc'; } renderDetail(); }
@@ -507,10 +521,10 @@ function renderDetail(){
     return `<th class="${cls}" onclick="setSort('${k}')">${label}${arrow}</th>`;
   }).join('');
   const body = rows.map(r=>`<tr>
-    <td style="font-weight:500">${r.nama||'-'}</td>
-    <td>${r.sko||'-'}</td>
-    <td>${r.sumber||'-'}</td>
-    <td>${r.nama_produk||'-'}</td>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+    <td title="${esc(r.sumber,1)}">${esc(r.sumber)||'-'}</td>
+    <td title="${esc(r.nama_produk,1)}">${esc(r.nama_produk)||'-'}</td>
     <td>${r.tanggal||'-'}</td>
     <td class="num">${fmtInt(r.quantity)}</td>
     <td class="num">${formatRpFull(r.harga_modal)}</td>
