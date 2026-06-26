@@ -279,5 +279,149 @@ def api_kategori():
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
+# ─── Grafik: Produk (jenis_bahan) ────────────────────────────────
+@app.route('/api/sales-by-bahan')
+@login_required
+def api_sales_by_bahan():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT o.jenis_bahan,
+               COUNT(DISTINCT o.order_key) AS orders,
+               SUM(o.total_harga) AS omzet
+        {BASE}
+        AND o.status_deal='Deal' AND o.jenis_bahan IS NOT NULL AND o.jenis_bahan!=''
+        {cond}
+        GROUP BY o.jenis_bahan ORDER BY omzet DESC
+    """
+    rows = query(sql, params)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
+
+@app.route('/api/trend-bahan')
+@login_required
+def api_trend_bahan():
+    tahun  = request.args.get('tahun', str(datetime.now().year))
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(None, None, pic, divisi)
+    sql = f"""
+        SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
+               o.jenis_bahan, SUM(o.total_harga) AS omzet
+        {BASE}
+        AND o.status_deal='Deal' AND o.jenis_bahan IS NOT NULL AND o.jenis_bahan!=''
+        AND YEAR(o.tgl_omzet_realtime) = %s
+        {cond}
+        GROUP BY bulan, o.jenis_bahan ORDER BY bulan
+    """
+    rows = query(sql, params + [tahun])
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
+
+# ─── Grafik: Sales by Margin (bucket margin %) ───────────────────
+@app.route('/api/sales-by-margin')
+@login_required
+def api_sales_by_margin():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT
+            CASE
+                WHEN omzet <= 0 THEN 'Tidak diketahui'
+                WHEN margin/omzet*100 < 10  THEN 'Low (<10%)'
+                WHEN margin/omzet*100 <= 20 THEN 'Medium (10-20%)'
+                ELSE 'High (>20%)'
+            END AS bucket,
+            COUNT(*) AS orders, SUM(omzet) AS omzet
+        FROM (
+            SELECT o.order_key,
+                   SUM(o.total_harga) AS omzet,
+                   SUM(o.total_harga - o.modal_sales) AS margin
+            {BASE}
+            AND o.status_deal='Deal'
+            {cond}
+            GROUP BY o.order_key
+        ) t
+        GROUP BY bucket
+    """
+    rows = query(sql, params)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
+
+# ─── Grafik: Persentase Margin bulanan (setahun) ─────────────────
+@app.route('/api/margin-bulanan')
+@login_required
+def api_margin_bulanan():
+    tahun  = request.args.get('tahun', str(datetime.now().year))
+    pic    = request.args.get('pic')
+    divisi = request.args.get('divisi')
+    cond, params = build_where(None, None, pic, divisi)
+    sql = f"""
+        SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
+               SUM(o.total_harga) AS omzet,
+               SUM(o.total_harga - o.modal_sales) AS margin
+        {BASE}
+        AND o.status_deal='Deal'
+        AND YEAR(o.tgl_omzet_realtime) = %s
+        {cond}
+        GROUP BY bulan ORDER BY bulan
+    """
+    rows = query(sql, params + [tahun])
+    out = []
+    for r in rows:
+        omzet = float(r['omzet'] or 0)
+        margin = float(r['margin'] or 0)
+        out.append({'bulan': r['bulan'],
+                    'persen_margin': round(margin / omzet * 100, 1) if omzet else 0})
+    return jsonify(out)
+
+# ─── Grafik: Lifetime Value (frekuensi beli per customer) ────────
+@app.route('/api/lifetime-value')
+@login_required
+def api_lifetime_value():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT
+            CASE WHEN n >= 4 THEN '>=4x' WHEN n = 3 THEN '3x'
+                 WHEN n = 2 THEN '2x' ELSE '1x' END AS bucket,
+            COUNT(*) AS customers
+        FROM (
+            SELECT o.id_customer, COUNT(DISTINCT o.order_key) AS n
+            {BASE}
+            AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+            {cond}
+            GROUP BY o.id_customer
+        ) t
+        GROUP BY bucket
+    """
+    rows = query(sql, params)
+    return jsonify([{**r, 'customers': int(r['customers'] or 0)} for r in rows])
+
+# ─── Grafik: Kategori Omzet (bucket nilai order) ─────────────────
+@app.route('/api/kategori-omzet')
+@login_required
+def api_kategori_omzet():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT
+            CASE
+                WHEN omzet > 100000000 THEN '>100 jt'
+                WHEN omzet > 50000000  THEN '50-100 jt'
+                WHEN omzet > 30000000  THEN '30-50 jt'
+                ELSE '<30 jt'
+            END AS bucket,
+            COUNT(*) AS orders, SUM(omzet) AS omzet
+        FROM (
+            SELECT o.order_key, SUM(o.total_harga) AS omzet
+            {BASE}
+            AND o.status_deal='Deal'
+            {cond}
+            GROUP BY o.order_key
+        ) t
+        GROUP BY bucket
+    """
+    rows = query(sql, params)
+    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
