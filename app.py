@@ -2,6 +2,7 @@ from flask import Flask, render_template, jsonify, request, session, redirect, u
 from functools import wraps
 import mysql.connector
 import os
+import calendar
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -95,8 +96,22 @@ def get_args():
         request.args.get('divisi'),
     )
 
+def shift_months(d, n):
+    """Geser tanggal mundur n bulan, pertahankan tanggal (clamp ke akhir bulan)."""
+    month = d.month - n
+    year = d.year
+    while month <= 0:
+        month += 12
+        year -= 1
+    last = calendar.monthrange(year, month)[1]
+    return d.replace(year=year, month=month, day=min(d.day, last))
+
 def prev_range(tgl_dari, tgl_sampai):
-    """Periode pembanding: durasi sama persis tepat sebelum rentang terpilih."""
+    """Periode pembanding berbasis kalender:
+    - rentang <= 1 bulan  -> bulan sebelumnya (tanggal sama)
+    - rentang <= 1 quarter -> quarter sebelumnya
+    - rentang lebih panjang -> tahun sebelumnya (year-over-year)
+    """
     if not tgl_dari or not tgl_sampai:
         return None, None
     try:
@@ -104,10 +119,9 @@ def prev_range(tgl_dari, tgl_sampai):
         d2 = datetime.strptime(tgl_sampai, '%Y-%m-%d').date()
     except ValueError:
         return None, None
-    length = (d2 - d1).days + 1
-    p2 = d1 - timedelta(days=1)
-    p1 = p2 - timedelta(days=length - 1)
-    return p1.isoformat(), p2.isoformat()
+    days = (d2 - d1).days + 1
+    n = 1 if days <= 31 else (3 if days <= 92 else 12)
+    return shift_months(d1, n).isoformat(), shift_months(d2, n).isoformat()
 
 def pct(cur, prev):
     """Persentase perubahan cur vs prev. None bila tak bisa dihitung."""
