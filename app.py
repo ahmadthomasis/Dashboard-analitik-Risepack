@@ -305,5 +305,31 @@ def api_schema():
     return jsonify({'kolom': cols, 'contoh_baris': sample})
 
 
+@app.route('/api/_values')
+@login_required
+def api_values():
+    """Distinct values + omzet untuk kolom kandidat produk. 1 koneksi, ringan."""
+    candidates = ['kategori_produksi', 'jenis_bahan', 'tipe_produk', 'jenis_kertas']
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        for col in candidates:
+            cur.execute(
+                f"SELECT `{col}` AS v, COUNT(DISTINCT order_key) AS orders, "
+                f"SUM(total_harga) AS omzet "
+                f"FROM order_risepack "
+                f"WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL) "
+                f"AND `{col}` IS NOT NULL AND `{col}` != '' "
+                f"GROUP BY `{col}` ORDER BY omzet DESC LIMIT 20"
+            )
+            out[col] = [f"{r['v']} — {r['orders']} order, omzet {r['omzet']}" for r in cur.fetchall()]
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
