@@ -25,7 +25,6 @@
   --red:#dc2626;
   --amber:#d97706;
   --shadow:0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
-  --shadow-md:0 4px 12px rgba(16,24,40,.06);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{
@@ -36,8 +35,7 @@ body{
 
 /* ── NAV ─────────────────────────────────────────── */
 nav{
-  background:var(--surface);
-  border-bottom:1px solid var(--border);
+  background:var(--surface);border-bottom:1px solid var(--border);
   padding:0 28px;display:flex;align-items:center;justify-content:space-between;
   height:62px;position:sticky;top:0;z-index:100;
 }
@@ -56,15 +54,20 @@ nav{
   padding:14px 28px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
 }
 .filters label{font-size:12px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
-select,input[type=month],.btn-filter,.btn-reset{
+select,input[type=date],.btn-filter,.btn-reset,.chip{
   padding:9px 14px;background:var(--surface);border:1px solid var(--border-strong);
   border-radius:9px;color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer;outline:none;
 }
-select:focus,input[type=month]:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);}
+select:focus,input[type=date]:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft);}
 .btn-filter{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600;}
 .btn-filter:hover{background:#ea6c0a;}
 .btn-reset{background:var(--surface);color:var(--ink-2);}
 .btn-reset:hover{border-color:var(--border-strong);color:var(--ink);}
+.shortcuts{display:flex;gap:6px;flex-wrap:wrap;}
+.chip{padding:8px 12px;color:var(--ink-2);font-size:12px;font-weight:600;}
+.chip:hover{border-color:var(--brand);color:var(--brand);}
+.chip.active{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);}
+.sep{width:1px;height:24px;background:var(--border);margin:0 2px;}
 
 /* ── MAIN ────────────────────────────────────────── */
 main{padding:28px;max-width:1440px;margin:0 auto;}
@@ -74,7 +77,7 @@ main{padding:28px;max-width:1440px;margin:0 auto;}
 .section-head:not(:first-child){margin-top:30px;}
 
 /* ── KPI CARDS ───────────────────────────────────── */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:16px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;}
 .kpi-card{
   background:var(--surface);border:1px solid var(--border);border-radius:14px;
   padding:18px 18px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;
@@ -83,11 +86,15 @@ main{padding:28px;max-width:1440px;margin:0 auto;}
 .kpi-card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .kpi-card .label{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
 .kpi-card .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft,#f1f2f4);color:var(--accent,var(--ink-2));font-size:15px;}
-.kpi-card .value{font-size:25px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1.15;}
-.kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:7px;display:flex;align-items:center;gap:6px;}
+.kpi-card .value{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--ink);line-height:1.15;}
+.kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1f2f4;color:var(--ink-2);}
 .pill.good{background:#e7f6ee;color:var(--green);}
 .pill.warn{background:#fdf0e1;color:var(--amber);}
+.muted{color:var(--ink-3);font-size:11px;}
+.delta{font-weight:700;font-size:11px;white-space:nowrap;display:inline-flex;align-items:center;gap:2px;}
+.delta.good{color:var(--green);}
+.delta.bad{color:var(--red);}
 
 /* accent variants */
 .a-brand{--accent:var(--brand);--accent-soft:var(--brand-soft);}
@@ -141,8 +148,18 @@ tbody tr:nth-child(3) .rank{background:#fdf0e1;color:#b45309;}
 </nav>
 
 <div class="filters">
-  <label>Bulan</label>
-  <input type="month" id="f-bulan">
+  <label>Dari</label>
+  <input type="date" id="f-dari">
+  <label>Sampai</label>
+  <input type="date" id="f-sampai">
+  <div class="sep"></div>
+  <div class="shortcuts">
+    <button class="chip" id="sc-month"     onclick="setRange('month')">Bulan Ini</button>
+    <button class="chip" id="sc-lastmonth" onclick="setRange('lastmonth')">Bulan Lalu</button>
+    <button class="chip" id="sc-quarter"   onclick="setRange('quarter')">Quarter Ini</button>
+    <button class="chip" id="sc-year"      onclick="setRange('year')">Tahun Ini</button>
+  </div>
+  <div class="sep"></div>
   <label>PIC</label>
   <select id="f-pic"><option value="">Semua PIC</option></select>
   <label>Divisi</label>
@@ -156,7 +173,7 @@ tbody tr:nth-child(3) .rank{background:#fdf0e1;color:#b45309;}
   <!-- ── SALES OVERVIEW ── -->
   <div class="section-head" style="margin-top:0">
     <h2>Sales Overview</h2>
-    <span class="hint">Ringkasan finansial periode terpilih</span>
+    <span class="hint" id="hint-fin">Ringkasan finansial periode terpilih</span>
   </div>
   <div class="kpi-grid" id="kpi-fin">
     <div class="loading">Memuat data...</div>
@@ -212,10 +229,30 @@ const PALETTE = ['#f97316','#2563eb','#059669','#7c3aed','#dc2626','#d97706','#0
 Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
 Chart.defaults.color = '#5a616e';
 
+// ─── Tanggal helper ──────────────────────────────────────
+function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+function setRange(type, load = true){
+  const now = new Date();
+  let from, to;
+  if (type === 'month')        { from = new Date(now.getFullYear(), now.getMonth(), 1); to = now; }
+  else if (type === 'lastmonth'){ from = new Date(now.getFullYear(), now.getMonth()-1, 1); to = new Date(now.getFullYear(), now.getMonth(), 0); }
+  else if (type === 'quarter') { const q = Math.floor(now.getMonth()/3); from = new Date(now.getFullYear(), q*3, 1); to = now; }
+  else if (type === 'year')    { from = new Date(now.getFullYear(), 0, 1); to = now; }
+  document.getElementById('f-dari').value   = ymd(from);
+  document.getElementById('f-sampai').value = ymd(to);
+  markChip('sc-' + type);
+  if (load) loadAll();
+}
+function markChip(id){
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  const el = id && document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
 // ─── Init ────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  const now = new Date();
-  document.getElementById('f-bulan').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  setRange('month', false);
 
   const f = await fetch('/api/filters').then(r => r.json());
   const picSel = document.getElementById('f-pic');
@@ -223,26 +260,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   const divSel = document.getElementById('f-divisi');
   f.sub_divisions.forEach(d => { const o = document.createElement('option'); o.value = d; o.textContent = d; divSel.appendChild(o); });
 
+  // klik manual tanggal → batalkan highlight shortcut
+  document.getElementById('f-dari').addEventListener('change', () => markChip(null));
+  document.getElementById('f-sampai').addEventListener('change', () => markChip(null));
+
   loadAll();
 });
 
 function getParams() {
   const p = new URLSearchParams();
-  const bulan  = document.getElementById('f-bulan').value;
+  const dari   = document.getElementById('f-dari').value;
+  const sampai = document.getElementById('f-sampai').value;
   const pic    = document.getElementById('f-pic').value;
   const divisi = document.getElementById('f-divisi').value;
-  if (bulan)  p.set('bulan', bulan);
+  if (dari)   p.set('tgl_dari', dari);
+  if (sampai) p.set('tgl_sampai', sampai);
   if (pic)    p.set('pic', pic);
   if (divisi) p.set('divisi', divisi);
   return p.toString();
 }
 
 function resetFilter() {
-  const now = new Date();
-  document.getElementById('f-bulan').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
   document.getElementById('f-pic').value = '';
   document.getElementById('f-divisi').value = '';
-  loadAll();
+  setRange('month');
 }
 
 async function loadAll() {
@@ -255,20 +296,24 @@ async function loadAll() {
 // ─── KPI ─────────────────────────────────────────────────
 async function loadKpi(q) {
   const d = await fetch('/api/kpi?' + q).then(r => r.json());
+  const D = d.delta || {};
 
   // Sales Overview (finansial)
   document.getElementById('kpi-fin').innerHTML = `
-    ${kpiCard('a-brand','💰','Total Omzet', formatRp(d.total_omzet), `<span class="pill">Periode terpilih</span>`)}
-    ${kpiCard('a-slate','📦','Total Modal', formatRp(d.total_modal), '')}
-    ${kpiCard('a-green','📈','Margin', formatRp(d.total_margin), `<span class="pill ${marginClass(d.persen_margin)}">${d.persen_margin}% dari omzet</span>`)}
-    ${kpiCard('a-blue','🧾','Total Order', fmtInt(d.total_order), `<span class="pill">${fmtInt(d.total_deal)} deal closing</span>`)}
+    ${kpiCard('a-brand','💰','Total Omzet', formatRp(d.total_omzet), trendSub(D.total_omzet))}
+    ${kpiCard('a-slate','📦','Total Modal', formatRp(d.total_modal), trendSub(D.total_modal))}
+    ${kpiCard('a-green','📈','Margin', formatRp(d.total_margin), `<span class="pill ${marginClass(d.persen_margin)}">${d.persen_margin}% omzet</span>${deltaPill(D.total_margin)}`)}
+    ${kpiCard('a-blue','🧾','Total Order', fmtInt(d.total_order), `<span class="muted">${fmtInt(d.total_deal)} deal</span>${deltaPill(D.total_order)}`)}
+    ${kpiCard('a-violet','🛒','Average Purchase', formatRp(d.avg_purchase), trendSub(D.avg_purchase))}
   `;
 
   // Repeat & Conversion (customer)
   document.getElementById('kpi-cust').innerHTML = `
-    ${kpiCard('a-violet','🎯','Closing Rate', d.closing_rate + '%', `<span class="pill ${rateClass(d.closing_rate)}">dari total order masuk</span>`)}
-    ${kpiCard('a-amber','🔁','Repeat Order', fmtInt(d.total_repeat), `<span class="pill">${d.persen_repeat}% dari deal</span>`)}
-    ${kpiCard('a-green','✨','New Customer', fmtInt(d.total_new), `<span class="pill">order baru periode ini</span>`)}
+    ${kpiCard('a-violet','🎯','Closing Rate', d.closing_rate + '%', `<span class="pill ${rateClass(d.closing_rate)}">order masuk</span>${deltaPill(D.closing_rate)}`)}
+    ${kpiCard('a-amber','🔁','Repeat Order', fmtInt(d.total_repeat), `<span class="muted">${d.persen_repeat}% dari deal</span>${deltaPill(D.total_repeat)}`)}
+    ${kpiCard('a-brand','💸','Repeat dari Omzet', formatRp(d.repeat_omzet), `<span class="pill">${d.persen_repeat_omzet}% omzet</span>${deltaPill(D.repeat_omzet)}`)}
+    ${kpiCard('a-green','✨','New Customer', fmtInt(d.total_new), `<span class="muted">order baru</span>${deltaPill(D.total_new)}`)}
+    ${kpiCard('a-blue','📲','Closing Rate New Cust', d.closing_rate_new + '%', `<span class="pill ${rateClass(d.closing_rate_new)}">konversi new</span>${deltaPill(D.closing_rate_new)}`)}
   `;
 }
 
@@ -282,12 +327,22 @@ function kpiCard(accent, icon, label, value, sub) {
     ${sub ? `<div class="sub">${sub}</div>` : ''}
   </div>`;
 }
+// panah naik/turun vs periode sebelumnya
+function deltaPill(v){
+  if (v === null || v === undefined) return '';
+  const up = v >= 0;
+  return `<span class="delta ${up?'good':'bad'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`;
+}
+function trendSub(v){
+  if (v === null || v === undefined) return `<span class="muted">vs periode lalu</span>`;
+  return `${deltaPill(v)}<span class="muted">vs periode lalu</span>`;
+}
 function marginClass(p){ p=parseFloat(p); return p>=25?'good':(p<15?'warn':''); }
 function rateClass(p){ p=parseFloat(p); return p>=40?'good':(p<20?'warn':''); }
 
 // ─── Trend ───────────────────────────────────────────────
 async function loadTrend() {
-  const tahun  = document.getElementById('f-bulan').value?.slice(0,4) || new Date().getFullYear();
+  const tahun  = document.getElementById('f-dari').value?.slice(0,4) || new Date().getFullYear();
   const pic    = document.getElementById('f-pic').value;
   const divisi = document.getElementById('f-divisi').value;
   const q = new URLSearchParams({tahun});
@@ -313,7 +368,7 @@ async function loadTrend() {
     plugins:{ legend:{ position:'bottom', labels:{ usePointStyle:true, boxWidth:7, padding:14, font:{size:12} } } },
     scales: {
       y: { ticks: { callback: v => formatRpShort(v) }, grid: { color:'#eef0f3' }, border:{display:false} },
-      x: { ticks:{}, grid: { display:false } }
+      x: { grid: { display:false } }
     }
   });
 }
@@ -337,7 +392,7 @@ async function loadKategori(q) {
     indexAxis: 'y',
     plugins:{ legend:{ display:false } },
     scales: { x: { ticks: { callback: v => formatRpShort(v) }, grid: { color:'#eef0f3' }, border:{display:false} },
-              y: { ticks: {}, grid: { display:false } } }
+              y: { grid: { display:false } } }
   });
 }
 
