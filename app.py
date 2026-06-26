@@ -129,14 +129,6 @@ def pct(cur, prev):
         return None
     return round((cur - prev) / prev * 100, 1)
 
-def fmt_date(v):
-    """Format tanggal aman untuk tipe apa pun (date/datetime/str/None)."""
-    if v is None:
-        return None
-    if hasattr(v, 'strftime'):
-        return v.strftime('%Y-%m-%d')
-    return str(v)[:10]
-
 BASE = """
     FROM order_risepack o
     WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
@@ -484,90 +476,22 @@ def api_detail():
     return jsonify(out)
 
 
-# ─── Monitoring Potensi (kelengkapan input harga oleh sales) ─────
-@app.route('/api/monitoring-potensi')
-@login_required
-def api_monitoring_potensi():
-    """Customer baru via Online; potensi = SUM(total_harga). Belum diisi = 0.
-    Difilter berdasarkan tgl_order (saat lead masuk), bukan tgl omzet,
-    agar lead yang belum dihargai tetap muncul."""
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    clauses = ["o.sumber = 'Online'", "o.id_customer IS NOT NULL"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.tgl_order >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.tgl_order <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    where = " AND ".join(clauses)
-    sql = f"""
-        SELECT o.id_customer,
-               MAX(o.nama) AS nama,
-               MAX(o.nama_instansi) AS instansi,
-               MAX(o.name) AS pic,
-               DATE_FORMAT(MIN(o.tgl_order),'%Y-%m-%d') AS tgl_masuk,
-               COUNT(DISTINCT o.order_key) AS orders,
-               SUM(o.total_harga) AS potensi
-        FROM order_risepack o
-        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL) AND {where}
-        GROUP BY o.id_customer
-        ORDER BY MIN(o.tgl_order) DESC
-        LIMIT 3000
-    """
-    rows = query(sql, params)
-    out = []
-    for r in rows:
-        potensi = float(r['potensi'] or 0)
-        out.append({
-            'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
-            'tgl_masuk': fmt_date(r['tgl_masuk']),
-            'orders': int(r['orders'] or 0),
-            'potensi': potensi,
-            'terisi': potensi > 0,
-        })
-    return jsonify(out)
-
-
 # ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_leadtest2')
+@app.route('/api/_find')
 @login_required
-def api_leadtest2():
-    """Cocokkan 71 (Emas) / 11 (Deal) pakai waktu_kontak + kandidat definisi."""
-    d1 = request.args.get('tgl_dari', '2026-06-01')
-    d2 = request.args.get('tgl_sampai', '2026-06-30') + ' 23:59:59'
-    base = """
-        FROM tb_orders o JOIN tb_produksis p ON o.sko_key = p.sko_key
-        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
-          AND o.waktu_kontak >= %s AND o.waktu_kontak <= %s
+def api_find():
+    """Cari kolom di seluruh database yang namanya mengandung kata kunci
+    potensi/prospek/target/lead/estimasi. Untuk menemukan kolom 'potensi'."""
+    sql = """
+        SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND (COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s
+               OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s)
+        ORDER BY TABLE_NAME, COLUMN_NAME
     """
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        def cnt(label, grain, extra):
-            col = 'o.id_customer' if grain == 'cust' else 'o.sko_key'
-            cur.execute(f"SELECT COUNT(DISTINCT {col}) AS n {base} {extra}", (d1, d2))
-            out[label] = cur.fetchone()['n']
-        ONL = "AND o.sumber = 'Online'"
-        ONLP = "AND o.sumber IN ('Online','Online Lintas')"
-        for g in ('cust', 'sko'):
-            cnt(f'{g}_online', g, ONL)
-            cnt(f'{g}_online_priced', g, ONL + " AND p.total_harga > 0")
-            cnt(f'{g}_online_unpriced', g, ONL + " AND (p.total_harga = 0 OR p.total_harga IS NULL)")
-            cnt(f'{g}_online_deal', g, ONL + " AND o.status_deal = 'Deal'")
-            cnt(f'{g}_online_notlost', g, ONL + " AND o.status_deal <> 'Lost'")
-            cnt(f'{g}_online_notlost_priced', g, ONL + " AND o.status_deal <> 'Lost' AND p.total_harga > 0")
-            cnt(f'{g}_onlineplus_priced', g, ONLP + " AND p.total_harga > 0")
-            cnt(f'{g}_onlineplus_deal', g, ONLP + " AND o.status_deal = 'Deal'")
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    return jsonify(out)
+    pats = ['%potensi%', '%prospek%', '%target%', '%estimasi%', '%potential%', '%lead%']
+    return jsonify(query(sql, pats))
 
 
 if __name__ == '__main__':
