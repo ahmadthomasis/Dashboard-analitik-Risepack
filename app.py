@@ -532,5 +532,19 @@ def api_monitoring_potensi():
     return jsonify(out)
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_viewdef')
+@login_required
+def api_viewdef():
+    """Tampilkan definisi SQL sebuah view, untuk memahami logika leads/potensi
+    aplikasi tanpa menebak. Pakai ?v=nama_view."""
+    name = request.args.get('v', 'view_newleads')
+    allowed = {'view_newleads', 'view_salesorder', 'view_customerprofile', 'view_ordercrm'}
+    if name not in allowed:
+        return jsonify({'error': 'view tidak diizinkan', 'pilihan': sorted(allowed)})
+    rows = query(f"SHOW CREATE VIEW `{name}`")
+    return jsonify(rows)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
