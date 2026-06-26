@@ -208,7 +208,7 @@ def api_trend_omzet():
         {cond}
         GROUP BY bulan, o.kategori_produksi ORDER BY bulan
     """
-    rows = query(sql, params + [tahun])
+    rows = query(sql, [tahun] + params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 @app.route('/api/top-sales')
@@ -313,7 +313,7 @@ def api_trend_bahan():
         {cond}
         GROUP BY bulan, o.jenis_bahan ORDER BY bulan
     """
-    rows = query(sql, params + [tahun])
+    rows = query(sql, [tahun] + params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 # ─── Grafik: Sales by Margin (bucket margin %) ───────────────────
@@ -363,7 +363,7 @@ def api_margin_bulanan():
         {cond}
         GROUP BY bulan ORDER BY bulan
     """
-    rows = query(sql, params + [tahun])
+    rows = query(sql, [tahun] + params)
     out = []
     for r in rows:
         omzet = float(r['omzet'] or 0)
