@@ -279,5 +279,33 @@ def api_kategori():
     rows = query(sql, params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
+# ─── DIAGNOSTIK (SEMENTARA — hapus setelah dipakai) ──────────────
+@app.route('/api/_schema')
+@login_required
+def api_schema():
+    """Tampilkan kolom order_risepack + contoh isi kolom teks.
+    Dipakai sekali untuk identifikasi kolom produk & customer, lalu dihapus."""
+    cols = query("SHOW COLUMNS FROM order_risepack")
+    out = []
+    for c in cols:
+        field = c['Field']
+        ctype = str(c['Type'])
+        info = {'kolom': field, 'tipe': ctype}
+        if any(t in ctype.lower() for t in ['char', 'text', 'enum']):
+            try:
+                dc = query(f"SELECT COUNT(DISTINCT `{field}`) AS c FROM order_risepack")[0]['c']
+                vals = query(
+                    f"SELECT `{field}` AS v, COUNT(*) AS n FROM order_risepack "
+                    f"WHERE `{field}` IS NOT NULL AND `{field}` != '' "
+                    f"GROUP BY `{field}` ORDER BY n DESC LIMIT 8"
+                )
+                info['jumlah_nilai_unik'] = dc
+                info['contoh_nilai'] = [f"{v['v']} ({v['n']})" for v in vals]
+            except Exception as e:
+                info['error'] = str(e)
+        out.append(info)
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
