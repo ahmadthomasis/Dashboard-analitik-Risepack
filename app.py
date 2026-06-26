@@ -476,5 +476,23 @@ def api_detail():
     return jsonify(out)
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_find')
+@login_required
+def api_find():
+    """Cari kolom di seluruh database yang namanya mengandung kata kunci
+    potensi/prospek/target/lead/estimasi. Untuk menemukan kolom 'potensi'."""
+    sql = """
+        SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND (COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s
+               OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s)
+        ORDER BY TABLE_NAME, COLUMN_NAME
+    """
+    pats = ['%potensi%', '%prospek%', '%target%', '%estimasi%', '%potential%', '%lead%']
+    return jsonify(query(sql, pats))
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
