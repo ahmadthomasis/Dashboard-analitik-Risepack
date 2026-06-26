@@ -533,17 +533,40 @@ def api_monitoring_potensi():
 
 
 # ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_viewdef')
+@app.route('/api/_leadtest')
 @login_required
-def api_viewdef():
-    """Tampilkan definisi SQL sebuah view, untuk memahami logika leads/potensi
-    aplikasi tanpa menebak. Pakai ?v=nama_view."""
-    name = request.args.get('v', 'view_newleads')
-    allowed = {'view_newleads', 'view_salesorder', 'view_customerprofile', 'view_ordercrm'}
-    if name not in allowed:
-        return jsonify({'error': 'view tidak diizinkan', 'pilihan': sorted(allowed)})
-    rows = query(f"SHOW CREATE VIEW `{name}`")
-    return jsonify(rows)
+def api_leadtest():
+    """Hitung kandidat definisi leads dari tb_orders+tb_produksis untuk
+    mencocokkan angka aplikasi (Emas/Deal/belum diberi harga)."""
+    d1 = request.args.get('tgl_dari', '2026-06-01')
+    d2 = request.args.get('tgl_sampai', '2026-06-30') + ' 23:59:59'
+    base = """
+        FROM tb_orders o JOIN tb_produksis p ON o.sko_key = p.sko_key
+        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
+          AND o.tgl_order >= %s AND o.tgl_order <= %s
+    """
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        def cnt(label, grain, extra):
+            col = 'o.id_customer' if grain == 'cust' else 'o.sko_key'
+            cur.execute(f"SELECT COUNT(DISTINCT {col}) AS n {base} {extra}", (d1, d2))
+            out[label] = cur.fetchone()['n']
+        UNPRICED = "AND (p.total_harga = 0 OR p.total_harga IS NULL)"
+        PRICED   = "AND p.total_harga > 0"
+        for g in ('cust', 'sko'):
+            cnt(f'{g}_new_lp1',           g, "AND o.lead_prospek = 1")
+            cnt(f'{g}_new_lp1_priced',    g, "AND o.lead_prospek = 1 " + PRICED)
+            cnt(f'{g}_new_lp1_unpriced',  g, "AND o.lead_prospek = 1 " + UNPRICED)
+            cnt(f'{g}_new_lp1_deal',      g, "AND o.lead_prospek = 1 AND o.status_deal = 'Deal'")
+            cnt(f'{g}_new_lp1_online',    g, "AND o.lead_prospek = 1 AND o.sumber = 'Online'")
+            cnt(f'{g}_all_unpriced',      g, UNPRICED)
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
 
 
 if __name__ == '__main__':
