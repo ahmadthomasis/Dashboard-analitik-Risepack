@@ -129,14 +129,6 @@ def pct(cur, prev):
         return None
     return round((cur - prev) / prev * 100, 1)
 
-def fmt_date(v):
-    """Format tanggal aman untuk tipe apa pun (date/datetime/str/None)."""
-    if v is None:
-        return None
-    if hasattr(v, 'strftime'):
-        return v.strftime('%Y-%m-%d')
-    return str(v)[:10]
-
 BASE = """
     FROM order_risepack o
     WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
@@ -484,51 +476,22 @@ def api_detail():
     return jsonify(out)
 
 
-# ─── Monitoring Potensi (kelengkapan input harga oleh sales) ─────
-@app.route('/api/monitoring-potensi')
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_find')
 @login_required
-def api_monitoring_potensi():
-    """Customer baru via Online; potensi = SUM(total_harga). Belum diisi = 0.
-    Difilter berdasarkan tgl_order (saat lead masuk), bukan tgl omzet,
-    agar lead yang belum dihargai tetap muncul."""
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    where = " AND ".join(clauses)
-    # Pakai order_risepack (tabel cepat, tanpa join) — sudah berisi waktu_kontak & total_harga
-    sql = f"""
-        SELECT DATE_FORMAT(o.waktu_kontak,'%Y-%m-%d') AS tgl_kontak,
-               o.nama AS nama,
-               o.nama_instansi AS instansi,
-               o.name AS pic,
-               o.status_deal AS status_deal,
-               o.total_harga AS potensi
-        FROM order_risepack o
-        WHERE {where}
-        ORDER BY o.waktu_kontak DESC
-        LIMIT 3000
+def api_find():
+    """Cari kolom di seluruh database yang namanya mengandung kata kunci
+    potensi/prospek/target/lead/estimasi. Untuk menemukan kolom 'potensi'."""
+    sql = """
+        SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND (COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s
+               OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s)
+        ORDER BY TABLE_NAME, COLUMN_NAME
     """
-    rows = query(sql, params)
-    out = []
-    for r in rows:
-        potensi = float(r['potensi'] or 0)
-        out.append({
-            'tgl_kontak': r['tgl_kontak'],
-            'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
-            'status_deal': r['status_deal'],
-            'potensi': potensi,
-            'terisi': potensi > 0,
-        })
-    return jsonify(out)
+    pats = ['%potensi%', '%prospek%', '%target%', '%estimasi%', '%potential%', '%lead%']
+    return jsonify(query(sql, pats))
 
 
 if __name__ == '__main__':
