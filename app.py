@@ -644,5 +644,29 @@ def api_sko_achievement():
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_journey')
+@login_required
+def api_journey_diag():
+    """Cari di mana tier journey (Bronze/Platinum/Ruby/Diamond) tersimpan,
+    dan kaitannya dengan status_deal."""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        def many(label, sql):
+            cur.execute(sql); out[label] = cur.fetchall()
+        B = "FROM order_risepack WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL)"
+        many('grading_x_status', f"SELECT grading, status_deal, COUNT(*) n {B} GROUP BY grading, status_deal ORDER BY n DESC LIMIT 50")
+        many('tingkat_penjualan', f"SELECT tingkat_penjualan AS v, COUNT(*) n {B} GROUP BY tingkat_penjualan ORDER BY n DESC LIMIT 20")
+        many('skala_bisnis', f"SELECT skala_bisnis AS v, COUNT(*) n {B} GROUP BY skala_bisnis ORDER BY n DESC LIMIT 20")
+        many('tipe_kontak', f"SELECT tipe_kontak AS v, COUNT(*) n {B} GROUP BY tipe_kontak ORDER BY n DESC LIMIT 20")
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
