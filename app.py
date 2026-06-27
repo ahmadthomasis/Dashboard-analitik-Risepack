@@ -602,26 +602,40 @@ def api_deal_new_repeat():
 @app.route('/api/journey')
 @login_required
 def api_journey():
+    """Customer Follow Up (belum order). Filter waktu_kontak, nilai = potensi."""
     tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
+               "o.status_deal = 'Follow Up'", "o.id_customer IS NOT NULL"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if pic:
+        clauses.append("o.name = %s"); params.append(pic)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    where = " AND ".join(clauses)
     sql = f"""
         SELECT MAX(o.nama) AS nama,
-               MAX(o.grading) AS grading,
+               MAX(o.nama_instansi) AS instansi,
+               MAX(o.name) AS pic,
+               DATE_FORMAT(MAX(o.waktu_kontak),'%Y-%m-%d') AS tgl_kontak,
                COUNT(DISTINCT o.order_key) AS orders,
-               SUM(o.total_harga) AS omzet
-        {BASE}
-        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
-        {cond}
+               SUM(o.total_harga) AS potensi
+        FROM order_risepack o
+        WHERE {where}
         GROUP BY o.id_customer
-        ORDER BY omzet DESC
+        ORDER BY SUM(o.total_harga) DESC
         LIMIT 1500
     """
     rows = query(sql, params)
     return jsonify([{
-        'nama': r['nama'],
-        'grading': (r['grading'] or 'Reguler'),
+        'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
+        'tgl_kontak': r['tgl_kontak'],
         'orders': int(r['orders'] or 0),
-        'omzet': float(r['omzet'] or 0),
+        'potensi': float(r['potensi'] or 0),
     } for r in rows])
 
 # ─── Customer: Achievement SKO 10x ───────────────────────────────
@@ -642,28 +656,6 @@ def api_sko_achievement():
     """
     rows = query(sql, params)
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
-
-
-# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_tier')
-@login_required
-def api_tier_diag():
-    """Cari kolom tempat tier journey (Bronze/Platinum/Ruby/Diamond) disimpan."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        cur.execute("SELECT * FROM tb_gradings ORDER BY id_grading LIMIT 30")
-        out['tb_gradings'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
-        cur.execute("SELECT grade AS v, COUNT(*) n FROM tb_customers GROUP BY grade ORDER BY n DESC LIMIT 20")
-        out['tb_customers_grade'] = cur.fetchall()
-        cur.execute("SELECT grading AS v, COUNT(*) n FROM tb_customers GROUP BY grading ORDER BY n DESC LIMIT 20")
-        out['tb_customers_grading'] = cur.fetchall()
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    return jsonify(out)
 
 
 if __name__ == '__main__':
