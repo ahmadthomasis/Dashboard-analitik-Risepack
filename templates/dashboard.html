@@ -228,6 +228,19 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
             <div class="card"><h3>Lifetime Value</h3><div class="ch-sub">Jumlah customer per frekuensi beli</div><div class="chart-wrap"><canvas id="c-ltv"></canvas></div></div>
             <div class="card"><h3>Sales by Sumber</h3><div class="ch-sub">Kontribusi omzet per channel</div><div class="chart-wrap"><canvas id="c-sumber"></canvas></div></div>
           </div>
+          <div class="grid-2" style="margin-top:15px">
+            <div class="card"><h3>Deal: New vs Repeat per Customer</h3><div class="ch-sub">Omzet deal dipecah per sumber — klik judul untuk sort</div><div class="table-wrap" id="dnr-table" style="max-height:360px;overflow:auto"><div class="loading">Memuat…</div></div></div>
+            <div class="card">
+              <h3>Customer Journey</h3><div class="ch-sub">Tier grading + nilai per customer</div>
+              <div id="journey-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+              <div class="table-wrap" id="journey-table" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:15px">
+            <h3>Achievement SKO 10x</h3><div class="ch-sub">Target 10 order per customer · nilai di-cap 100%</div>
+            <div class="kpi-grid" id="sko-summary" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin:4px 0 14px"></div>
+            <div class="table-wrap" id="sko-ach" style="max-height:360px;overflow:auto"><div class="loading">Memuat…</div></div>
+          </div>
         </div>
 
         <div id="subview-penjualan" class="subview">
@@ -392,7 +405,7 @@ const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loa
 const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
-  customer:[['c-ltv',loadLTV],['c-sumber',loadSumber]],
+  customer:[['c-ltv',loadLTV],['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
   penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
 };
 async function renderView(){
@@ -420,6 +433,7 @@ async function loadKpi(q){
     ${kpiCard('a-amber','🔁','Repeat Order',fmtInt(d.total_repeat),`<span class="muted">${d.persen_repeat}% dari deal</span>${deltaPill(D.total_repeat)}`)}
     ${kpiCard('a-orange','💸','Repeat dari Omzet',formatRp(d.repeat_omzet),`<span class="pill">${d.persen_repeat_omzet}% omzet</span>${deltaPill(D.repeat_omzet)}`)}
     ${kpiCard('a-leaf','✨','New Customer',fmtInt(d.total_new),`<span class="muted">order baru</span>${deltaPill(D.total_new)}`)}
+    ${kpiCard('a-green','🆕','Omzet New',formatRp(d.omzet_new),`<span class="muted">dari customer baru</span>${deltaPill(D.omzet_new)}`)}
     ${kpiCard('a-blue','📲','Closing Rate New',d.closing_rate_new+'%',`<span class="pill ${rateClass(d.closing_rate_new)}">konversi new</span>${deltaPill(D.closing_rate_new)}`)}`;
 }
 function kpiCard(a,ic,label,val,sub){return `<div class="kpi-card ${a}"><div class="top"><div class="label">${label}</div><div class="ic">${ic}</div></div><div class="value">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
@@ -483,6 +497,85 @@ async function loadSumber(q){
   renderChart('c-sumber','doughnut',{labels:rows.map(r=>r.sumber),datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
     {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
 }
+// ── Customer: pivot New/Repeat, Journey, SKO 10x ──
+const TIER_ORDER = ['Diamond','Ruby','Platinum','Gold','Silver','Bronze','Reguler'];
+const TIER_STYLE = {Diamond:['#E6F1FB','#0C447C'],Ruby:['#FBEAF0','#72243E'],Platinum:['#EEEDFE','#3C3489'],Gold:['#FAEEDA','#854F0B'],Silver:['#F1EFE8','#444441'],Bronze:['#FAECE7','#993C1D'],Reguler:['#F1EFE8','#5F5E5A']};
+function tierRank(t){ const i=TIER_ORDER.indexOf(t); return i<0?99:i; }
+function tierBadge(t){ const s=TIER_STYLE[t]||['#F1EFE8','#5F5E5A']; return `<span style="font-size:11.5px;padding:2px 8px;border-radius:6px;background:${s[0]};color:${s[1]}">${esc(t)}</span>`; }
+function sortBy(rows,key,dir,type){
+  const d=dir==='asc'?1:-1;
+  return rows.slice().sort((a,b)=>{
+    let x=a[key],y=b[key];
+    if(type==='num') return ((+x||0)-(+y||0))*d;
+    if(type==='tier') return (tierRank(x)-tierRank(y))*d;
+    if(x==null)return 1; if(y==null)return -1;
+    x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-d:x>y?d:0;
+  });
+}
+function sortHead(cols,state,fn){
+  return cols.map(([k,label,type])=>{
+    const arrow=state.key===k?(state.dir==='asc'?' ▲':' ▼'):'';
+    return `<th class="${type==='num'?'num':''}" style="cursor:pointer" onclick="${fn}('${k}')">${label}${arrow}</th>`;
+  }).join('');
+}
+
+const DNR={rows:[],key:'total',dir:'desc'};
+const DNR_COLS=[['nama','Customer','str'],['omzet_new','Omzet New','num'],['omzet_repeat','Omzet Repeat','num'],['total','Total','num']];
+async function loadDealNvR(q){ const rows=await fetchJSON('/api/deal-new-repeat?'+q); rows.forEach(r=>r.total=r.omzet_new+r.omzet_repeat); DNR.rows=rows; renderDNR(); }
+function setDnrSort(k){ if(DNR.key===k)DNR.dir=DNR.dir==='asc'?'desc':'asc'; else{DNR.key=k;DNR.dir='asc';} renderDNR(); }
+function renderDNR(){
+  const rows=sortBy(DNR.rows,DNR.key,DNR.dir,(DNR_COLS.find(c=>c[0]===DNR.key)||[])[2]);
+  const body=rows.map(r=>`<tr>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td class="num" style="color:#993C1D">${r.omzet_new?formatRp(r.omzet_new):'–'}</td>
+    <td class="num" style="color:#854F0B">${r.omzet_repeat?formatRp(r.omzet_repeat):'–'}</td>
+    <td class="num" style="font-weight:600">${formatRp(r.total)}</td>
+  </tr>`).join('');
+  document.getElementById('dnr-table').innerHTML=`<table><thead><tr>${sortHead(DNR_COLS,DNR,'setDnrSort')}</tr></thead><tbody>${body||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
+const JRN={rows:[],key:'omzet',dir:'desc'};
+const JRN_COLS=[['nama','Customer','str'],['grading','Tier','tier'],['orders','Order','num'],['omzet','Omzet','num']];
+async function loadJourney(q){ JRN.rows=await fetchJSON('/api/journey?'+q); renderJourney(); }
+function setJrnSort(k){ if(JRN.key===k)JRN.dir=JRN.dir==='asc'?'desc':'asc'; else{JRN.key=k;JRN.dir='asc';} renderJourney(); }
+function renderJourney(){
+  const cnt={};
+  JRN.rows.forEach(r=>{ cnt[r.grading]=(cnt[r.grading]||0)+1; });
+  const tiers=Object.keys(cnt).sort((a,b)=>tierRank(a)-tierRank(b));
+  document.getElementById('journey-strip').innerHTML=tiers.map(t=>{const s=TIER_STYLE[t]||['#F1EFE8','#5F5E5A'];return `<span style="font-size:12px;padding:4px 9px;border-radius:7px;background:${s[0]};color:${s[1]}">${esc(t)} · ${cnt[t]}</span>`;}).join('');
+  const rows=sortBy(JRN.rows,JRN.key,JRN.dir,(JRN_COLS.find(c=>c[0]===JRN.key)||[])[2]);
+  const body=rows.map(r=>`<tr>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td>${tierBadge(r.grading)}</td>
+    <td class="num">${fmtInt(r.orders)}</td>
+    <td class="num" style="font-weight:600">${formatRp(r.omzet)}</td>
+  </tr>`).join('');
+  document.getElementById('journey-table').innerHTML=`<table><thead><tr>${sortHead(JRN_COLS,JRN,'setJrnSort')}</tr></thead><tbody>${body||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
+async function loadSko(q){
+  const rows=await fetchJSON('/api/sko-achievement?'+q);
+  const wp=rows.map(r=>({...r,pct:Math.min(Math.round(r.jml/10*100),100)}));
+  const n=wp.length;
+  const avg=n?Math.round(wp.reduce((s,r)=>s+r.pct,0)/n):0;
+  const done=wp.filter(r=>r.pct>=100).length;
+  document.getElementById('sko-summary').innerHTML=`
+    ${kpiCard('a-amber','📊','Rata-rata Achievement',avg+'%',`<span class="muted">${fmtInt(n)} customer</span>`)}
+    ${kpiCard('a-green','🏆','Sudah 100%',fmtInt(done),`<span class="muted">capai target 10x</span>`)}
+    ${kpiCard('a-blue','📦','Total Customer',fmtInt(n),`<span class="muted">deal periode ini</span>`)}`;
+  const body=wp.map(r=>{
+    const col=r.pct>=100?'var(--green)':r.pct>=70?'var(--amber)':'var(--red)';
+    return `<tr>
+      <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+      <td class="num">${fmtInt(r.jml)}</td>
+      <td style="width:42%"><div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:8px;background:#f1ece6;border-radius:4px;overflow:hidden"><div style="width:${r.pct}%;height:100%;background:${col}"></div></div>
+        <span style="flex:0 0 38px;text-align:right;font-weight:600;color:${col}">${r.pct}%</span></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('sko-ach').innerHTML=`<table><thead><tr><th>Customer</th><th class="num">Order (SKO)</th><th>Achievement</th></tr></thead><tbody>${body||'<tr><td colspan="3" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
 // ── Penjualan ──
 async function loadKatOmzet(q){
   const rows=await fetchJSON('/api/kategori-omzet?'+q);
