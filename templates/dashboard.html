@@ -230,9 +230,8 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           </div>
           <div class="grid-2" style="margin-top:15px">
             <div class="card">
-              <h3>Customer Journey</h3><div class="ch-sub">Tier grading + nilai per customer</div>
-              <div id="journey-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
-              <div class="table-wrap" id="journey-table" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div>
+              <h3>Customer Follow Up (Belum Order)</h3><div class="ch-sub">Customer dalam pipeline + nilai potensi — klik judul untuk sort</div>
+              <div class="table-wrap" id="journey-table" style="max-height:320px;overflow:auto"><div class="loading">Memuat…</div></div>
             </div>
             <div class="card">
               <h3>Achievement SKO 10x</h3><div class="ch-sub">Target 10 order per customer · di-cap 100%</div>
@@ -533,23 +532,20 @@ function renderDNR(){
   document.getElementById('dnr-table').innerHTML=`<table><thead><tr>${sortHead(DNR_COLS,DNR,'setDnrSort')}</tr></thead><tbody>${body||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 
-const JRN={rows:[],key:'omzet',dir:'desc'};
-const JRN_COLS=[['nama','Customer','str'],['grading','Tier','tier'],['orders','Order','num'],['omzet','Omzet','num']];
+const JRN={rows:[],key:'potensi',dir:'desc'};
+const JRN_COLS=[['nama','Customer','str'],['instansi','Instansi','str'],['pic','PIC','str'],['orders','Order','num'],['potensi','Potensi','num']];
 async function loadJourney(q){ JRN.rows=await fetchJSON('/api/journey?'+q); renderJourney(); }
 function setJrnSort(k){ if(JRN.key===k)JRN.dir=JRN.dir==='asc'?'desc':'asc'; else{JRN.key=k;JRN.dir='asc';} renderJourney(); }
 function renderJourney(){
-  const cnt={};
-  JRN.rows.forEach(r=>{ cnt[r.grading]=(cnt[r.grading]||0)+1; });
-  const tiers=Object.keys(cnt).sort((a,b)=>tierRank(a)-tierRank(b));
-  document.getElementById('journey-strip').innerHTML=tiers.map(t=>{const s=TIER_STYLE[t]||['#F1EFE8','#5F5E5A'];return `<span style="font-size:12px;padding:4px 9px;border-radius:7px;background:${s[0]};color:${s[1]}">${esc(t)} · ${cnt[t]}</span>`;}).join('');
   const rows=sortBy(JRN.rows,JRN.key,JRN.dir,(JRN_COLS.find(c=>c[0]===JRN.key)||[])[2]);
   const body=rows.map(r=>`<tr>
     <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
-    <td>${tierBadge(r.grading)}</td>
+    <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
+    <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
     <td class="num">${fmtInt(r.orders)}</td>
-    <td class="num" style="font-weight:600">${formatRp(r.omzet)}</td>
+    <td class="num" style="font-weight:600">${formatRp(r.potensi)}</td>
   </tr>`).join('');
-  document.getElementById('journey-table').innerHTML=`<table><thead><tr>${sortHead(JRN_COLS,JRN,'setJrnSort')}</tr></thead><tbody>${body||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+  document.getElementById('journey-table').innerHTML=`<table><thead><tr>${sortHead(JRN_COLS,JRN,'setJrnSort')}</tr></thead><tbody>${body||'<tr><td colspan="5" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 
 async function loadSko(q){
