@@ -645,22 +645,31 @@ def api_sko_achievement():
 
 
 # ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_journey')
+@app.route('/api/_tier')
 @login_required
-def api_journey_diag():
-    """Cari di mana tier journey (Bronze/Platinum/Ruby/Diamond) tersimpan,
-    dan kaitannya dengan status_deal."""
+def api_tier_diag():
+    """Cari kolom tempat tier journey (Bronze/Platinum/Ruby/Diamond) disimpan."""
     conn = mysql.connector.connect(**DB_CONFIG)
     out = {}
     try:
         cur = conn.cursor(dictionary=True)
-        def many(label, sql):
-            cur.execute(sql); out[label] = cur.fetchall()
-        B = "FROM order_risepack WHERE (flag_dummy != 'dummy' OR flag_dummy IS NULL)"
-        many('grading_x_status', f"SELECT grading, status_deal, COUNT(*) n {B} GROUP BY grading, status_deal ORDER BY n DESC LIMIT 50")
-        many('tingkat_penjualan', f"SELECT tingkat_penjualan AS v, COUNT(*) n {B} GROUP BY tingkat_penjualan ORDER BY n DESC LIMIT 20")
-        many('skala_bisnis', f"SELECT skala_bisnis AS v, COUNT(*) n {B} GROUP BY skala_bisnis ORDER BY n DESC LIMIT 20")
-        many('tipe_kontak', f"SELECT tipe_kontak AS v, COUNT(*) n {B} GROUP BY tipe_kontak ORDER BY n DESC LIMIT 20")
+        cur.execute("""
+            SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND (COLUMN_NAME LIKE '%journey%' OR COLUMN_NAME LIKE '%tier%'
+                   OR COLUMN_NAME LIKE '%grade%' OR COLUMN_NAME LIKE '%grading%'
+                   OR COLUMN_NAME LIKE '%level%' OR COLUMN_NAME LIKE '%tahap%'
+                   OR COLUMN_NAME LIKE '%stage%' OR COLUMN_NAME LIKE '%segmen%'
+                   OR COLUMN_NAME LIKE '%klasifikasi%' OR COLUMN_NAME LIKE '%prioritas%'
+                   OR COLUMN_NAME LIKE '%kategori%' OR COLUMN_NAME LIKE '%status%')
+            ORDER BY TABLE_NAME, COLUMN_NAME
+        """)
+        out['kandidat_kolom'] = cur.fetchall()
+        cur.execute("SHOW COLUMNS FROM tb_customers")
+        out['tb_customers_kolom'] = [r['Field'] for r in cur.fetchall()]
+        cur.execute("SELECT * FROM tb_customers LIMIT 3")
+        out['tb_customers_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
         cur.close()
     finally:
         try: conn.close()
