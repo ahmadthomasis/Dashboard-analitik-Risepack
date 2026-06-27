@@ -588,7 +588,7 @@ def api_deal_new_repeat():
         AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
         {cond}
         GROUP BY o.id_customer
-        ORDER BY (omzet_new + omzet_repeat) DESC
+        ORDER BY SUM(o.total_harga) DESC
         LIMIT 1000
     """
     rows = query(sql, params)
