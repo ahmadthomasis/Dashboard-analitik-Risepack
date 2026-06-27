@@ -129,6 +129,14 @@ def pct(cur, prev):
         return None
     return round((cur - prev) / prev * 100, 1)
 
+def fmt_date(v):
+    """Format tanggal aman untuk tipe apa pun (date/datetime/str/None)."""
+    if v is None:
+        return None
+    if hasattr(v, 'strftime'):
+        return v.strftime('%Y-%m-%d')
+    return str(v)[:10]
+
 BASE = """
     FROM order_risepack o
     WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
@@ -179,8 +187,48 @@ def kpi_metrics(cond, params):
         'persen_repeat': round(repeat / deal * 100, 1) if deal else 0,
         'avg_purchase': round(omzet / deal) if deal else 0,
         'repeat_omzet': rep_omzet,
+        'omzet_new': omzet - rep_omzet,
         'persen_repeat_omzet': round(rep_omzet / omzet * 100, 1) if omzet else 0,
         'closing_rate_new': round(new / new_order * 100, 1) if new_order else 0,
+    }
+
+def new_funnel(tgl_dari, tgl_sampai, pic, divisi):
+    """Corong customer baru = ONLINE leads (konsisten dgn Monitoring Potensi 71).
+    Difilter waktu_kontak, grain per lead (sko_key).
+      qualified_new = jumlah leads online
+      total_new     = leads online yang Deal (new customer)
+      omzet_new     = omzet dari leads online yang Deal
+      closing_rate_new = total_new / qualified_new
+    """
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if pic:
+        clauses.append("o.name = %s"); params.append(pic)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    where = " AND ".join(clauses)
+    sql = f"""
+        SELECT
+            COUNT(DISTINCT o.sko_key) AS qualified,
+            COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.sko_key END) AS deal_new,
+            SUM(CASE WHEN o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS omzet_new
+        FROM order_risepack o
+        WHERE {where}
+    """
+    r = query(sql, params)[0]
+    q = int(r['qualified'] or 0)
+    d = int(r['deal_new'] or 0)
+    om = float(r['omzet_new'] or 0)
+    return {
+        'qualified_new': q,
+        'total_new': d,
+        'omzet_new': om,
+        'closing_rate_new': round(d / q * 100, 1) if q else 0,
     }
 
 @app.route('/api/kpi')
@@ -189,6 +237,7 @@ def api_kpi():
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
     cur = kpi_metrics(cond, params)
+    cur.update(new_funnel(tgl_dari, tgl_sampai, pic, divisi))  # override metrik new -> corong online
 
     # Perbandingan periode sebelumnya (durasi sama)
     delta = {}
@@ -196,9 +245,10 @@ def api_kpi():
     if p1 and p2:
         pcond, pparams = build_where(p1, p2, pic, divisi)
         prev = kpi_metrics(pcond, pparams)
+        prev.update(new_funnel(p1, p2, pic, divisi))
         for k in ['total_omzet', 'total_modal', 'total_margin', 'total_order',
                   'total_deal', 'total_repeat', 'total_new', 'closing_rate',
-                  'avg_purchase', 'repeat_omzet', 'closing_rate_new', 'persen_repeat']:
+                  'avg_purchase', 'repeat_omzet', 'omzet_new', 'closing_rate_new', 'persen_repeat']:
             delta[k] = pct(cur[k], prev[k])
 
     cur['delta'] = delta
@@ -476,22 +526,122 @@ def api_detail():
     return jsonify(out)
 
 
-# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_find')
+# ─── Monitoring Potensi (kelengkapan input harga oleh sales) ─────
+@app.route('/api/monitoring-potensi')
 @login_required
-def api_find():
-    """Cari kolom di seluruh database yang namanya mengandung kata kunci
-    potensi/prospek/target/lead/estimasi. Untuk menemukan kolom 'potensi'."""
-    sql = """
-        SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND (COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s
-               OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s OR COLUMN_NAME LIKE %s)
-        ORDER BY TABLE_NAME, COLUMN_NAME
+def api_monitoring_potensi():
+    """Customer baru via Online; potensi = SUM(total_harga). Belum diisi = 0.
+    Difilter berdasarkan tgl_order (saat lead masuk), bukan tgl omzet,
+    agar lead yang belum dihargai tetap muncul."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if pic:
+        clauses.append("o.name = %s"); params.append(pic)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    where = " AND ".join(clauses)
+    # Pakai order_risepack (tabel cepat, tanpa join) — sudah berisi waktu_kontak & total_harga
+    sql = f"""
+        SELECT DATE_FORMAT(o.waktu_kontak,'%Y-%m-%d') AS tgl_kontak,
+               o.nama AS nama,
+               o.nama_instansi AS instansi,
+               o.name AS pic,
+               o.status_deal AS status_deal,
+               o.total_harga AS potensi
+        FROM order_risepack o
+        WHERE {where}
+        ORDER BY o.waktu_kontak DESC
+        LIMIT 3000
     """
-    pats = ['%potensi%', '%prospek%', '%target%', '%estimasi%', '%potential%', '%lead%']
-    return jsonify(query(sql, pats))
+    rows = query(sql, params)
+    out = []
+    for r in rows:
+        potensi = float(r['potensi'] or 0)
+        out.append({
+            'tgl_kontak': r['tgl_kontak'],
+            'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
+            'status_deal': r['status_deal'],
+            'potensi': potensi,
+            'terisi': potensi > 0,
+        })
+    return jsonify(out)
+
+
+# ─── Customer: Deal New vs Repeat (pivot per customer) ───────────
+@app.route('/api/deal-new-repeat')
+@login_required
+def api_deal_new_repeat():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT MAX(o.nama) AS nama,
+               MAX(o.nama_instansi) AS instansi,
+               SUM(CASE WHEN o.sumber='Repeat Order' THEN o.total_harga ELSE 0 END) AS omzet_repeat,
+               SUM(CASE WHEN o.sumber<>'Repeat Order' THEN o.total_harga ELSE 0 END) AS omzet_new
+        {BASE}
+        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+        {cond}
+        GROUP BY o.id_customer
+        ORDER BY (omzet_new + omzet_repeat) DESC
+        LIMIT 1000
+    """
+    rows = query(sql, params)
+    return jsonify([{
+        'nama': r['nama'], 'instansi': r['instansi'],
+        'omzet_new': float(r['omzet_new'] or 0),
+        'omzet_repeat': float(r['omzet_repeat'] or 0),
+    } for r in rows])
+
+# ─── Customer: Journey (grading) per customer ────────────────────
+@app.route('/api/journey')
+@login_required
+def api_journey():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT MAX(o.nama) AS nama,
+               MAX(o.grading) AS grading,
+               COUNT(DISTINCT o.order_key) AS orders,
+               SUM(o.total_harga) AS omzet
+        {BASE}
+        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+        {cond}
+        GROUP BY o.id_customer
+        ORDER BY omzet DESC
+        LIMIT 1500
+    """
+    rows = query(sql, params)
+    return jsonify([{
+        'nama': r['nama'],
+        'grading': (r['grading'] or 'Reguler'),
+        'orders': int(r['orders'] or 0),
+        'omzet': float(r['omzet'] or 0),
+    } for r in rows])
+
+# ─── Customer: Achievement SKO 10x ───────────────────────────────
+@app.route('/api/sko-achievement')
+@login_required
+def api_sko_achievement():
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT MAX(o.nama) AS nama,
+               COUNT(DISTINCT o.sko_key) AS jml
+        {BASE}
+        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+        {cond}
+        GROUP BY o.id_customer
+        ORDER BY jml DESC
+        LIMIT 2000
+    """
+    rows = query(sql, params)
+    return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
 
 
 if __name__ == '__main__':
