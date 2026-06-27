@@ -653,23 +653,12 @@ def api_tier_diag():
     out = {}
     try:
         cur = conn.cursor(dictionary=True)
-        cur.execute("""
-            SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND (COLUMN_NAME LIKE '%journey%' OR COLUMN_NAME LIKE '%tier%'
-                   OR COLUMN_NAME LIKE '%grade%' OR COLUMN_NAME LIKE '%grading%'
-                   OR COLUMN_NAME LIKE '%level%' OR COLUMN_NAME LIKE '%tahap%'
-                   OR COLUMN_NAME LIKE '%stage%' OR COLUMN_NAME LIKE '%segmen%'
-                   OR COLUMN_NAME LIKE '%klasifikasi%' OR COLUMN_NAME LIKE '%prioritas%'
-                   OR COLUMN_NAME LIKE '%kategori%' OR COLUMN_NAME LIKE '%status%')
-            ORDER BY TABLE_NAME, COLUMN_NAME
-        """)
-        out['kandidat_kolom'] = cur.fetchall()
-        cur.execute("SHOW COLUMNS FROM tb_customers")
-        out['tb_customers_kolom'] = [r['Field'] for r in cur.fetchall()]
-        cur.execute("SELECT * FROM tb_customers LIMIT 3")
-        out['tb_customers_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
+        cur.execute("SELECT * FROM tb_gradings ORDER BY id_grading LIMIT 30")
+        out['tb_gradings'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
+        cur.execute("SELECT grade AS v, COUNT(*) n FROM tb_customers GROUP BY grade ORDER BY n DESC LIMIT 20")
+        out['tb_customers_grade'] = cur.fetchall()
+        cur.execute("SELECT grading AS v, COUNT(*) n FROM tb_customers GROUP BY grading ORDER BY n DESC LIMIT 20")
+        out['tb_customers_grading'] = cur.fetchall()
         cur.close()
     finally:
         try: conn.close()
