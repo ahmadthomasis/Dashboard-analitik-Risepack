@@ -432,9 +432,9 @@ async function loadKpi(q){
     ${kpiCard('a-orange','🎯','Closing Rate',d.closing_rate+'%',`<span class="pill ${rateClass(d.closing_rate)}">order masuk</span>${deltaPill(D.closing_rate)}`)}
     ${kpiCard('a-amber','🔁','Repeat Order',fmtInt(d.total_repeat),`<span class="muted">${d.persen_repeat}% dari deal</span>${deltaPill(D.total_repeat)}`)}
     ${kpiCard('a-orange','💸','Repeat dari Omzet',formatRp(d.repeat_omzet),`<span class="pill">${d.persen_repeat_omzet}% omzet</span>${deltaPill(D.repeat_omzet)}`)}
-    ${kpiCard('a-leaf','✨','New Customer',fmtInt(d.total_new),`<span class="muted">order baru</span>${deltaPill(D.total_new)}`)}
-    ${kpiCard('a-green','🆕','Omzet New',formatRp(d.omzet_new),`<span class="muted">dari customer baru</span>${deltaPill(D.omzet_new)}`)}
-    ${kpiCard('a-blue','📲','Closing Rate New',d.closing_rate_new+'%',`<span class="pill ${rateClass(d.closing_rate_new)}">konversi new</span>${deltaPill(D.closing_rate_new)}`)}`;
+    ${kpiCard('a-leaf','✨','New Customer (Deal)',fmtInt(d.total_new),`<span class="muted">dari ${fmtInt(d.qualified_new)} leads online</span>${deltaPill(D.total_new)}`)}
+    ${kpiCard('a-green','🆕','Omzet New',formatRp(d.omzet_new),`<span class="muted">deal customer baru online</span>${deltaPill(D.omzet_new)}`)}
+    ${kpiCard('a-blue','📲','Closing Rate New',d.closing_rate_new+'%',`<span class="pill ${rateClass(d.closing_rate_new)}">${fmtInt(d.total_new)}/${fmtInt(d.qualified_new)} leads</span>${deltaPill(D.closing_rate_new)}`)}`;
 }
 function kpiCard(a,ic,label,val,sub){return `<div class="kpi-card ${a}"><div class="top"><div class="label">${label}</div><div class="ic">${ic}</div></div><div class="value">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
 function deltaPill(v){ if(v==null) return ''; const up=v>=0; return `<span class="delta ${up?'good':'bad'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; }
