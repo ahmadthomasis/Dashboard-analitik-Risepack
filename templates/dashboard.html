@@ -225,21 +225,20 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
         <div id="subview-customer" class="subview">
           <div class="grid-2">
-            <div class="card"><h3>Lifetime Value</h3><div class="ch-sub">Jumlah customer per frekuensi beli</div><div class="chart-wrap"><canvas id="c-ltv"></canvas></div></div>
             <div class="card"><h3>Sales by Sumber</h3><div class="ch-sub">Kontribusi omzet per channel</div><div class="chart-wrap"><canvas id="c-sumber"></canvas></div></div>
+            <div class="card"><h3>Deal: New vs Repeat per Customer</h3><div class="ch-sub">Omzet deal dipecah per sumber — klik judul untuk sort</div><div class="table-wrap" id="dnr-table" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div></div>
           </div>
           <div class="grid-2" style="margin-top:15px">
-            <div class="card"><h3>Deal: New vs Repeat per Customer</h3><div class="ch-sub">Omzet deal dipecah per sumber — klik judul untuk sort</div><div class="table-wrap" id="dnr-table" style="max-height:360px;overflow:auto"><div class="loading">Memuat…</div></div></div>
             <div class="card">
               <h3>Customer Journey</h3><div class="ch-sub">Tier grading + nilai per customer</div>
               <div id="journey-strip" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
               <div class="table-wrap" id="journey-table" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div>
             </div>
-          </div>
-          <div class="card" style="margin-top:15px">
-            <h3>Achievement SKO 10x</h3><div class="ch-sub">Target 10 order per customer · nilai di-cap 100%</div>
-            <div class="kpi-grid" id="sko-summary" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin:4px 0 14px"></div>
-            <div class="table-wrap" id="sko-ach" style="max-height:360px;overflow:auto"><div class="loading">Memuat…</div></div>
+            <div class="card">
+              <h3>Achievement SKO 10x</h3><div class="ch-sub">Target 10 order per customer · di-cap 100%</div>
+              <div class="kpi-grid" id="sko-summary" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin:4px 0 12px"></div>
+              <div class="table-wrap" id="sko-ach" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div>
+            </div>
           </div>
         </div>
 
@@ -405,7 +404,7 @@ const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loa
 const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
-  customer:[['c-ltv',loadLTV],['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
+  customer:[['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
   penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
 };
 async function renderView(){
