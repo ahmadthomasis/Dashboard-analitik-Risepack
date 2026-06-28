@@ -747,6 +747,18 @@ def score_from_ach(ach, bands):
             return sc
     return 0
 
+def sum_months(cfg_map, d1, d2, nmonths, default=0):
+    """Jumlahkan nilai per-bulan dari config (YYYY-MM) sepanjang rentang."""
+    if not (d1 and d2):
+        return default
+    tot, y, mo = 0, d1.year, d1.month
+    for _ in range(nmonths):
+        tot += cfg_map.get(f"{y:04d}-{mo:02d}", default) or 0
+        mo += 1
+        if mo > 12:
+            mo = 1; y += 1
+    return tot
+
 def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
     """Total nilai potensi (total_harga) dari lead Online, by waktu_kontak."""
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
@@ -779,28 +791,17 @@ def api_kpi_score():
     m = kpi_metrics(cond, params)
     nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
 
-    if d2:
-        qcond, qparams = build_where(quarter_start(d2).isoformat(), tgl_sampai, pic, divisi)
-        omzet_q = kpi_metrics(qcond, qparams)['total_omzet']
-    else:
-        omzet_q = m['total_omzet']
     pot = potensi_total(tgl_dari, tgl_sampai, pic, divisi)
-
-    um = cfg.get('umbrella_manual', {})
-    umbrella_val, y, mo = 0, (d1.year if d1 else 0), (d1.month if d1 else 0)
-    if d1 and d2:
-        for _ in range(nmonths):
-            umbrella_val += um.get(f"{y:04d}-{mo:02d}", 0) or 0
-            mo += 1
-            if mo > 12:
-                mo = 1; y += 1
+    default_omzet_t = next((k['target'] for k in cfg.get('kpi', []) if k['id'] == 'omzet'), 2500000000)
+    omzet_target_eff = sum_months(cfg.get('omzet_target', {}), d1, d2, nmonths, default_omzet_t) if (d1 and d2) else default_omzet_t
+    umbrella_val = sum_months(cfg.get('umbrella_manual', {}), d1, d2, nmonths, 0)
 
     rows, total_w, total_ach_w = [], 0.0, 0.0
     for k in cfg.get('kpi', []):
         basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
         target_eff = target
-        if basis == 'omzet_quarter':
-            actual = omzet_q
+        if basis == 'omzet_monthly':
+            actual = m['total_omzet']; target_eff = omzet_target_eff
         elif basis == 'repeat_pct':
             actual = m['persen_repeat_omzet']
         elif basis == 'closing_rate_new':
