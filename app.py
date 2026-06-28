@@ -720,29 +720,22 @@ def api_bonus():
 
 
 # ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_bonus_check')
+@app.route('/api/_vsdef')
 @login_required
-def api_bonus_check():
-    """Cari sumber tanggal pelunasan & jatuh tempo yang benar untuk bonus."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        def one(label, sql, p=()):
-            cur.execute(sql, p); out[label] = cur.fetchone()
-        def many(label, sql, p=()):
-            cur.execute(sql, p); out[label] = cur.fetchall()
-        one('tb_orders_dates', "SELECT COUNT(*) total, COUNT(tgl_pelunasan) ada_pelunasan, COUNT(tgl_jatuh_tempo) ada_tempo FROM tb_orders")
-        one('invoice_orders_dates', "SELECT COUNT(*) total, COUNT(tanggal_pelunasan) ada_pelunasan FROM invoice_orders")
-        one('invoices_dates', "SELECT COUNT(*) total, COUNT(tanggal_jatuh_tempo) ada_tempo, COUNT(tanggal_pelunasan) ada_pelunasan FROM invoices")
-        one('link_sko_kodeorder', "SELECT COUNT(*) n FROM order_risepack o JOIN invoice_orders io ON o.sko = io.kode_order")
-        many('sample_invoice', "SELECT io.kode_order, CAST(io.tanggal_pelunasan AS CHAR) pelunasan, io.status_paid, CAST(inv.tanggal_jatuh_tempo AS CHAR) jatuh_tempo FROM invoice_orders io LEFT JOIN invoices inv ON io.invoice_key = inv.invoice_key LIMIT 5")
-        one('kiki_juni_via_invoice', "SELECT COUNT(*) n FROM order_risepack o JOIN invoice_orders io ON o.sko = io.kode_order WHERE o.name='Kiki' AND io.tanggal_pelunasan >= '2026-06-01' AND io.tanggal_pelunasan <= '2026-06-30'")
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    return jsonify(out)
+def api_vsdef():
+    """Ambil ekspresi kolom tanggal pelunasan & jatuh tempo dari definisi view_salesorder."""
+    rows = query("SHOW CREATE VIEW view_salesorder")
+    defn = rows[0].get('Create View', '') if rows else ''
+    def ctx(kw, before=260, after=80):
+        i = defn.find(kw)
+        return defn[max(0, i - before):i + after] if i >= 0 else 'NOT FOUND'
+    fi = defn.lower().find(' from ')
+    return jsonify({
+        'pelunasan_ctx': ctx('`tanggal_pelunasan`'),
+        'jatuh_tempo_ctx': ctx('`tanggal_jatuh_tempo_awal`'),
+        'from_join': defn[fi:fi + 2000] if fi >= 0 else 'NOT FOUND',
+        'panjang_total': len(defn),
+    })
 
 
 if __name__ == '__main__':
