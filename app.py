@@ -667,12 +667,12 @@ def api_bonus():
     Net = bonus - denda. Difilter tgl_pelunasan (order yang sudah lunas)."""
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
-               "o.status_deal = 'Deal'", "o.tgl_pelunasan IS NOT NULL"]
+               "o.status_deal = 'Deal'", "t.tgl_pelunasan IS NOT NULL"]
     params = []
     if tgl_dari:
-        clauses.append("o.tgl_pelunasan >= %s"); params.append(tgl_dari)
+        clauses.append("t.tgl_pelunasan >= %s"); params.append(tgl_dari)
     if tgl_sampai:
-        clauses.append("o.tgl_pelunasan <= %s"); params.append(tgl_sampai)
+        clauses.append("t.tgl_pelunasan <= %s"); params.append(tgl_sampai)
     if pic:
         clauses.append("o.name = %s"); params.append(pic)
     if divisi:
@@ -681,14 +681,14 @@ def api_bonus():
     where = " AND ".join(clauses)
     sql = f"""
         SELECT o.nama, o.sko, o.sumber, o.name AS pic,
-               DATE_FORMAT(o.tgl_pelunasan,'%Y-%m-%d') AS tgl_pelunasan,
+               DATE_FORMAT(t.tgl_pelunasan,'%Y-%m-%d') AS tgl_pelunasan,
                DATE_FORMAT(t.tgl_jatuh_tempo,'%Y-%m-%d') AS tgl_jatuh_tempo,
-               DATEDIFF(o.tgl_pelunasan, t.tgl_jatuh_tempo) AS hari_telat,
+               DATEDIFF(t.tgl_pelunasan, t.tgl_jatuh_tempo) AS hari_telat,
                o.total_harga, o.modal_sales
         FROM order_risepack o
         JOIN tb_orders t ON o.sko_key = t.sko_key
         WHERE {where}
-        ORDER BY o.tgl_pelunasan DESC
+        ORDER BY t.tgl_pelunasan DESC
         LIMIT 3000
     """
     rows = query(sql, params)
