@@ -798,6 +798,20 @@ def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
     sql = f"SELECT SUM(o.total_harga) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
     return float(query(sql, params)[0]['v'] or 0)
 
+def qualified_leads_count(tgl_dari, tgl_sampai, divisi):
+    """Jumlah qualified leads (tipe_kontak 'Bukan Sampah') semua sumber, by waktu_kontak."""
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.tipe_kontak = 'Bukan Sampah'"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    sql = f"SELECT COUNT(DISTINCT o.sko_key) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
+    return int(query(sql, params)[0]['v'] or 0)
+
 @app.route('/api/kpi-score')
 @login_required
 def api_kpi_score():
@@ -904,6 +918,54 @@ def api_kpi_fungsi():
     label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
     return jsonify({'valid': True, 'sales': pic, 'rows': rows, 'total_kpi': round(total_w, 2),
                     'total_ach': total_ach, 'label': label, 'months': nmonths})
+
+@app.route('/api/kpi-marketing')
+@login_required
+def api_kpi_marketing():
+    """KPI fungsi Marketing — team-wide (tidak per PIC). ROI pakai belanja iklan manual."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _pic, divisi = get_args()
+
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    bands = cfg.get('scoring_bands', [])
+
+    nf = potensi = None
+    nf = new_funnel(tgl_dari, tgl_sampai, None, divisi)
+    potensi = potensi_total(tgl_dari, tgl_sampai, None, divisi)
+    qleads = qualified_leads_count(tgl_dari, tgl_sampai, divisi)
+    adspend = sum_months(cfg.get('marketing_adspend', {}), d1, d2, nmonths, 0)
+
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('marketing_kpi', []):
+        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
+        target_eff = target
+        if basis == 'potensi_total':
+            actual = potensi; target_eff = target * nmonths
+        elif basis == 'qualified_leads':
+            actual = qleads; target_eff = target * nmonths
+        elif basis == 'roi_ads':
+            actual = round(nf['omzet_new'] / adspend, 1) if adspend > 0 else 0
+        else:
+            actual = 0
+        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2)
+        total_w += weighted
+        total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
+                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
+                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
+                     'ach': ach, 'score': sc, 'weighted': weighted})
+
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach,
+                    'label': label, 'months': nmonths,
+                    'adspend': adspend, 'omzet_new': nf['omzet_new']})
 
 
 if __name__ == '__main__':
