@@ -884,5 +884,32 @@ def api_kpi_fungsi():
                     'total_ach': total_ach, 'label': label, 'months': nmonths})
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_targets')
+@login_required
+def api_targets_diag():
+    """Pelajari struktur tb_targets / tb_sumber_targets + cara link ke PIC."""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        for tbl in ('tb_targets', 'tb_sumber_targets', 'tb_target_sales'):
+            try:
+                cur.execute(f"SHOW COLUMNS FROM {tbl}")
+                out[tbl + '_cols'] = [r['Field'] for r in cur.fetchall()]
+                cur.execute(f"SELECT * FROM {tbl} LIMIT 3")
+                out[tbl + '_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
+            except Exception as e:
+                out[tbl + '_error'] = str(e)
+        cur.execute("SELECT id, name FROM users WHERE name IN (%s, %s, %s, %s)",
+                    ('Kiki', "Ma'ruf", 'Faisal', 'Amel'))
+        out['users_sales'] = cur.fetchall()
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
