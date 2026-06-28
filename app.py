@@ -658,5 +658,39 @@ def api_sko_achievement():
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_due')
+@login_required
+def api_due_diag():
+    """Cari kolom tanggal jatuh tempo + struktur tabel invoice untuk bonus."""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute("""
+            SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND (COLUMN_NAME LIKE '%tempo%' OR COLUMN_NAME LIKE '%jatuh%'
+                   OR COLUMN_NAME LIKE '%due%' OR COLUMN_NAME LIKE '%pelunasan%'
+                   OR COLUMN_NAME LIKE '%lunas%')
+            ORDER BY TABLE_NAME, COLUMN_NAME
+        """)
+        out['kandidat_kolom'] = cur.fetchall()
+        for tbl in ('invoices', 'invoice_orders'):
+            try:
+                cur.execute(f"SHOW COLUMNS FROM {tbl}")
+                out[tbl + '_kolom'] = [r['Field'] for r in cur.fetchall()]
+                cur.execute(f"SELECT * FROM {tbl} LIMIT 2")
+                out[tbl + '_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
+            except Exception as e:
+                out[tbl + '_error'] = str(e)
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
