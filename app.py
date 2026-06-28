@@ -667,28 +667,31 @@ def api_bonus():
     Net = bonus - denda. Difilter tgl_pelunasan (order yang sudah lunas)."""
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
-               "o.status_deal = 'Deal'", "t.tgl_pelunasan IS NOT NULL"]
+               "o.status_deal = 'Deal'", "inv.tanggal_pelunasan IS NOT NULL"]
     params = []
-    if tgl_dari:
-        clauses.append("t.tgl_pelunasan >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("t.tgl_pelunasan <= %s"); params.append(tgl_sampai)
     if pic:
         clauses.append("o.name = %s"); params.append(pic)
     if divisi:
         clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         params.append(divisi)
+    if tgl_dari:
+        clauses.append("inv.tanggal_pelunasan >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("inv.tanggal_pelunasan <= %s"); params.append(tgl_sampai)
     where = " AND ".join(clauses)
+    # tanggal pelunasan & jatuh tempo asli ada di invoices (lewat invoice_details), sesuai view_salesorder
     sql = f"""
-        SELECT o.nama, o.sko, o.sumber, o.name AS pic,
-               DATE_FORMAT(t.tgl_pelunasan,'%Y-%m-%d') AS tgl_pelunasan,
-               DATE_FORMAT(t.tgl_jatuh_tempo,'%Y-%m-%d') AS tgl_jatuh_tempo,
-               DATEDIFF(t.tgl_pelunasan, t.tgl_jatuh_tempo) AS hari_telat,
-               o.total_harga, o.modal_sales
+        SELECT MAX(o.nama) AS nama, o.sko, MAX(o.sumber) AS sumber, MAX(o.name) AS pic,
+               MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
+               DATE_FORMAT(MAX(inv.tanggal_pelunasan),'%Y-%m-%d') AS tgl_pelunasan,
+               DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
+               DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN tb_orders t ON o.sko_key = t.sko_key
+        JOIN invoice_details idt ON o.sko = idt.kode_order
+        JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {where}
-        ORDER BY t.tgl_pelunasan DESC
+        GROUP BY o.sko_key, o.sko
+        ORDER BY MAX(inv.tanggal_pelunasan) DESC
         LIMIT 3000
     """
     rows = query(sql, params)
@@ -717,25 +720,6 @@ def api_bonus():
             'denda': round(denda), 'net': round(bonus - denda),
         })
     return jsonify(out)
-
-
-# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_vsdef')
-@login_required
-def api_vsdef():
-    """Ambil ekspresi kolom tanggal pelunasan & jatuh tempo dari definisi view_salesorder."""
-    rows = query("SHOW CREATE VIEW view_salesorder")
-    defn = rows[0].get('Create View', '') if rows else ''
-    def ctx(kw, before=260, after=80):
-        i = defn.find(kw)
-        return defn[max(0, i - before):i + after] if i >= 0 else 'NOT FOUND'
-    fi = defn.lower().find(' from ')
-    return jsonify({
-        'pelunasan_ctx': ctx('`tanggal_pelunasan`'),
-        'jatuh_tempo_ctx': ctx('`tanggal_jatuh_tempo_awal`'),
-        'from_join': defn[fi:fi + 2000] if fi >= 0 else 'NOT FOUND',
-        'panjang_total': len(defn),
-    })
 
 
 if __name__ == '__main__':
