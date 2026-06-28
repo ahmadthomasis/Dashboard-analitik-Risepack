@@ -3,6 +3,7 @@ from functools import wraps
 import mysql.connector
 import os
 import calendar
+import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -722,6 +723,108 @@ def api_bonus():
             'denda': round(denda), 'net': round(bonus - denda),
         })
     return jsonify(out)
+
+
+# ─── KPI Sales (OKR scorecard) ───────────────────────────────────
+def load_kpi_config():
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kpi_config.json')
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return {'scoring_bands': [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
+                'labels': [[0, '-']], 'kpi': [], 'umbrella_manual': {}}
+
+def quarter_start(d):
+    return d.replace(month=((d.month - 1) // 3) * 3 + 1, day=1)
+
+def months_between(d1, d2):
+    return (d2.year - d1.year) * 12 + (d2.month - d1.month) + 1
+
+def score_from_ach(ach, bands):
+    for thr, sc in bands:
+        if ach >= thr:
+            return sc
+    return 0
+
+def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
+    """Total nilai potensi (total_harga) dari lead Online, by waktu_kontak."""
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if pic:
+        clauses.append("o.name = %s"); params.append(pic)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    sql = f"SELECT SUM(o.total_harga) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
+    return float(query(sql, params)[0]['v'] or 0)
+
+@app.route('/api/kpi-score')
+@login_required
+def api_kpi_score():
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    bands = cfg.get('scoring_bands', [])
+
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    m = kpi_metrics(cond, params)
+    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
+
+    if d2:
+        qcond, qparams = build_where(quarter_start(d2).isoformat(), tgl_sampai, pic, divisi)
+        omzet_q = kpi_metrics(qcond, qparams)['total_omzet']
+    else:
+        omzet_q = m['total_omzet']
+    pot = potensi_total(tgl_dari, tgl_sampai, pic, divisi)
+
+    um = cfg.get('umbrella_manual', {})
+    umbrella_val, y, mo = 0, (d1.year if d1 else 0), (d1.month if d1 else 0)
+    if d1 and d2:
+        for _ in range(nmonths):
+            umbrella_val += um.get(f"{y:04d}-{mo:02d}", 0) or 0
+            mo += 1
+            if mo > 12:
+                mo = 1; y += 1
+
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('kpi', []):
+        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
+        target_eff = target
+        if basis == 'omzet_quarter':
+            actual = omzet_q
+        elif basis == 'repeat_pct':
+            actual = m['persen_repeat_omzet']
+        elif basis == 'closing_rate_new':
+            actual = nf['closing_rate_new']
+        elif basis == 'umbrella_manual':
+            actual = umbrella_val; target_eff = target * nmonths
+        elif basis == 'potensi_total':
+            actual = pot; target_eff = target * nmonths
+        else:
+            actual = 0
+        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2)
+        total_w += weighted
+        total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
+                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
+                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
+                     'ach': ach, 'score': sc, 'weighted': weighted})
+
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
+                    'total_ach': total_ach, 'label': label, 'months': nmonths})
 
 
 if __name__ == '__main__':
