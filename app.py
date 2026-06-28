@@ -682,6 +682,7 @@ def api_bonus():
     # tanggal pelunasan & jatuh tempo asli ada di invoices (lewat invoice_details), sesuai view_salesorder
     sql = f"""
         SELECT MAX(o.nama) AS nama, o.sko, MAX(o.sumber) AS sumber, MAX(o.name) AS pic,
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS nama_produk,
                MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
                DATE_FORMAT(MAX(inv.tanggal_pelunasan),'%Y-%m-%d') AS tgl_pelunasan,
                DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
@@ -714,6 +715,7 @@ def api_bonus():
         denda = bonus * mult
         out.append({
             'nama': r['nama'], 'sko': r['sko'], 'sumber': sumber, 'pic': r['pic'],
+            'nama_produk': (r['nama_produk'] or '').strip(),
             'tgl_pelunasan': r['tgl_pelunasan'], 'tgl_jatuh_tempo': r['tgl_jatuh_tempo'],
             'hari_telat': h if h is not None else 0,
             'margin': round(margin), 'bonus': round(bonus),
