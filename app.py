@@ -827,6 +827,62 @@ def api_kpi_score():
     return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
                     'total_ach': total_ach, 'label': label, 'months': nmonths})
 
+@app.route('/api/kpi-fungsi')
+@login_required
+def api_kpi_fungsi():
+    """KPI per fungsi sales (individu). Sales dipilih lewat filter PIC."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    sales_list = cfg.get('fungsi_sales', [])
+    if not pic or pic not in sales_list:
+        return jsonify({'valid': False, 'sales_list': sales_list})
+
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    bands = cfg.get('scoring_bands', [])
+
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    m = kpi_metrics(cond, params)
+    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
+
+    om_t = cfg.get('fungsi_omzet_target', {}).get(pic, 0) or 0
+    omzet_target_eff = om_t * nmonths
+    umbrella_val = sum_months(cfg.get('fungsi_umbrella', {}).get(pic, {}), d1, d2, nmonths, 0)
+
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('fungsi_kpi', []):
+        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
+        target_eff = target
+        if basis == 'omzet_sales':
+            actual = m['total_omzet']; target_eff = omzet_target_eff
+        elif basis == 'repeat_sales':
+            actual = m['repeat_omzet']; target_eff = (target / 100.0) * omzet_target_eff
+        elif basis == 'closing_rate_new':
+            actual = nf['closing_rate_new']
+        elif basis == 'gross_margin':
+            actual = m['persen_margin']
+        elif basis == 'umbrella_sales':
+            actual = umbrella_val; target_eff = target * nmonths
+        else:
+            actual = 0
+        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2)
+        total_w += weighted
+        total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
+                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
+                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
+                     'ach': ach, 'score': sc, 'weighted': weighted})
+
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return jsonify({'valid': True, 'sales': pic, 'rows': rows, 'total_kpi': round(total_w, 2),
+                    'total_ach': total_ach, 'label': label, 'months': nmonths})
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
