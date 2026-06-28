@@ -937,8 +937,9 @@ def api_kpi_marketing():
     nmonths = months_between(d1, d2) if (d1 and d2) else 1
     bands = cfg.get('scoring_bands', [])
 
-    nf = potensi = None
-    nf = new_funnel(tgl_dari, tgl_sampai, None, divisi)
+    cond, params = build_where(tgl_dari, tgl_sampai, None, divisi)
+    m = kpi_metrics(cond, params)
+    omzet_new = m['omzet_new']  # non-repeat (konsisten dgn Ringkasan & tabel Customer)
     potensi = potensi_total(tgl_dari, tgl_sampai, None, divisi)
     qleads = qualified_leads_count(tgl_dari, tgl_sampai, divisi)
     adspend = sum_months(cfg.get('marketing_adspend', {}), d1, d2, nmonths, 0)
@@ -952,7 +953,7 @@ def api_kpi_marketing():
         elif basis == 'qualified_leads':
             actual = qleads; target_eff = target * nmonths
         elif basis == 'roi_ads':
-            actual = round(nf['omzet_new'] / adspend, 1) if adspend > 0 else 0
+            actual = round(omzet_new / adspend, 1) if adspend > 0 else 0
         else:
             actual = 0
         ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
@@ -969,7 +970,7 @@ def api_kpi_marketing():
     label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
     return jsonify({'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach,
                     'label': label, 'months': nmonths,
-                    'adspend': adspend, 'omzet_new': nf['omzet_new']})
+                    'adspend': adspend, 'omzet_new': omzet_new})
 
 
 if __name__ == '__main__':
