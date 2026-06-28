@@ -822,7 +822,7 @@ function exportBonCSV(){
   const rows=bonFiltered();
   const lines=[BON_COLS.map(c=>c[1]).join(',')];
   rows.forEach(r=>{
-    const vals=[r.nama,r.sko,r.sumber,r.pic,r.tgl_pelunasan,r.tgl_jatuh_tempo,r.hari_telat,r.margin,r.bonus,r.denda,r.net];
+    const vals=[r.nama,r.sko,r.nama_produk,r.sumber,r.pic,r.tgl_pelunasan,r.tgl_jatuh_tempo,r.hari_telat,r.margin,r.bonus,r.denda,r.net];
     lines.push(vals.map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
