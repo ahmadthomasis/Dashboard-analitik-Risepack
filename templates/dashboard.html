@@ -141,6 +141,20 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #detail-table th:nth-child(9),#detail-table td:nth-child(9){width:130px;}
 #detail-table th:nth-child(10),#detail-table td:nth-child(10){width:85px;}
 
+/* tabel customer proporsional */
+#dnr-table table,#journey-table table,#sko-ach table{table-layout:fixed;width:100%;}
+#dnr-table th,#dnr-table td,#journey-table th,#journey-table td,#sko-ach th,#sko-ach td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#dnr-table td:nth-child(1),#dnr-table th:nth-child(1){width:30%;}
+#dnr-table td:nth-child(n+2),#dnr-table th:nth-child(n+2){width:23.3%;}
+#journey-table td:nth-child(1),#journey-table th:nth-child(1){width:25%;}
+#journey-table td:nth-child(2),#journey-table th:nth-child(2){width:30%;}
+#journey-table td:nth-child(3),#journey-table th:nth-child(3){width:17%;}
+#journey-table td:nth-child(4),#journey-table th:nth-child(4){width:12%;}
+#journey-table td:nth-child(5),#journey-table th:nth-child(5){width:16%;}
+#sko-ach td:nth-child(1),#sko-ach th:nth-child(1){width:40%;}
+#sko-ach td:nth-child(2),#sko-ach th:nth-child(2){width:18%;}
+#sko-ach td:nth-child(3),#sko-ach th:nth-child(3){width:42%;overflow:visible;}
+
 @media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
 </style>
