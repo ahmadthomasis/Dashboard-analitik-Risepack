@@ -170,7 +170,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <div class="nav-label">Menu</div>
     <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
     <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
-    <button class="nav-item" data-view="kpi" onclick="showView('kpi')"><span class="i">🏆</span> KPI Divisi</button>
+    <button class="nav-item" data-view="kpi" onclick="showView('kpi')"><span class="i">🏆</span> KPI</button>
     <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
     <button class="nav-item" data-view="monitoring" onclick="showView('monitoring')"><span class="i">🎯</span> Monitoring Potensi</button>
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
@@ -281,13 +281,27 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         </div>
       </section>
 
-      <!-- KPI SALES -->
+      <!-- KPI -->
       <section id="view-kpi" class="view">
-        <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
-        <div class="card">
-          <h3>KPI Scorecard</h3>
-          <div class="ch-sub">Achievement = min(aktual ÷ target, 100%) · skor 1–6 dari band · weighted = skor × bobot · target gabungan tim</div>
-          <div class="table-wrap" id="kpi-table"><div class="loading">Memuat…</div></div>
+        <div class="subtabs">
+          <button class="subtab active" id="kt-divisi" onclick="kpiTab('divisi')">🏛️ Divisi</button>
+          <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
+        </div>
+        <div id="kpiview-divisi">
+          <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
+          <div class="card">
+            <h3>KPI Scorecard — Divisi</h3>
+            <div class="ch-sub">Achievement = min(aktual ÷ target, 100%) · skor 1–6 · weighted = skor × bobot · target gabungan tim</div>
+            <div class="table-wrap" id="kpi-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-fungsi" style="display:none">
+          <div class="kpi-grid" id="fungsi-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Fungsi Sales</h3>
+            <div class="ch-sub">Pilih sales lewat filter <b>PIC</b> di atas (Kiki / Ma'ruf / Faisal / Amel) · target per sales di config</div>
+            <div class="table-wrap" id="fungsi-table"><div class="loading">Pilih sales di filter PIC…</div></div>
+          </div>
         </div>
       </section>
 
@@ -332,13 +346,13 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
 <script>
 let charts = {};
-let state = { view: 'ringkasan', subtab: 'produk' };
+let state = { view: 'ringkasan', subtab: 'produk', kpitab: 'divisi' };
 let CACHE = {};
 const PALETTE = ['#e9852b','#7a5230','#3b6fb0','#4e9a3f','#cf4b3a','#d99327','#9b59b6','#16a085'];
 const PAGE = {
   ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
   sales:['Sales','Analisis penjualan'],
-  kpi:['KPI Divisi','Scorecard OKR divisi · periode terpilih'],
+  kpi:['KPI','Scorecard OKR · divisi & fungsi sales'],
   detail:['Detail Order','Cek data cepat per order'],
   monitoring:['Monitoring Potensi','Customer baru online & kelengkapan input potensi'],
   produksi:['Produksi','Status order produksi'],
@@ -441,7 +455,15 @@ async function loadAll(){
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], kpi:[['kpi-table',loadKpiScore]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
+function kpiTab(t){
+  state.kpitab=t;
+  document.getElementById('kt-divisi').classList.toggle('active',t==='divisi');
+  document.getElementById('kt-fungsi').classList.toggle('active',t==='fungsi');
+  document.getElementById('kpiview-divisi').style.display = t==='divisi'?'':'none';
+  document.getElementById('kpiview-fungsi').style.display = t==='fungsi'?'':'none';
+  renderView();
+}
 const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
@@ -451,7 +473,10 @@ const SUB_TASKS = {
 };
 async function renderView(){
   const q = getParams();
-  const tasks = state.view==='sales' ? (SUB_TASKS[state.subtab]||[]) : (TOP_TASKS[state.view]||[]);
+  let tasks;
+  if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
+  else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : [['kpi-table',loadKpiScore]];
+  else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
     if (!(el.tagName==='CANVAS' && charts[target])) setMsg(target,'Memuat…');
@@ -792,14 +817,13 @@ function exportMonCSV(){
   URL.revokeObjectURL(url);
 }
 
-// ── KPI Sales (OKR scorecard) ──
-async function loadKpiScore(q){
-  const d = await fetchJSON('/api/kpi-score?'+q);
+// ── KPI scorecard (Divisi & Fungsi) ──
+function renderScorecard(d, sumId, tblId){
   const lblClass = d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
-  document.getElementById('kpi-score-summary').innerHTML=`
+  document.getElementById(sumId).innerHTML=`
     ${kpiCard('a-orange','🏆','Total KPI',d.total_kpi+' / 6',`<span class="muted">skor tertimbang</span>`)}
     ${kpiCard('a-green','📊','Total Achievement',d.total_ach+'%',`<span class="pill ${lblClass}">${esc(d.label)}</span>`)}
-    ${kpiCard('a-blue','📅','Periode',fmtInt(d.months)+' bulan',`<span class="muted">rentang terpilih</span>`)}`;
+    ${kpiCard('a-blue','📅','Periode',fmtInt(d.months)+' bulan',`<span class="muted">${d.sales?('Sales: '+esc(d.sales)):'rentang terpilih'}</span>`)}`;
   const fmtVal=(v,u)=> u==='Rp'?formatRp(v):(u==='%'?(v+'%'):(fmtInt(v)+(u?(' '+u):'')));
   const body=d.rows.map((r,i)=>{
     const col=r.score>=5?'var(--green)':(r.score>=3?'var(--amber)':'var(--red)');
@@ -814,7 +838,7 @@ async function loadKpiScore(q){
       <td class="num" style="font-weight:600">${r.weighted.toFixed(2)}</td>
     </tr>`;
   }).join('');
-  document.getElementById('kpi-table').innerHTML=`<table>
+  document.getElementById(tblId).innerHTML=`<table>
     <thead><tr><th>#</th><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th class="num">Skor</th><th class="num">Weighted</th></tr></thead>
     <tbody>${body}</tbody>
     <tfoot><tr style="border-top:2px solid var(--border-strong)">
@@ -823,6 +847,16 @@ async function loadKpiScore(q){
       <td></td>
       <td class="num" style="font-weight:700">${d.total_kpi}</td>
     </tr></tfoot></table>`;
+}
+async function loadKpiScore(q){ renderScorecard(await fetchJSON('/api/kpi-score?'+q), 'kpi-score-summary', 'kpi-table'); }
+async function loadKpiFungsi(q){
+  const d = await fetchJSON('/api/kpi-fungsi?'+q);
+  if(!d.valid){
+    document.getElementById('fungsi-summary').innerHTML='';
+    document.getElementById('fungsi-table').innerHTML=`<div class="loading">Pilih salah satu sales di filter <b>PIC</b> di atas: ${(d.sales_list||[]).map(esc).join(' · ')}</div>`;
+    return;
+  }
+  renderScorecard(d, 'fungsi-summary', 'fungsi-table');
 }
 
 // ── Bonus Achievement Sales ──
