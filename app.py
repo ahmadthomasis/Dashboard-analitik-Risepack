@@ -699,7 +699,7 @@ def api_bonus():
     for r in rows:
         margin = float(r['total_harga'] or 0) - float(r['modal_sales'] or 0)
         sumber = r['sumber'] or ''
-        rate = 0.05 if sumber == 'Repeat Order' else (0.07 if sumber in ('Online', 'Online Lintas') else 0.0)
+        rate = 0.025 if sumber == 'Repeat Order' else (0.05 if sumber in ('Online', 'Online Lintas') else 0.0)
         bonus = margin * rate
         h = r['hari_telat']
         h = int(h) if h is not None else None
