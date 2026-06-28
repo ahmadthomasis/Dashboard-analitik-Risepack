@@ -782,7 +782,7 @@ function exportMonCSV(){
 
 // ── Bonus Achievement Sales ──
 const BON={rows:[],term:'',key:'tgl_pelunasan',dir:'desc'};
-const BON_COLS=[['nama','Nama','str'],['sko','SKO','str'],['sumber','Sumber','str'],['pic','PIC','str'],['tgl_pelunasan','Pelunasan','str'],['tgl_jatuh_tempo','Jatuh Tempo','str'],['hari_telat','Hari Telat','num'],['margin','Margin','num'],['bonus','Bonus','num'],['denda','Denda','num'],['net','Net Bonus','num']];
+const BON_COLS=[['nama','Nama','str'],['sko','SKO','str'],['nama_produk','Produk','str'],['sumber','Sumber','str'],['pic','PIC','str'],['tgl_pelunasan','Pelunasan','str'],['tgl_jatuh_tempo','Jatuh Tempo','str'],['hari_telat','Hari Telat','num'],['margin','Margin','num'],['bonus','Bonus','num'],['denda','Denda','num'],['net','Net Bonus','num']];
 async function loadBonus(q){ BON.rows=await fetchJSON('/api/bonus?'+q); renderBon(); }
 function onBonSearch(v){ BON.term=v.trim().toLowerCase(); renderBon(); }
 function setBonSort(k){ if(BON.key===k)BON.dir=BON.dir==='asc'?'desc':'asc'; else{BON.key=k;BON.dir='asc';} renderBon(); }
@@ -804,6 +804,7 @@ function renderBon(){
     return `<tr>
       <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
       <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+      <td title="${esc(r.nama_produk,1)}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.nama_produk)||'-'}</td>
       <td>${esc(r.sumber)||'-'}</td>
       <td>${esc(r.pic)||'-'}</td>
       <td>${r.tgl_pelunasan||'-'}</td>
@@ -815,7 +816,7 @@ function renderBon(){
       <td class="num" style="font-weight:700;color:var(--green)">${formatRp(r.net)}</td>
     </tr>`;
   }).join('');
-  document.getElementById('bonus-table').innerHTML=`<table style="min-width:1080px"><thead><tr>${sortHead(BON_COLS,BON,'setBonSort')}</tr></thead><tbody>${body||'<tr><td colspan="11" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+  document.getElementById('bonus-table').innerHTML=`<table style="min-width:1220px"><thead><tr>${sortHead(BON_COLS,BON,'setBonSort')}</tr></thead><tbody>${body||'<tr><td colspan="12" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportBonCSV(){
   const rows=bonFiltered();
