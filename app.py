@@ -802,8 +802,8 @@ def api_kpi_score():
         target_eff = target
         if basis == 'omzet_monthly':
             actual = m['total_omzet']; target_eff = omzet_target_eff
-        elif basis == 'repeat_pct':
-            actual = m['persen_repeat_omzet']
+        elif basis == 'repeat_vs_target':
+            actual = m['repeat_omzet']; target_eff = (target / 100.0) * omzet_target_eff
         elif basis == 'closing_rate_new':
             actual = nf['closing_rate_new']
         elif basis == 'umbrella_manual':
