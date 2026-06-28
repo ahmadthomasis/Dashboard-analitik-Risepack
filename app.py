@@ -238,7 +238,9 @@ def api_kpi():
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
     cur = kpi_metrics(cond, params)
-    cur.update(new_funnel(tgl_dari, tgl_sampai, pic, divisi))  # override metrik new -> corong online
+    omzet_new_cur = cur['omzet_new']                          # Omzet New = non-repeat (by tgl omzet)
+    cur.update(new_funnel(tgl_dari, tgl_sampai, pic, divisi)) # corong online utk total_new/closing_rate_new/qualified_new
+    cur['omzet_new'] = omzet_new_cur                          # kembalikan ke definisi non-repeat
 
     # Perbandingan periode sebelumnya (durasi sama)
     delta = {}
@@ -246,7 +248,9 @@ def api_kpi():
     if p1 and p2:
         pcond, pparams = build_where(p1, p2, pic, divisi)
         prev = kpi_metrics(pcond, pparams)
+        omzet_new_prev = prev['omzet_new']
         prev.update(new_funnel(p1, p2, pic, divisi))
+        prev['omzet_new'] = omzet_new_prev
         for k in ['total_omzet', 'total_modal', 'total_margin', 'total_order',
                   'total_deal', 'total_repeat', 'total_new', 'closing_rate',
                   'avg_purchase', 'repeat_omzet', 'omzet_new', 'closing_rate_new', 'persen_repeat']:
