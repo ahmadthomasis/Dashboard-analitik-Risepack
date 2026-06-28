@@ -759,6 +759,29 @@ def sum_months(cfg_map, d1, d2, nmonths, default=0):
             mo = 1; y += 1
     return tot
 
+def sales_omzet_target(pic, d1, d2, nmonths, cfg):
+    """Target omzet sales per bulan dari tb_target_sales (yang diset manager di app).
+    Dijumlahkan sepanjang rentang. Fallback ke config bila belum diset di app."""
+    months = []
+    if d1 and d2:
+        y, mo = d1.year, d1.month
+        for _ in range(nmonths):
+            months.append(f"{y:04d}-{mo:02d}")
+            mo += 1
+            if mo > 12:
+                mo = 1; y += 1
+    db_total = 0.0
+    if months:
+        ph = ','.join(['%s'] * len(months))
+        sql = (f"SELECT COALESCE(SUM(ts.target_revenue),0) v "
+               f"FROM tb_target_sales ts JOIN users u ON ts.user_id = u.id "
+               f"WHERE u.name = %s AND ts.deleted_at IS NULL "
+               f"AND CONCAT(ts.year,'-',LPAD(ts.month,2,'0')) IN ({ph})")
+        db_total = float(query(sql, [pic] + months)[0]['v'] or 0)
+    if db_total > 0:
+        return db_total
+    return (cfg.get('fungsi_omzet_target', {}).get(pic, 0) or 0) * nmonths
+
 def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
     """Total nilai potensi (total_harga) dari lead Online, by waktu_kontak."""
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
@@ -848,8 +871,7 @@ def api_kpi_fungsi():
     m = kpi_metrics(cond, params)
     nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
 
-    om_t = cfg.get('fungsi_omzet_target', {}).get(pic, 0) or 0
-    omzet_target_eff = om_t * nmonths
+    omzet_target_eff = sales_omzet_target(pic, d1, d2, nmonths, cfg)
     umbrella_val = sum_months(cfg.get('fungsi_umbrella', {}).get(pic, {}), d1, d2, nmonths, 0)
 
     rows, total_w, total_ach_w = [], 0.0, 0.0
@@ -882,33 +904,6 @@ def api_kpi_fungsi():
     label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
     return jsonify({'valid': True, 'sales': pic, 'rows': rows, 'total_kpi': round(total_w, 2),
                     'total_ach': total_ach, 'label': label, 'months': nmonths})
-
-
-# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_targets')
-@login_required
-def api_targets_diag():
-    """Pelajari struktur tb_targets / tb_sumber_targets + cara link ke PIC."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        for tbl in ('tb_targets', 'tb_sumber_targets', 'tb_target_sales'):
-            try:
-                cur.execute(f"SHOW COLUMNS FROM {tbl}")
-                out[tbl + '_cols'] = [r['Field'] for r in cur.fetchall()]
-                cur.execute(f"SELECT * FROM {tbl} LIMIT 3")
-                out[tbl + '_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
-            except Exception as e:
-                out[tbl + '_error'] = str(e)
-        cur.execute("SELECT id, name FROM users WHERE name IN (%s, %s, %s, %s)",
-                    ('Kiki', "Ma'ruf", 'Faisal', 'Amel'))
-        out['users_sales'] = cur.fetchall()
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
-    return jsonify(out)
 
 
 if __name__ == '__main__':
