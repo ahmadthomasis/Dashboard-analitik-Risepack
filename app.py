@@ -719,5 +719,31 @@ def api_bonus():
     return jsonify(out)
 
 
+# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
+@app.route('/api/_bonus_check')
+@login_required
+def api_bonus_check():
+    """Cari sumber tanggal pelunasan & jatuh tempo yang benar untuk bonus."""
+    conn = mysql.connector.connect(**DB_CONFIG)
+    out = {}
+    try:
+        cur = conn.cursor(dictionary=True)
+        def one(label, sql, p=()):
+            cur.execute(sql, p); out[label] = cur.fetchone()
+        def many(label, sql, p=()):
+            cur.execute(sql, p); out[label] = cur.fetchall()
+        one('tb_orders_dates', "SELECT COUNT(*) total, COUNT(tgl_pelunasan) ada_pelunasan, COUNT(tgl_jatuh_tempo) ada_tempo FROM tb_orders")
+        one('invoice_orders_dates', "SELECT COUNT(*) total, COUNT(tanggal_pelunasan) ada_pelunasan FROM invoice_orders")
+        one('invoices_dates', "SELECT COUNT(*) total, COUNT(tanggal_jatuh_tempo) ada_tempo, COUNT(tanggal_pelunasan) ada_pelunasan FROM invoices")
+        one('link_sko_kodeorder', "SELECT COUNT(*) n FROM order_risepack o JOIN invoice_orders io ON o.sko = io.kode_order")
+        many('sample_invoice', "SELECT io.kode_order, CAST(io.tanggal_pelunasan AS CHAR) pelunasan, io.status_paid, CAST(inv.tanggal_jatuh_tempo AS CHAR) jatuh_tempo FROM invoice_orders io LEFT JOIN invoices inv ON io.invoice_key = inv.invoice_key LIMIT 5")
+        one('kiki_juni_via_invoice', "SELECT COUNT(*) n FROM order_risepack o JOIN invoice_orders io ON o.sko = io.kode_order WHERE o.name='Kiki' AND io.tanggal_pelunasan >= '2026-06-01' AND io.tanggal_pelunasan <= '2026-06-30'")
+        cur.close()
+    finally:
+        try: conn.close()
+        except: pass
+    return jsonify(out)
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
