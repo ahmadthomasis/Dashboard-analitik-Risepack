@@ -1,0 +1,26 @@
+{
+  "_catatan": "Edit file ini untuk mengubah target KPI, bobot, atau angka Umbrella Contract manual. Bobot total harus 100.",
+  "scoring_bands": [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
+  "labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
+  "kpi": [
+    {"id": "omzet",       "name": "Omzet",                "weight": 40, "target": 7500000000, "basis": "omzet_quarter",     "unit": "Rp", "note": "Rp 7,5 M / quarter (kumulatif)"},
+    {"id": "repeat",      "name": "Repeat Order 70%",     "weight": 20, "target": 70,         "basis": "repeat_pct",        "unit": "%",  "note": "Repeat 70% dari total omzet"},
+    {"id": "umbrella",    "name": "Umbrella Contract",    "weight": 5,  "target": 2,          "basis": "umbrella_manual",   "unit": "kontrak", "note": "2 / bulan (diisi manual di bawah)"},
+    {"id": "closing_new", "name": "Closing Rate New 10%", "weight": 20, "target": 10,         "basis": "closing_rate_new",  "unit": "%",  "note": "Deal new / qualified leads"},
+    {"id": "potensi",     "name": "Potensi 3M",           "weight": 15, "target": 3000000000, "basis": "potensi_total",     "unit": "Rp", "note": "Rp 3 M / bulan total nilai potensi"}
+  ],
+  "umbrella_manual": {
+    "2026-01": 1,
+    "2026-02": 0,
+    "2026-03": 0,
+    "2026-04": 0,
+    "2026-05": 0,
+    "2026-06": 0,
+    "2026-07": 0,
+    "2026-08": 0,
+    "2026-09": 0,
+    "2026-10": 0,
+    "2026-11": 0,
+    "2026-12": 0
+  }
+}
