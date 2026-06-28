@@ -121,8 +121,8 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 /* Detail Order */
 .toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
 .toolbar .spacer-f{flex:1;}
-#detail-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 340px;max-width:60%;}
-#detail-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
+#detail-search,#bonus-search,#mon-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 320px;max-width:60%;}
+#detail-search:focus,#bonus-search:focus,#mon-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
 #detail-table table{font-size:12.5px;table-layout:fixed;width:100%;}
 #detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
 #detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -220,6 +220,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           <button class="subtab" data-sub="margin"    onclick="showSub('margin')">📈 Margin</button>
           <button class="subtab" data-sub="customer"  onclick="showSub('customer')">👥 Customer</button>
           <button class="subtab" data-sub="penjualan" onclick="showSub('penjualan')">💰 Penjualan</button>
+          <button class="subtab" data-sub="bonus" onclick="showSub('bonus')">🏅 Bonus</button>
         </div>
 
         <div id="subview-produk" class="subview active">
@@ -261,6 +262,21 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
             <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
           </div>
           <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
+        </div>
+
+        <div id="subview-bonus" class="subview">
+          <div class="kpi-grid" id="bonus-summary" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
+          <div class="card">
+            <h3>Bonus Achievement Sales</h3>
+            <div class="ch-sub">Bonus = margin × rate (Repeat 5% · New-Online 7%) − denda telat bayar · difilter tanggal pelunasan</div>
+            <div class="toolbar">
+              <input id="bonus-search" type="text" placeholder="🔎 Cari nama / SKO / PIC…" oninput="onBonSearch(this.value)">
+              <span class="muted" id="bonus-count"></span>
+              <div class="spacer-f"></div>
+              <button class="btn-reset" onclick="exportBonCSV()">⬇ Export CSV</button>
+            </div>
+            <div class="table-wrap" id="bonus-table" style="max-height:62vh;overflow:auto"><div class="loading">Memuat…</div></div>
+          </div>
         </div>
       </section>
 
@@ -315,7 +331,7 @@ const PAGE = {
   monitoring:['Monitoring Potensi','Customer baru online & kelengkapan input potensi'],
   produksi:['Produksi','Status order produksi'],
 };
-const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan'};
+const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan',bonus:'Bonus'};
 Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
 Chart.defaults.color = '#6d6055';
 
@@ -419,6 +435,7 @@ const SUB_TASKS = {
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
   customer:[['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
   penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
+  bonus:[['bonus-table',loadBonus]],
 };
 async function renderView(){
   const q = getParams();
@@ -761,6 +778,54 @@ function exportMonCSV(){
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a'); a.href=url; a.download='monitoring-potensi-risepack.csv'; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── Bonus Achievement Sales ──
+const BON={rows:[],term:'',key:'tgl_pelunasan',dir:'desc'};
+const BON_COLS=[['nama','Nama','str'],['sko','SKO','str'],['sumber','Sumber','str'],['pic','PIC','str'],['tgl_pelunasan','Pelunasan','str'],['tgl_jatuh_tempo','Jatuh Tempo','str'],['hari_telat','Hari Telat','num'],['margin','Margin','num'],['bonus','Bonus','num'],['denda','Denda','num'],['net','Net Bonus','num']];
+async function loadBonus(q){ BON.rows=await fetchJSON('/api/bonus?'+q); renderBon(); }
+function onBonSearch(v){ BON.term=v.trim().toLowerCase(); renderBon(); }
+function setBonSort(k){ if(BON.key===k)BON.dir=BON.dir==='asc'?'desc':'asc'; else{BON.key=k;BON.dir='asc';} renderBon(); }
+function bonFiltered(){
+  let rows=BON.rows.slice();
+  if(BON.term) rows=rows.filter(r=>[r.nama,r.sko,r.pic,r.sumber].join(' ').toLowerCase().includes(BON.term));
+  return sortBy(rows,BON.key,BON.dir,(BON_COLS.find(c=>c[0]===BON.key)||[])[2]);
+}
+function renderBon(){
+  const rows=bonFiltered();
+  const tBonus=rows.reduce((s,r)=>s+r.bonus,0), tDenda=rows.reduce((s,r)=>s+r.denda,0), tNet=rows.reduce((s,r)=>s+r.net,0);
+  document.getElementById('bonus-summary').innerHTML=`
+    ${kpiCard('a-green','🏅','Net Bonus',formatRp(tNet),`<span class="muted">${fmtInt(rows.length)} order lunas</span>`)}
+    ${kpiCard('a-blue','💰','Total Bonus',formatRp(tBonus),`<span class="muted">sebelum denda</span>`)}
+    ${kpiCard('a-orange','⚠️','Total Denda',formatRp(tDenda),`<span class="muted">potongan telat bayar</span>`)}`;
+  document.getElementById('bonus-count').textContent=`${rows.length} baris`;
+  const body=rows.map(r=>{
+    const late=r.hari_telat>0;
+    return `<tr>
+      <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+      <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+      <td>${esc(r.sumber)||'-'}</td>
+      <td>${esc(r.pic)||'-'}</td>
+      <td>${r.tgl_pelunasan||'-'}</td>
+      <td>${r.tgl_jatuh_tempo||'-'}</td>
+      <td class="num" style="color:${late?'var(--red)':'var(--ink-3)'}">${r.hari_telat}</td>
+      <td class="num">${formatRp(r.margin)}</td>
+      <td class="num">${formatRp(r.bonus)}</td>
+      <td class="num" style="color:${r.denda>0?'var(--red)':'var(--ink-3)'}">${r.denda?formatRp(r.denda):'–'}</td>
+      <td class="num" style="font-weight:700;color:var(--green)">${formatRp(r.net)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('bonus-table').innerHTML=`<table style="min-width:1080px"><thead><tr>${sortHead(BON_COLS,BON,'setBonSort')}</tr></thead><tbody>${body||'<tr><td colspan="11" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportBonCSV(){
+  const rows=bonFiltered();
+  const lines=[BON_COLS.map(c=>c[1]).join(',')];
+  rows.forEach(r=>{
+    const vals=[r.nama,r.sko,r.sumber,r.pic,r.tgl_pelunasan,r.tgl_jatuh_tempo,r.hari_telat,r.margin,r.bonus,r.denda,r.net];
+    lines.push(vals.map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='bonus-sales-risepack.csv'; a.click(); URL.revokeObjectURL(url);
 }
 
 // ── Helpers ──
