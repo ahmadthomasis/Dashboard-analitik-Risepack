@@ -286,6 +286,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         <div class="subtabs">
           <button class="subtab active" id="kt-divisi" onclick="kpiTab('divisi')">🏛️ Divisi</button>
           <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
+          <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
         </div>
         <div id="kpiview-divisi">
           <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
@@ -299,8 +300,16 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           <div class="kpi-grid" id="fungsi-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
           <div class="card">
             <h3>KPI Scorecard — Fungsi Sales</h3>
-            <div class="ch-sub">Pilih sales lewat filter <b>PIC</b> di atas (Kiki / Ma'ruf / Faisal / Amel) · target per sales di config</div>
+            <div class="ch-sub">Pilih sales lewat filter <b>PIC</b> di atas (Kiki / Ma'ruf / Faisal / Amel) · target per sales otomatis dari aplikasi</div>
             <div class="table-wrap" id="fungsi-table"><div class="loading">Pilih sales di filter PIC…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-marketing" style="display:none">
+          <div class="kpi-grid" id="marketing-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Marketing</h3>
+            <div class="ch-sub">Potensi · Qualified Leads · ROI (omzet new ÷ belanja iklan) · belanja iklan diisi manual di config</div>
+            <div class="table-wrap" id="marketing-table"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -458,10 +467,10 @@ async function loadAll(){
 const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
 function kpiTab(t){
   state.kpitab=t;
-  document.getElementById('kt-divisi').classList.toggle('active',t==='divisi');
-  document.getElementById('kt-fungsi').classList.toggle('active',t==='fungsi');
-  document.getElementById('kpiview-divisi').style.display = t==='divisi'?'':'none';
-  document.getElementById('kpiview-fungsi').style.display = t==='fungsi'?'':'none';
+  ['divisi','fungsi','marketing'].forEach(x=>{
+    document.getElementById('kt-'+x).classList.toggle('active',x===t);
+    document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
+  });
   renderView();
 }
 const SUB_TASKS = {
@@ -475,7 +484,7 @@ async function renderView(){
   const q = getParams();
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
-  else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : [['kpi-table',loadKpiScore]];
+  else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -824,7 +833,7 @@ function renderScorecard(d, sumId, tblId){
     ${kpiCard('a-orange','🏆','Total KPI',d.total_kpi+' / 6',`<span class="muted">skor tertimbang</span>`)}
     ${kpiCard('a-green','📊','Total Achievement',d.total_ach+'%',`<span class="pill ${lblClass}">${esc(d.label)}</span>`)}
     ${kpiCard('a-blue','📅','Periode',fmtInt(d.months)+' bulan',`<span class="muted">${d.sales?('Sales: '+esc(d.sales)):'rentang terpilih'}</span>`)}`;
-  const fmtVal=(v,u)=> u==='Rp'?formatRp(v):(u==='%'?(v+'%'):(fmtInt(v)+(u?(' '+u):'')));
+  const fmtVal=(v,u)=> u==='Rp'?formatRp(v):(u==='%'?(v+'%'):(u==='x'?(v+'x'):(fmtInt(v)+(u?(' '+u):''))));
   const body=d.rows.map((r,i)=>{
     const col=r.score>=5?'var(--green)':(r.score>=3?'var(--amber)':'var(--red)');
     return `<tr>
@@ -858,6 +867,7 @@ async function loadKpiFungsi(q){
   }
   renderScorecard(d, 'fungsi-summary', 'fungsi-table');
 }
+async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-marketing?'+q), 'marketing-summary', 'marketing-table'); }
 
 // ── Bonus Achievement Sales ──
 const BON={rows:[],term:'',key:'tgl_pelunasan',dir:'desc'};
