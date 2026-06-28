@@ -658,37 +658,64 @@ def api_sko_achievement():
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
 
 
-# ─── DIAGNOSTIK SEMENTARA (hapus setelah dipakai) ────────────────
-@app.route('/api/_due')
+# ─── Bonus Achievement Sales ─────────────────────────────────────
+@app.route('/api/bonus')
 @login_required
-def api_due_diag():
-    """Cari kolom tanggal jatuh tempo + struktur tabel invoice untuk bonus."""
-    conn = mysql.connector.connect(**DB_CONFIG)
-    out = {}
-    try:
-        cur = conn.cursor(dictionary=True)
-        cur.execute("""
-            SELECT TABLE_NAME AS tabel, COLUMN_NAME AS kolom, DATA_TYPE AS tipe
-            FROM information_schema.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE()
-              AND (COLUMN_NAME LIKE '%tempo%' OR COLUMN_NAME LIKE '%jatuh%'
-                   OR COLUMN_NAME LIKE '%due%' OR COLUMN_NAME LIKE '%pelunasan%'
-                   OR COLUMN_NAME LIKE '%lunas%')
-            ORDER BY TABLE_NAME, COLUMN_NAME
-        """)
-        out['kandidat_kolom'] = cur.fetchall()
-        for tbl in ('invoices', 'invoice_orders'):
-            try:
-                cur.execute(f"SHOW COLUMNS FROM {tbl}")
-                out[tbl + '_kolom'] = [r['Field'] for r in cur.fetchall()]
-                cur.execute(f"SELECT * FROM {tbl} LIMIT 2")
-                out[tbl + '_sample'] = [{k: (None if v is None else str(v)) for k, v in r.items()} for r in cur.fetchall()]
-            except Exception as e:
-                out[tbl + '_error'] = str(e)
-        cur.close()
-    finally:
-        try: conn.close()
-        except: pass
+def api_bonus():
+    """Bonus per SKO. Bonus = margin x rate (Repeat 5% / New-Online 7% / lainnya 0).
+    Denda = bonus x faktor telat (1-7hr 25%, 8-14hr 50%, >14hr 100%, tidak telat 0).
+    Net = bonus - denda. Difilter tgl_pelunasan (order yang sudah lunas)."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
+               "o.status_deal = 'Deal'", "o.tgl_pelunasan IS NOT NULL"]
+    params = []
+    if tgl_dari:
+        clauses.append("o.tgl_pelunasan >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("o.tgl_pelunasan <= %s"); params.append(tgl_sampai)
+    if pic:
+        clauses.append("o.name = %s"); params.append(pic)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    where = " AND ".join(clauses)
+    sql = f"""
+        SELECT o.nama, o.sko, o.sumber, o.name AS pic,
+               DATE_FORMAT(o.tgl_pelunasan,'%Y-%m-%d') AS tgl_pelunasan,
+               DATE_FORMAT(t.tgl_jatuh_tempo,'%Y-%m-%d') AS tgl_jatuh_tempo,
+               DATEDIFF(o.tgl_pelunasan, t.tgl_jatuh_tempo) AS hari_telat,
+               o.total_harga, o.modal_sales
+        FROM order_risepack o
+        JOIN tb_orders t ON o.sko_key = t.sko_key
+        WHERE {where}
+        ORDER BY o.tgl_pelunasan DESC
+        LIMIT 3000
+    """
+    rows = query(sql, params)
+    out = []
+    for r in rows:
+        margin = float(r['total_harga'] or 0) - float(r['modal_sales'] or 0)
+        sumber = r['sumber'] or ''
+        rate = 0.05 if sumber == 'Repeat Order' else (0.07 if sumber in ('Online', 'Online Lintas') else 0.0)
+        bonus = margin * rate
+        h = r['hari_telat']
+        h = int(h) if h is not None else None
+        if h is None or h <= 0:
+            mult = 0.0
+        elif h <= 7:
+            mult = 0.25
+        elif h <= 14:
+            mult = 0.50
+        else:
+            mult = 1.0
+        denda = bonus * mult
+        out.append({
+            'nama': r['nama'], 'sko': r['sko'], 'sumber': sumber, 'pic': r['pic'],
+            'tgl_pelunasan': r['tgl_pelunasan'], 'tgl_jatuh_tempo': r['tgl_jatuh_tempo'],
+            'hari_telat': h if h is not None else 0,
+            'margin': round(margin), 'bonus': round(bonus),
+            'denda': round(denda), 'net': round(bonus - denda),
+        })
     return jsonify(out)
 
 
