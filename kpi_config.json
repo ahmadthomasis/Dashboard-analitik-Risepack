@@ -2,12 +2,7 @@
   "_catatan": "Edit file ini untuk mengubah target/bobot/angka manual. Bobot tiap blok harus total 100. Target & umbrella per bulan format YYYY-MM. Nama sales harus sama persis dgn kolom PIC di dashboard.",
   "scoring_bands": [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
   "labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
-
-  "ring_thresholds": {
-    "_catatan": "Ring 1 = nilai >= ring1 (Rp), Ring 2 = nilai >= ring2, Ring 3 = di bawah ring2. Nilai = potensi (Follow Up) + repeat (Repeat Order).",
-    "ring1": 100000000,
-    "ring2": 30000000
-  },
+  "ring_thresholds": {"ring1": 100000000, "ring2": 30000000},
 
   "kpi": [
     {"id": "omzet",       "name": "Omzet",                "weight": 40, "target": 2500000000, "basis": "omzet_monthly",     "unit": "Rp", "note": "Target per bulan (atur di omzet_target)"},
