@@ -821,6 +821,7 @@ def qualified_leads_count(tgl_dari, tgl_sampai, divisi):
 def api_kpi_score():
     cfg = load_kpi_config()
     tgl_dari, tgl_sampai, pic, divisi = get_args()
+    pic = None  # KPI Divisi selalu level tim — abaikan filter PIC (per orang pakai tab Fungsi Sales)
     def pdate(s):
         try: return datetime.strptime(s, '%Y-%m-%d').date()
         except Exception: return None
