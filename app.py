@@ -1,978 +1,939 @@
-from flask import Flask, render_template, jsonify, request, session, redirect, url_for
-from functools import wraps
-import mysql.connector
-import os
-import calendar
-import json
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Risepack Analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --brown:#2a201a;--brown-2:#3a2d24;--brown-line:#4a3a2e;
+  --cream:#f6f3ef;--surface:#ffffff;--border:#ece5dd;--border-strong:#dcd2c6;
+  --ink:#2a211b;--ink-2:#6d6055;--ink-3:#9d9085;
+  --orange:#e9852b;--orange-soft:#fdeede;--orange-600:#cf731c;
+  --leaf:#4e9a3f;--blue:#3b6fb0;--green:#2f9e6f;--red:#cf4b3a;--amber:#d99327;
+  --shadow:0 1px 2px rgba(60,40,20,.05), 0 1px 3px rgba(60,40,20,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--cream);color:var(--ink);-webkit-font-smoothing:antialiased;}
+.app{display:flex;min-height:100vh;}
 
-load_dotenv()
+/* SIDEBAR */
+.sidebar{width:236px;flex-shrink:0;background:var(--brown);color:#e8ddd2;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:20px 14px;}
+.brand{display:flex;align-items:center;gap:11px;padding:6px 8px 18px;}
+.brand .mark{width:38px;height:38px;border-radius:50%;background:#1f1712;display:grid;place-items:center;font-weight:800;font-size:15px;flex-shrink:0;}
+.brand .mark b{color:#fff;}.brand .mark i{color:var(--orange);font-style:normal;}
+.brand .t{font-size:17px;font-weight:800;letter-spacing:-.02em;line-height:1;color:#fff;}
+.brand .t span{color:var(--orange);}
+.brand .t small{display:block;font-size:10.5px;font-weight:500;color:#a08e7e;letter-spacing:.06em;margin-top:3px;}
+.nav-label{font-size:10px;font-weight:700;letter-spacing:.1em;color:#7d6c5d;text-transform:uppercase;padding:14px 10px 7px;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;color:#cdbfb1;font-size:13.5px;font-weight:500;cursor:pointer;margin-bottom:2px;border:none;background:none;width:100%;text-align:left;font-family:inherit;}
+.nav-item .i{font-size:16px;width:20px;text-align:center;}
+.nav-item:hover{background:var(--brown-2);color:#fff;}
+.nav-item.active{background:var(--orange);color:#fff;font-weight:600;}
+.sidebar .spacer{flex:1;}
+.side-card{background:var(--brown-2);border:1px solid var(--brown-line);border-radius:12px;padding:14px;margin-top:10px;}
+.side-card .h{font-size:12.5px;font-weight:700;color:#fff;margin-bottom:4px;}
+.side-card .p{font-size:11.5px;color:#a99a8b;line-height:1.5;}
+.side-logout{display:block;text-align:center;margin-top:10px;padding:9px;border-radius:10px;border:1px solid var(--brown-line);color:#cdbfb1;font-size:12.5px;text-decoration:none;}
+.side-logout:hover{background:var(--brown-2);color:#fff;}
 
-app = Flask(__name__)
-app.secret_key = os.getenv('SECRET_KEY', 'risepack-dashboard-secret-2025')
+/* CONTENT */
+.content{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 26px;display:flex;align-items:center;justify-content:space-between;gap:16px;position:sticky;top:0;z-index:50;}
+.topbar h1{font-size:19px;font-weight:800;letter-spacing:-.02em;}
+.topbar h1 small{display:block;font-size:12px;font-weight:500;color:var(--ink-3);margin-top:2px;}
+.topbar .right{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--ink-3);}
+.filters{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 26px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;position:sticky;top:69px;z-index:40;}
+.filters label{font-size:11px;color:var(--ink-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;}
+select,input[type=date],.btn-filter,.btn-reset,.chip{padding:8px 12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;color:var(--ink);font-size:12.5px;font-family:inherit;cursor:pointer;outline:none;}
+select:focus,input[type=date]:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
+.btn-filter{background:var(--orange);border-color:var(--orange);color:#fff;font-weight:600;}
+.btn-filter:hover{background:var(--orange-600);}
+.btn-reset{color:var(--ink-2);}.btn-reset:hover{border-color:var(--border-strong);color:var(--ink);}
+.shortcuts{display:flex;gap:5px;flex-wrap:wrap;}
+.chip{padding:7px 11px;color:var(--ink-2);font-weight:600;font-size:12px;}
+.chip:hover{border-color:var(--orange);color:var(--orange);}
+.chip.active{background:var(--orange-soft);border-color:var(--orange);color:var(--orange-600);}
+.sep{width:1px;height:22px;background:var(--border);margin:0 2px;}
 
-DB_CONFIG = {
-    'host': os.getenv('DB_HOST'),
-    'port': int(os.getenv('DB_PORT', 3306)),
-    'database': os.getenv('DB_NAME'),
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'connection_timeout': 60,
-    'autocommit': True,
+main{padding:24px 26px;}
+.view{display:none;}.view.active{display:block;}
+
+/* SUB-TABS dalam Sales */
+.subtabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);}
+.subtab{padding:10px 16px;border:none;background:none;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:7px;}
+.subtab:hover{color:var(--ink);}
+.subtab.active{color:var(--orange-600);border-bottom-color:var(--orange);}
+.subview{display:none;}.subview.active{display:block;}
+
+.section-head{display:flex;align-items:baseline;gap:12px;margin:4px 0 16px;}
+.section-head:not(:first-child){margin-top:28px;}
+.section-head h2{font-size:15px;font-weight:700;letter-spacing:-.01em;}
+.section-head .hint{font-size:12px;color:var(--ink-3);}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));gap:15px;}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:17px 17px 15px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+.kpi-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--border-strong));}
+.kpi-card .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;}
+.kpi-card .label{font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+.kpi-card .ic{width:29px;height:29px;border-radius:8px;display:grid;place-items:center;background:var(--accent-soft,#f1ece6);color:var(--accent,var(--ink-2));font-size:15px;}
+.kpi-card .value{font-size:23px;font-weight:800;letter-spacing:-.02em;line-height:1.15;}
+.kpi-card .sub{font-size:12px;color:var(--ink-2);margin-top:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;padding:2px 7px;border-radius:6px;background:#f1ece6;color:var(--ink-2);}
+.pill.good{background:#e6f5ee;color:var(--green);}.pill.warn{background:#fdf0df;color:var(--amber);}
+.pill.bad{background:#fbeae8;color:var(--red);}
+.checkfilter{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-2);cursor:pointer;}
+.muted{color:var(--ink-3);font-size:11px;}
+.delta{font-weight:700;font-size:11px;white-space:nowrap;}
+.delta.good{color:var(--green);}.delta.bad{color:var(--red);}
+.a-orange{--accent:var(--orange);--accent-soft:var(--orange-soft);}
+.a-brown{--accent:#7a5230;--accent-soft:#f3ebe2;}
+.a-blue{--accent:var(--blue);--accent-soft:#e9f0f8;}
+.a-green{--accent:var(--green);--accent-soft:#e6f5ee;}
+.a-leaf{--accent:var(--leaf);--accent-soft:#eaf5e7;}
+.a-amber{--accent:var(--amber);--accent-soft:#fdf0df;}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
+.grid-2-wide{display:grid;grid-template-columns:1.5fr 1fr;gap:15px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:19px;box-shadow:var(--shadow);}
+.card h3{font-size:13px;font-weight:700;letter-spacing:-.01em;}
+.card .ch-sub{font-size:11.5px;color:var(--ink-3);margin:2px 0 15px;}
+.chart-wrap{position:relative;height:280px;}
+.chart-wrap[data-msg]::after{content:attr(data-msg);position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:0 20px;color:var(--ink-3);font-size:13px;background:var(--surface);border-radius:8px;}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:9px 11px;color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;border-bottom:1px solid var(--border);}
+th.num,td.num{text-align:right;}
+td{padding:11px 11px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#faf7f3;}
+.rank{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:#f1ece6;color:var(--ink-2);font-weight:700;font-size:12px;}
+tbody tr:nth-child(1) .rank{background:var(--orange);color:#fff;}
+tbody tr:nth-child(2) .rank{background:#f0d6bb;color:#8a5a2b;}
+tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
+.loading{color:var(--ink-3);font-size:13px;text-align:center;padding:50px;}
+
+/* Detail Order */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+.toolbar .spacer-f{flex:1;}
+#detail-search,#bonus-search,#mon-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 320px;max-width:60%;}
+#detail-search:focus,#bonus-search:focus,#mon-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
+#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;}
+#detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
+#detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#detail-table th:hover{color:var(--orange-600);}
+#detail-table tbody tr:nth-child(even) td{background:#faf8f5;}
+#detail-table tbody tr:hover td{background:#fdeede;}
+/* lebar kolom: Customer, SKO, Sumber, Produk, Tanggal, Qty, H.Modal, H.Jual, Total, Margin */
+#detail-table th:nth-child(1),#detail-table td:nth-child(1){width:130px;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:120px;}
+#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:105px;}
+#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:240px;}
+#detail-table th:nth-child(5),#detail-table td:nth-child(5){width:100px;}
+#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:80px;}
+#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:110px;}
+#detail-table th:nth-child(8),#detail-table td:nth-child(8){width:105px;}
+#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:130px;}
+#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:85px;}
+
+/* tabel customer proporsional */
+#dnr-table table,#journey-table table,#sko-ach table{table-layout:fixed;width:100%;}
+#dnr-table th,#dnr-table td,#journey-table th,#journey-table td,#sko-ach th,#sko-ach td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#dnr-table td:nth-child(1),#dnr-table th:nth-child(1){width:30%;}
+#dnr-table td:nth-child(n+2),#dnr-table th:nth-child(n+2){width:23.3%;}
+#journey-table td:nth-child(1),#journey-table th:nth-child(1){width:25%;}
+#journey-table td:nth-child(2),#journey-table th:nth-child(2){width:30%;}
+#journey-table td:nth-child(3),#journey-table th:nth-child(3){width:17%;}
+#journey-table td:nth-child(4),#journey-table th:nth-child(4){width:12%;}
+#journey-table td:nth-child(5),#journey-table th:nth-child(5){width:16%;}
+#sko-ach td:nth-child(1),#sko-ach th:nth-child(1){width:40%;}
+#sko-ach td:nth-child(2),#sko-ach th:nth-child(2){width:18%;}
+#sko-ach td:nth-child(3),#sko-ach th:nth-child(3){width:42%;overflow:visible;}
+
+@media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
+@media (max-width:760px){.sidebar{display:none;}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark"><b>R</b><i>p</i></div>
+      <div class="t">Rise<span>pack</span><small>ANALYTICS</small></div>
+    </div>
+    <div class="nav-label">Menu</div>
+    <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
+    <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
+    <button class="nav-item" data-view="kpi" onclick="showView('kpi')"><span class="i">🏆</span> KPI</button>
+    <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
+    <button class="nav-item" data-view="monitoring" onclick="showView('monitoring')"><span class="i">🎯</span> Monitoring Potensi</button>
+    <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
+    <div class="spacer"></div>
+    <div class="side-card">
+      <div class="h">Risepack Analytics</div>
+      <div class="p">Dashboard internal. Data real-time dari database produksi.</div>
+    </div>
+    <a class="side-logout" href="/logout">Keluar</a>
+  </aside>
+
+  <div class="content">
+    <div class="topbar">
+      <h1 id="page-title">Ringkasan<small id="page-sub">Ikhtisar performa penjualan</small></h1>
+      <div class="right"><span id="last-update"></span></div>
+    </div>
+
+    <div class="filters">
+      <label>Dari</label><input type="date" id="f-dari">
+      <label>Sampai</label><input type="date" id="f-sampai">
+      <div class="sep"></div>
+      <div class="shortcuts">
+        <button class="chip" id="sc-month"     onclick="setRange('month')">Bulan Ini</button>
+        <button class="chip" id="sc-lastmonth" onclick="setRange('lastmonth')">Bulan Lalu</button>
+        <button class="chip" id="sc-quarter"   onclick="setRange('quarter')">Quarter Ini</button>
+        <button class="chip" id="sc-year"      onclick="setRange('year')">Tahun Ini</button>
+      </div>
+      <div class="sep"></div>
+      <label>PIC</label><select id="f-pic"><option value="">Semua PIC</option></select>
+      <label>Divisi</label><select id="f-divisi"><option value="">Semua Divisi</option></select>
+      <button class="btn-filter" onclick="loadAll()">Terapkan</button>
+      <button class="btn-reset" onclick="resetFilter()">Reset</button>
+    </div>
+
+    <main>
+      <!-- RINGKASAN -->
+      <section id="view-ringkasan" class="view active">
+        <div class="section-head"><h2>Sales Overview</h2><span class="hint">Ringkasan finansial periode terpilih</span></div>
+        <div class="kpi-grid" id="kpi-fin"><div class="loading">Memuat data...</div></div>
+        <div class="section-head"><h2>Repeat Order &amp; Konversi Customer</h2><span class="hint">Closing rate, repeat, akuisisi baru</span></div>
+        <div class="kpi-grid" id="kpi-cust"></div>
+      </section>
+
+      <!-- SALES (gabungan) -->
+      <section id="view-sales" class="view">
+        <div class="subtabs">
+          <button class="subtab active" data-sub="produk"    onclick="showSub('produk')">📦 Produk</button>
+          <button class="subtab" data-sub="margin"    onclick="showSub('margin')">📈 Margin</button>
+          <button class="subtab" data-sub="customer"  onclick="showSub('customer')">👥 Customer</button>
+          <button class="subtab" data-sub="penjualan" onclick="showSub('penjualan')">💰 Penjualan</button>
+          <button class="subtab" data-sub="bonus" onclick="showSub('bonus')">🏅 Bonus</button>
+        </div>
+
+        <div id="subview-produk" class="subview active">
+          <div class="grid-2-wide">
+            <div class="card"><h3>Monthly Trend by Produk</h3><div class="ch-sub">Omzet per jenis bahan sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend-bahan"></canvas></div></div>
+            <div class="card"><h3>Sales by Produk</h3><div class="ch-sub">Kontribusi omzet per jenis bahan</div><div class="chart-wrap"><canvas id="c-bahan"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>Kategori Produk</h3><div class="ch-sub">Omzet per kategori produksi</div><div class="chart-wrap"><canvas id="c-kategori"></canvas></div></div>
+        </div>
+
+        <div id="subview-margin" class="subview">
+          <div class="grid-2">
+            <div class="card"><h3>Sales by Margin</h3><div class="ch-sub">Low &lt;10% · Medium 10-20% · High &gt;20%</div><div class="chart-wrap"><canvas id="c-margin"></canvas></div></div>
+            <div class="card"><h3>Persentase Margin (Setahun)</h3><div class="ch-sub">Rata-rata margin per bulan</div><div class="chart-wrap"><canvas id="c-margin-bulan"></canvas></div></div>
+          </div>
+        </div>
+
+        <div id="subview-customer" class="subview">
+          <div class="grid-2">
+            <div class="card"><h3>Sales by Sumber</h3><div class="ch-sub">Kontribusi omzet per channel</div><div class="chart-wrap"><canvas id="c-sumber"></canvas></div></div>
+            <div class="card"><h3>Deal: New vs Repeat per Customer</h3><div class="ch-sub">Omzet deal dipecah per sumber — klik judul untuk sort</div><div class="table-wrap" id="dnr-table" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div></div>
+          </div>
+          <div class="grid-2" style="margin-top:15px">
+            <div class="card">
+              <h3>Customer Follow Up (Belum Order)</h3><div class="ch-sub">Customer dalam pipeline + nilai potensi — klik judul untuk sort</div>
+              <div class="table-wrap" id="journey-table" style="max-height:320px;overflow:auto"><div class="loading">Memuat…</div></div>
+            </div>
+            <div class="card">
+              <h3>Achievement SKO 10x</h3><div class="ch-sub">Target 10 order per customer · di-cap 100%</div>
+              <div class="kpi-grid" id="sko-summary" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr));margin:4px 0 12px"></div>
+              <div class="table-wrap" id="sko-ach" style="max-height:300px;overflow:auto"><div class="loading">Memuat…</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="subview-penjualan" class="subview">
+          <div class="grid-2-wide">
+            <div class="card"><h3>Trend Omzet Bulanan</h3><div class="ch-sub">Omzet per kategori sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend"></canvas></div></div>
+            <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
+        </div>
+
+        <div id="subview-bonus" class="subview">
+          <div class="kpi-grid" id="bonus-summary" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
+          <div class="card">
+            <h3>Bonus Achievement Sales</h3>
+            <div class="ch-sub">Bonus = margin × rate (Repeat 2,5% · New-Online 5%) − denda telat bayar · difilter tanggal pelunasan</div>
+            <div class="toolbar">
+              <input id="bonus-search" type="text" placeholder="🔎 Cari nama / SKO / PIC…" oninput="onBonSearch(this.value)">
+              <span class="muted" id="bonus-count"></span>
+              <div class="spacer-f"></div>
+              <button class="btn-reset" onclick="exportBonCSV()">⬇ Export CSV</button>
+            </div>
+            <div class="table-wrap" id="bonus-table" style="max-height:62vh;overflow:auto"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- KPI -->
+      <section id="view-kpi" class="view">
+        <div class="subtabs">
+          <button class="subtab active" id="kt-divisi" onclick="kpiTab('divisi')">🏛️ Divisi</button>
+          <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
+          <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
+        </div>
+        <div id="kpiview-divisi">
+          <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
+          <div class="card">
+            <h3>KPI Scorecard — Divisi</h3>
+            <div class="ch-sub">Seluruh tim (abaikan filter PIC) · untuk KPI per orang buka tab Fungsi Sales · Ach = min(aktual ÷ target, 100%) · weighted = skor × bobot</div>
+            <div class="table-wrap" id="kpi-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-fungsi" style="display:none">
+          <div class="kpi-grid" id="fungsi-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Fungsi Sales</h3>
+            <div class="ch-sub">Pilih sales lewat filter <b>PIC</b> di atas (Kiki / Ma'ruf / Faisal / Amel) · target per sales otomatis dari aplikasi</div>
+            <div class="table-wrap" id="fungsi-table"><div class="loading">Pilih sales di filter PIC…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-marketing" style="display:none">
+          <div class="kpi-grid" id="marketing-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Marketing</h3>
+            <div class="ch-sub">Potensi · Qualified Leads · ROI (omzet new ÷ belanja iklan) · belanja iklan diisi manual di config</div>
+            <div class="table-wrap" id="marketing-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- DETAIL ORDER -->
+      <section id="view-detail" class="view">
+        <div class="toolbar">
+          <input id="detail-search" type="text" placeholder="🔎 Cari customer / SKO / produk…" oninput="onDetailSearch(this.value)">
+          <span class="muted" id="detail-count"></span>
+          <div class="spacer-f"></div>
+          <button class="btn-reset" onclick="exportDetailCSV()">⬇ Export CSV</button>
+        </div>
+        <div class="card" style="padding:8px">
+          <div class="table-wrap" id="detail-table" style="max-height:70vh;overflow:auto"><div class="loading">Memuat…</div></div>
+        </div>
+      </section>
+
+      <!-- MONITORING POTENSI -->
+      <section id="view-monitoring" class="view">
+        <div class="kpi-grid" id="mon-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))"><div class="loading">Memuat…</div></div>
+        <div class="section-head" style="margin-top:26px"><h2>Belum Diisi per Sales (PIC)</h2><span class="hint">Siapa yang perlu ditagih untuk melengkapi potensi</span></div>
+        <div class="card" style="padding:8px"><div class="table-wrap" id="mon-pic"></div></div>
+        <div class="section-head"><h2>Daftar Lead Online Baru</h2></div>
+        <div class="toolbar">
+          <input id="mon-search" type="text" placeholder="🔎 Cari customer / instansi / PIC…" oninput="onMonSearch(this.value)">
+          <label class="checkfilter"><input type="checkbox" id="mon-only" onchange="renderMon()"> Hanya yang belum diisi</label>
+          <span class="muted" id="mon-count"></span>
+          <div class="spacer-f"></div>
+          <button class="btn-reset" onclick="exportMonCSV()">⬇ Export CSV</button>
+        </div>
+        <div class="card" style="padding:8px"><div class="table-wrap" id="mon-table" style="max-height:60vh;overflow:auto"><div class="loading">Memuat…</div></div></div>
+      </section>
+
+      <!-- PRODUKSI -->
+      <section id="view-produksi" class="view">
+        <div class="grid-2">
+          <div class="card"><h3>Status Produksi</h3><div class="ch-sub">Distribusi order per status</div><div class="chart-wrap"><canvas id="c-produksi"></canvas></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+let charts = {};
+let state = { view: 'ringkasan', subtab: 'produk', kpitab: 'divisi' };
+let CACHE = {};
+const PALETTE = ['#e9852b','#7a5230','#3b6fb0','#4e9a3f','#cf4b3a','#d99327','#9b59b6','#16a085'];
+const PAGE = {
+  ringkasan:['Ringkasan','Ikhtisar performa penjualan'],
+  sales:['Sales','Analisis penjualan'],
+  kpi:['KPI','Scorecard OKR · divisi & fungsi sales'],
+  detail:['Detail Order','Cek data cepat per order'],
+  monitoring:['Monitoring Potensi','Customer baru online & kelengkapan input potensi'],
+  produksi:['Produksi','Status order produksi'],
+};
+const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan',bonus:'Bonus'};
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.color = '#6d6055';
+
+async function fetchJSON(url){
+  if (url in CACHE) return CACHE[url];
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  CACHE[url] = d;
+  return d;
+}
+function setMsg(target, msg){
+  const el = document.getElementById(target);
+  if (!el) return;
+  if (el.tagName === 'CANVAS'){ const w = el.parentElement; if (msg) w.dataset.msg = msg; else delete w.dataset.msg; }
+  else if (msg){ el.innerHTML = `<div class="loading">${msg}</div>`; }
 }
 
-def query(sql, params=None):
-    conn = mysql.connector.connect(**DB_CONFIG)
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(sql, params or ())
-        rows = cursor.fetchall()
-        cursor.close()
-        return rows
-    finally:
-        try: conn.close()
-        except: pass
+// ── Tanggal ──
+function ymd(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function setRange(type, load = true){
+  const now = new Date(); let from, to;
+  if (type==='month')         { from=new Date(now.getFullYear(),now.getMonth(),1); to=now; }
+  else if (type==='lastmonth'){ from=new Date(now.getFullYear(),now.getMonth()-1,1); to=new Date(now.getFullYear(),now.getMonth(),0); }
+  else if (type==='quarter')  { const q=Math.floor(now.getMonth()/3); from=new Date(now.getFullYear(),q*3,1); to=now; }
+  else if (type==='year')     { from=new Date(now.getFullYear(),0,1); to=now; }
+  document.getElementById('f-dari').value = ymd(from);
+  document.getElementById('f-sampai').value = ymd(to);
+  markChip('sc-'+type);
+  if (load) loadAll();
+}
+function markChip(id){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active')); const el=id&&document.getElementById(id); if(el)el.classList.add('active'); }
 
-USERS = {
-    os.getenv('MANAGER_EMAIL', 'manager@risepack.id'): os.getenv('MANAGER_PASSWORD', 'risepack2025')
+// ── Navigasi ──
+function setTitle(){
+  const [t,s] = PAGE[state.view];
+  document.getElementById('page-title').firstChild.textContent = t;
+  document.getElementById('page-sub').textContent = state.view==='sales' ? ('Sales · '+SUBLABEL[state.subtab]) : s;
+}
+function showView(view){
+  state.view = view;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  if (view==='sales') syncSub();
+  setTitle();
+  renderView();
+}
+function showSub(sub){
+  state.subtab = sub;
+  syncSub();
+  setTitle();
+  renderView();
+}
+function syncSub(){
+  document.querySelectorAll('.subtab').forEach(t=>t.classList.toggle('active', t.dataset.sub===state.subtab));
+  document.querySelectorAll('.subview').forEach(v=>v.classList.remove('active'));
+  document.getElementById('subview-'+state.subtab).classList.add('active');
 }
 
-def login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        if USERS.get(email) == password:
-            session['user'] = email
-            return redirect(url_for('index'))
-        error = 'Email atau password salah.'
-    return render_template('login.html', error=error)
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-@app.route('/')
-@login_required
-def index():
-    return render_template('dashboard.html')
-
-# ─── Helpers filter ──────────────────────────────────────────────
-def build_where(tgl_dari, tgl_sampai, pic, divisi):
-    """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""
-    clauses, params = [], []
-    if tgl_dari:
-        clauses.append("DATE(o.tgl_omzet_realtime) >= %s")
-        params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("DATE(o.tgl_omzet_realtime) <= %s")
-        params.append(tgl_sampai)
-    if pic:
-        clauses.append("o.name = %s")
-        params.append(pic)
-    if divisi:
-        clauses.append("""o.order_key IN (
-            SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s
-        )""")
-        params.append(divisi)
-    cond = (' AND ' + ' AND '.join(clauses)) if clauses else ''
-    return cond, params
-
-def get_args():
-    return (
-        request.args.get('tgl_dari'),
-        request.args.get('tgl_sampai'),
-        request.args.get('pic'),
-        request.args.get('divisi'),
-    )
-
-def shift_months(d, n):
-    """Geser tanggal mundur n bulan, pertahankan tanggal (clamp ke akhir bulan)."""
-    month = d.month - n
-    year = d.year
-    while month <= 0:
-        month += 12
-        year -= 1
-    last = calendar.monthrange(year, month)[1]
-    return d.replace(year=year, month=month, day=min(d.day, last))
-
-def prev_range(tgl_dari, tgl_sampai):
-    """Periode pembanding berbasis kalender:
-    - rentang <= 1 bulan  -> bulan sebelumnya (tanggal sama)
-    - rentang <= 1 quarter -> quarter sebelumnya
-    - rentang lebih panjang -> tahun sebelumnya (year-over-year)
-    """
-    if not tgl_dari or not tgl_sampai:
-        return None, None
-    try:
-        d1 = datetime.strptime(tgl_dari, '%Y-%m-%d').date()
-        d2 = datetime.strptime(tgl_sampai, '%Y-%m-%d').date()
-    except ValueError:
-        return None, None
-    days = (d2 - d1).days + 1
-    n = 1 if days <= 31 else (3 if days <= 92 else 12)
-    return shift_months(d1, n).isoformat(), shift_months(d2, n).isoformat()
-
-def pct(cur, prev):
-    """Persentase perubahan cur vs prev. None bila tak bisa dihitung."""
-    if not prev:
-        return None
-    return round((cur - prev) / prev * 100, 1)
-
-def fmt_date(v):
-    """Format tanggal aman untuk tipe apa pun (date/datetime/str/None)."""
-    if v is None:
-        return None
-    if hasattr(v, 'strftime'):
-        return v.strftime('%Y-%m-%d')
-    return str(v)[:10]
-
-BASE = """
-    FROM order_risepack o
-    WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
-"""
-
-# ─── API ─────────────────────────────────────────────────────────
-@app.route('/api/filters')
-@login_required
-def api_filters():
-    pics = query("SELECT DISTINCT name AS PIC FROM order_risepack WHERE name IS NOT NULL AND name != '' ORDER BY name")
-    divs = query("SELECT DISTINCT sub_division FROM tb_orders WHERE sub_division IS NOT NULL ORDER BY sub_division")
-    return jsonify({
-        'pics': [r['PIC'] for r in pics],
-        'sub_divisions': [r['sub_division'] for r in divs]
-    })
-
-def kpi_metrics(cond, params):
-    """Hitung seluruh metrik KPI untuk satu kondisi WHERE."""
-    sql = f"""
-        SELECT
-            COUNT(DISTINCT o.order_key) AS total_order,
-            COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.order_key END) AS total_deal,
-            SUM(CASE WHEN o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS total_omzet,
-            SUM(CASE WHEN o.status_deal='Deal' THEN o.modal_sales ELSE 0 END) AS total_modal,
-            SUM(CASE WHEN o.status_deal='Deal' THEN (o.total_harga-o.modal_sales) ELSE 0 END) AS total_margin,
-            COUNT(DISTINCT CASE WHEN o.sumber='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_repeat,
-            COUNT(DISTINCT CASE WHEN o.sumber!='Repeat Order' AND o.status_deal='Deal' THEN o.order_key END) AS total_new,
-            COUNT(DISTINCT CASE WHEN o.sumber!='Repeat Order' THEN o.order_key END) AS new_order,
-            SUM(CASE WHEN o.sumber='Repeat Order' AND o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS repeat_omzet
-        {BASE} {cond}
-    """
-    r = query(sql, params)[0]
-    omzet     = float(r['total_omzet']  or 0)
-    modal     = float(r['total_modal']  or 0)
-    margin    = float(r['total_margin'] or 0)
-    deal      = int(r['total_deal']     or 0)
-    order     = int(r['total_order']    or 0)
-    repeat    = int(r['total_repeat']   or 0)
-    new       = int(r['total_new']      or 0)
-    new_order = int(r['new_order']      or 0)
-    rep_omzet = float(r['repeat_omzet'] or 0)
-    return {
-        'total_omzet': omzet, 'total_modal': modal, 'total_margin': margin,
-        'persen_margin': round(margin / omzet * 100, 1) if omzet else 0,
-        'total_order': order, 'total_deal': deal,
-        'total_repeat': repeat, 'total_new': new,
-        'closing_rate': round(deal / order * 100, 1) if order else 0,
-        'persen_repeat': round(repeat / deal * 100, 1) if deal else 0,
-        'avg_purchase': round(omzet / deal) if deal else 0,
-        'repeat_omzet': rep_omzet,
-        'omzet_new': omzet - rep_omzet,
-        'persen_repeat_omzet': round(rep_omzet / omzet * 100, 1) if omzet else 0,
-        'closing_rate_new': round(new / new_order * 100, 1) if new_order else 0,
-    }
-
-def new_funnel(tgl_dari, tgl_sampai, pic, divisi):
-    """Corong customer baru = ONLINE leads (konsisten dgn Monitoring Potensi 71).
-    Difilter waktu_kontak, grain per lead (sko_key).
-      qualified_new = jumlah leads online
-      total_new     = leads online yang Deal (new customer)
-      omzet_new     = omzet dari leads online yang Deal
-      closing_rate_new = total_new / qualified_new
-    """
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    where = " AND ".join(clauses)
-    sql = f"""
-        SELECT
-            COUNT(DISTINCT o.sko_key) AS qualified,
-            COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.sko_key END) AS deal_new,
-            SUM(CASE WHEN o.status_deal='Deal' THEN o.total_harga ELSE 0 END) AS omzet_new
-        FROM order_risepack o
-        WHERE {where}
-    """
-    r = query(sql, params)[0]
-    q = int(r['qualified'] or 0)
-    d = int(r['deal_new'] or 0)
-    om = float(r['omzet_new'] or 0)
-    return {
-        'qualified_new': q,
-        'total_new': d,
-        'omzet_new': om,
-        'closing_rate_new': round(d / q * 100, 1) if q else 0,
-    }
-
-@app.route('/api/kpi')
-@login_required
-def api_kpi():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    cur = kpi_metrics(cond, params)
-    omzet_new_cur = cur['omzet_new']                          # Omzet New = non-repeat (by tgl omzet)
-    cur.update(new_funnel(tgl_dari, tgl_sampai, pic, divisi)) # corong online utk total_new/closing_rate_new/qualified_new
-    cur['omzet_new'] = omzet_new_cur                          # kembalikan ke definisi non-repeat
-
-    # Perbandingan periode sebelumnya (durasi sama)
-    delta = {}
-    p1, p2 = prev_range(tgl_dari, tgl_sampai)
-    if p1 and p2:
-        pcond, pparams = build_where(p1, p2, pic, divisi)
-        prev = kpi_metrics(pcond, pparams)
-        omzet_new_prev = prev['omzet_new']
-        prev.update(new_funnel(p1, p2, pic, divisi))
-        prev['omzet_new'] = omzet_new_prev
-        for k in ['total_omzet', 'total_modal', 'total_margin', 'total_order',
-                  'total_deal', 'total_repeat', 'total_new', 'closing_rate',
-                  'avg_purchase', 'repeat_omzet', 'omzet_new', 'closing_rate_new', 'persen_repeat']:
-            delta[k] = pct(cur[k], prev[k])
-
-    cur['delta'] = delta
-    cur['prev_range'] = {'dari': p1, 'sampai': p2} if p1 else None
-    return jsonify(cur)
-
-@app.route('/api/trend-omzet')
-@login_required
-def api_trend_omzet():
-    tahun  = request.args.get('tahun', str(datetime.now().year))
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(None, None, pic, divisi)
-
-    sql = f"""
-        SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
-               o.kategori_produksi, SUM(o.total_harga) AS omzet
-        {BASE}
-        AND o.status_deal='Deal'
-        AND YEAR(o.tgl_omzet_realtime) = %s
-        {cond}
-        GROUP BY bulan, o.kategori_produksi ORDER BY bulan
-    """
-    rows = query(sql, [tahun] + params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-@app.route('/api/top-sales')
-@login_required
-def api_top_sales():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-
-    sql = f"""
-        SELECT o.name AS PIC,
-               COUNT(DISTINCT o.order_key) AS total_order,
-               SUM(o.total_harga) AS total_omzet,
-               SUM(o.total_harga-o.modal_sales) AS total_margin
-        {BASE}
-        AND o.status_deal='Deal' AND o.name IS NOT NULL AND o.name!=''
-        {cond}
-        GROUP BY o.name ORDER BY total_omzet DESC LIMIT 10
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'total_omzet': float(r['total_omzet'] or 0), 'total_margin': float(r['total_margin'] or 0)} for r in rows])
-
-@app.route('/api/sales-by-sumber')
-@login_required
-def api_sales_by_sumber():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-
-    sql = f"""
-        SELECT o.sumber, COUNT(DISTINCT o.order_key) AS total, SUM(o.total_harga) AS omzet
-        {BASE}
-        AND o.status_deal='Deal'
-        {cond}
-        GROUP BY o.sumber ORDER BY omzet DESC
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-@app.route('/api/produksi')
-@login_required
-def api_produksi():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-
-    sql = f"""
-        SELECT
-            COUNT(CASE WHEN o.status_order='Berjalan' THEN 1 END) AS berjalan,
-            COUNT(CASE WHEN o.status_order='Selesai Produksi' THEN 1 END) AS tuntas,
-            COUNT(CASE WHEN o.status_order='Belum SPK' THEN 1 END) AS belum_spk
-        {BASE}
-        AND o.status_deal='Deal'
-        {cond}
-    """
-    return jsonify(query(sql, params)[0])
-
-@app.route('/api/kategori')
-@login_required
-def api_kategori():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-
-    sql = f"""
-        SELECT o.kategori_produksi, SUM(o.total_harga) AS omzet, COUNT(DISTINCT o.order_key) AS total
-        {BASE}
-        AND o.status_deal='Deal' AND o.kategori_produksi IS NOT NULL
-        {cond}
-        GROUP BY o.kategori_produksi ORDER BY omzet DESC
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-# ─── Grafik: Produk (jenis_bahan) ────────────────────────────────
-@app.route('/api/sales-by-bahan')
-@login_required
-def api_sales_by_bahan():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT o.jenis_bahan,
-               COUNT(DISTINCT o.order_key) AS orders,
-               SUM(o.total_harga) AS omzet
-        {BASE}
-        AND o.status_deal='Deal' AND o.jenis_bahan IS NOT NULL AND o.jenis_bahan!=''
-        {cond}
-        GROUP BY o.jenis_bahan ORDER BY omzet DESC
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-@app.route('/api/trend-bahan')
-@login_required
-def api_trend_bahan():
-    tahun  = request.args.get('tahun', str(datetime.now().year))
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(None, None, pic, divisi)
-    sql = f"""
-        SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
-               o.jenis_bahan, SUM(o.total_harga) AS omzet
-        {BASE}
-        AND o.status_deal='Deal' AND o.jenis_bahan IS NOT NULL AND o.jenis_bahan!=''
-        AND YEAR(o.tgl_omzet_realtime) = %s
-        {cond}
-        GROUP BY bulan, o.jenis_bahan ORDER BY bulan
-    """
-    rows = query(sql, [tahun] + params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-# ─── Grafik: Sales by Margin (bucket margin %) ───────────────────
-@app.route('/api/sales-by-margin')
-@login_required
-def api_sales_by_margin():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT
-            CASE
-                WHEN omzet <= 0 THEN 'Tidak diketahui'
-                WHEN margin/omzet*100 < 10  THEN 'Low (<10%)'
-                WHEN margin/omzet*100 <= 20 THEN 'Medium (10-20%)'
-                ELSE 'High (>20%)'
-            END AS bucket,
-            COUNT(*) AS orders, SUM(omzet) AS omzet
-        FROM (
-            SELECT o.order_key,
-                   SUM(o.total_harga) AS omzet,
-                   SUM(o.total_harga - o.modal_sales) AS margin
-            {BASE}
-            AND o.status_deal='Deal'
-            {cond}
-            GROUP BY o.order_key
-        ) t
-        GROUP BY bucket
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-# ─── Grafik: Persentase Margin bulanan (setahun) ─────────────────
-@app.route('/api/margin-bulanan')
-@login_required
-def api_margin_bulanan():
-    tahun  = request.args.get('tahun', str(datetime.now().year))
-    pic    = request.args.get('pic')
-    divisi = request.args.get('divisi')
-    cond, params = build_where(None, None, pic, divisi)
-    sql = f"""
-        SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
-               SUM(o.total_harga) AS omzet,
-               SUM(o.total_harga - o.modal_sales) AS margin
-        {BASE}
-        AND o.status_deal='Deal'
-        AND YEAR(o.tgl_omzet_realtime) = %s
-        {cond}
-        GROUP BY bulan ORDER BY bulan
-    """
-    rows = query(sql, [tahun] + params)
-    out = []
-    for r in rows:
-        omzet = float(r['omzet'] or 0)
-        margin = float(r['margin'] or 0)
-        out.append({'bulan': r['bulan'],
-                    'persen_margin': round(margin / omzet * 100, 1) if omzet else 0})
-    return jsonify(out)
-
-# ─── Grafik: Lifetime Value (frekuensi beli per customer) ────────
-@app.route('/api/lifetime-value')
-@login_required
-def api_lifetime_value():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT
-            CASE WHEN n >= 4 THEN '>=4x' WHEN n = 3 THEN '3x'
-                 WHEN n = 2 THEN '2x' ELSE '1x' END AS bucket,
-            COUNT(*) AS customers
-        FROM (
-            SELECT o.id_customer, COUNT(DISTINCT o.order_key) AS n
-            {BASE}
-            AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
-            {cond}
-            GROUP BY o.id_customer
-        ) t
-        GROUP BY bucket
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'customers': int(r['customers'] or 0)} for r in rows])
-
-# ─── Grafik: Kategori Omzet (bucket nilai order) ─────────────────
-@app.route('/api/kategori-omzet')
-@login_required
-def api_kategori_omzet():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT
-            CASE
-                WHEN omzet > 100000000 THEN '>100 jt'
-                WHEN omzet > 50000000  THEN '50-100 jt'
-                WHEN omzet > 30000000  THEN '30-50 jt'
-                ELSE '<30 jt'
-            END AS bucket,
-            COUNT(*) AS orders, SUM(omzet) AS omzet
-        FROM (
-            SELECT o.order_key, SUM(o.total_harga) AS omzet
-            {BASE}
-            AND o.status_deal='Deal'
-            {cond}
-            GROUP BY o.order_key
-        ) t
-        GROUP BY bucket
-    """
-    rows = query(sql, params)
-    return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
-
-
-# ─── Detail Order (tabel cek cepat, per baris produk) ────────────
-@app.route('/api/detail')
-@login_required
-def api_detail():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT o.sko, o.nama, o.sumber,
-               TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,''))) AS nama_produk,
-               o.tgl_omzet_realtime AS tanggal,
-               o.jumlah_produk AS quantity,
-               o.harga_produk AS harga_jual,
-               o.modal_sales, o.total_harga
-        {BASE}
-        AND o.status_deal='Deal'
-        {cond}
-        ORDER BY o.tgl_omzet_realtime DESC
-        LIMIT 2000
-    """
-    rows = query(sql, params)
-    out = []
-    for r in rows:
-        qty   = float(r['quantity'] or 0)
-        total = float(r['total_harga'] or 0)
-        modal = float(r['modal_sales'] or 0)
-        tgl = r['tanggal']
-        out.append({
-            'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
-            'nama_produk': (r['nama_produk'] or '').strip(),
-            'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
-            'quantity': int(qty),
-            'harga_jual': float(r['harga_jual'] or 0),
-            'harga_modal': round(modal / qty) if qty else 0,
-            'total_harga': total,
-            'persen_margin': round((total - modal) / total * 100, 1) if total else 0,
-        })
-    return jsonify(out)
-
-
-# ─── Monitoring Potensi (kelengkapan input harga oleh sales) ─────
-@app.route('/api/monitoring-potensi')
-@login_required
-def api_monitoring_potensi():
-    """Customer baru via Online; potensi = SUM(total_harga). Belum diisi = 0.
-    Difilter berdasarkan tgl_order (saat lead masuk), bukan tgl omzet,
-    agar lead yang belum dihargai tetap muncul."""
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    where = " AND ".join(clauses)
-    # Pakai order_risepack (tabel cepat, tanpa join) — sudah berisi waktu_kontak & total_harga
-    sql = f"""
-        SELECT DATE_FORMAT(o.waktu_kontak,'%Y-%m-%d') AS tgl_kontak,
-               o.nama AS nama,
-               o.nama_instansi AS instansi,
-               o.name AS pic,
-               o.status_deal AS status_deal,
-               o.total_harga AS potensi
-        FROM order_risepack o
-        WHERE {where}
-        ORDER BY o.waktu_kontak DESC
-        LIMIT 3000
-    """
-    rows = query(sql, params)
-    out = []
-    for r in rows:
-        potensi = float(r['potensi'] or 0)
-        out.append({
-            'tgl_kontak': r['tgl_kontak'],
-            'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
-            'status_deal': r['status_deal'],
-            'potensi': potensi,
-            'terisi': potensi > 0,
-        })
-    return jsonify(out)
-
-
-# ─── Customer: Deal New vs Repeat (pivot per customer) ───────────
-@app.route('/api/deal-new-repeat')
-@login_required
-def api_deal_new_repeat():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT MAX(o.nama) AS nama,
-               MAX(o.nama_instansi) AS instansi,
-               SUM(CASE WHEN o.sumber='Repeat Order' THEN o.total_harga ELSE 0 END) AS omzet_repeat,
-               SUM(CASE WHEN o.sumber<>'Repeat Order' THEN o.total_harga ELSE 0 END) AS omzet_new
-        {BASE}
-        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
-        {cond}
-        GROUP BY o.id_customer
-        ORDER BY SUM(o.total_harga) DESC
-        LIMIT 1000
-    """
-    rows = query(sql, params)
-    return jsonify([{
-        'nama': r['nama'], 'instansi': r['instansi'],
-        'omzet_new': float(r['omzet_new'] or 0),
-        'omzet_repeat': float(r['omzet_repeat'] or 0),
-    } for r in rows])
-
-# ─── Customer: Journey (grading) per customer ────────────────────
-@app.route('/api/journey')
-@login_required
-def api_journey():
-    """Customer Follow Up (belum order). Filter waktu_kontak, nilai = potensi."""
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
-               "o.status_deal = 'Follow Up'", "o.id_customer IS NOT NULL"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    where = " AND ".join(clauses)
-    sql = f"""
-        SELECT MAX(o.nama) AS nama,
-               MAX(o.nama_instansi) AS instansi,
-               MAX(o.name) AS pic,
-               DATE_FORMAT(MAX(o.waktu_kontak),'%Y-%m-%d') AS tgl_kontak,
-               COUNT(DISTINCT o.order_key) AS orders,
-               SUM(o.total_harga) AS potensi
-        FROM order_risepack o
-        WHERE {where}
-        GROUP BY o.id_customer
-        ORDER BY SUM(o.total_harga) DESC
-        LIMIT 1500
-    """
-    rows = query(sql, params)
-    return jsonify([{
-        'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
-        'tgl_kontak': r['tgl_kontak'],
-        'orders': int(r['orders'] or 0),
-        'potensi': float(r['potensi'] or 0),
-    } for r in rows])
-
-# ─── Customer: Achievement SKO 10x ───────────────────────────────
-@app.route('/api/sko-achievement')
-@login_required
-def api_sko_achievement():
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    sql = f"""
-        SELECT MAX(o.nama) AS nama,
-               COUNT(DISTINCT o.sko_key) AS jml
-        {BASE}
-        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
-        {cond}
-        GROUP BY o.id_customer
-        ORDER BY jml DESC
-        LIMIT 2000
-    """
-    rows = query(sql, params)
-    return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
-
-
-# ─── Bonus Achievement Sales ─────────────────────────────────────
-@app.route('/api/bonus')
-@login_required
-def api_bonus():
-    """Bonus per SKO. Bonus = margin x rate (Repeat 5% / New-Online 7% / lainnya 0).
-    Denda = bonus x faktor telat (1-7hr 25%, 8-14hr 50%, >14hr 100%, tidak telat 0).
-    Net = bonus - denda. Difilter tgl_pelunasan (order yang sudah lunas)."""
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
-               "o.status_deal = 'Deal'", "inv.tanggal_pelunasan IS NOT NULL"]
-    params = []
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    if tgl_dari:
-        clauses.append("inv.tanggal_pelunasan >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("inv.tanggal_pelunasan <= %s"); params.append(tgl_sampai)
-    where = " AND ".join(clauses)
-    # tanggal pelunasan & jatuh tempo asli ada di invoices (lewat invoice_details), sesuai view_salesorder
-    sql = f"""
-        SELECT MAX(o.nama) AS nama, o.sko, MAX(o.sumber) AS sumber, MAX(o.name) AS pic,
-               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS nama_produk,
-               MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
-               DATE_FORMAT(MAX(inv.tanggal_pelunasan),'%Y-%m-%d') AS tgl_pelunasan,
-               DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
-               DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
-        FROM order_risepack o
-        JOIN invoice_details idt ON o.sko = idt.kode_order
-        JOIN invoices inv ON idt.invoice_key = inv.invoice_key
-        WHERE {where}
-        GROUP BY o.sko_key, o.sko
-        ORDER BY MAX(inv.tanggal_pelunasan) DESC
-        LIMIT 3000
-    """
-    rows = query(sql, params)
-    out = []
-    for r in rows:
-        margin = float(r['total_harga'] or 0) - float(r['modal_sales'] or 0)
-        sumber = r['sumber'] or ''
-        rate = 0.025 if sumber == 'Repeat Order' else (0.05 if sumber in ('Online', 'Online Lintas') else 0.0)
-        bonus = margin * rate
-        h = r['hari_telat']
-        h = int(h) if h is not None else None
-        if h is None or h <= 0:
-            mult = 0.0
-        elif h <= 7:
-            mult = 0.25
-        elif h <= 14:
-            mult = 0.50
-        else:
-            mult = 1.0
-        denda = bonus * mult
-        out.append({
-            'nama': r['nama'], 'sko': r['sko'], 'sumber': sumber, 'pic': r['pic'],
-            'nama_produk': (r['nama_produk'] or '').strip(),
-            'tgl_pelunasan': r['tgl_pelunasan'], 'tgl_jatuh_tempo': r['tgl_jatuh_tempo'],
-            'hari_telat': h if h is not None else 0,
-            'margin': round(margin), 'bonus': round(bonus),
-            'denda': round(denda), 'net': round(bonus - denda),
-        })
-    return jsonify(out)
-
-
-# ─── KPI Sales (OKR scorecard) ───────────────────────────────────
-def load_kpi_config():
-    try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kpi_config.json')
-        with open(path, encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        return {'scoring_bands': [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
-                'labels': [[0, '-']], 'kpi': [], 'umbrella_manual': {}}
-
-def quarter_start(d):
-    return d.replace(month=((d.month - 1) // 3) * 3 + 1, day=1)
-
-def months_between(d1, d2):
-    return (d2.year - d1.year) * 12 + (d2.month - d1.month) + 1
-
-def score_from_ach(ach, bands):
-    for thr, sc in bands:
-        if ach >= thr:
-            return sc
-    return 0
-
-def sum_months(cfg_map, d1, d2, nmonths, default=0):
-    """Jumlahkan nilai per-bulan dari config (YYYY-MM) sepanjang rentang."""
-    if not (d1 and d2):
-        return default
-    tot, y, mo = 0, d1.year, d1.month
-    for _ in range(nmonths):
-        tot += cfg_map.get(f"{y:04d}-{mo:02d}", default) or 0
-        mo += 1
-        if mo > 12:
-            mo = 1; y += 1
-    return tot
-
-def sales_omzet_target(pic, d1, d2, nmonths, cfg):
-    """Target omzet sales per bulan dari tb_target_sales (yang diset manager di app).
-    Dijumlahkan sepanjang rentang. Fallback ke config bila belum diset di app."""
-    months = []
-    if d1 and d2:
-        y, mo = d1.year, d1.month
-        for _ in range(nmonths):
-            months.append(f"{y:04d}-{mo:02d}")
-            mo += 1
-            if mo > 12:
-                mo = 1; y += 1
-    db_total = 0.0
-    if months:
-        ph = ','.join(['%s'] * len(months))
-        sql = (f"SELECT COALESCE(SUM(ts.target_revenue),0) v "
-               f"FROM tb_target_sales ts JOIN users u ON ts.user_id = u.id "
-               f"WHERE u.name = %s AND ts.deleted_at IS NULL "
-               f"AND CONCAT(ts.year,'-',LPAD(ts.month,2,'0')) IN ({ph})")
-        db_total = float(query(sql, [pic] + months)[0]['v'] or 0)
-    if db_total > 0:
-        return db_total
-    return (cfg.get('fungsi_omzet_target', {}).get(pic, 0) or 0) * nmonths
-
-def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
-    """Total nilai potensi (total_harga) dari lead Online, by waktu_kontak."""
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if pic:
-        clauses.append("o.name = %s"); params.append(pic)
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    sql = f"SELECT SUM(o.total_harga) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
-    return float(query(sql, params)[0]['v'] or 0)
-
-def qualified_leads_count(tgl_dari, tgl_sampai, divisi):
-    """Jumlah qualified leads (tipe_kontak 'Bukan Sampah') semua sumber, by waktu_kontak."""
-    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.tipe_kontak = 'Bukan Sampah'"]
-    params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
-    if divisi:
-        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
-        params.append(divisi)
-    sql = f"SELECT COUNT(DISTINCT o.sko_key) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
-    return int(query(sql, params)[0]['v'] or 0)
-
-@app.route('/api/kpi-score')
-@login_required
-def api_kpi_score():
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    pic = None  # KPI Divisi selalu level tim — abaikan filter PIC (per orang pakai tab Fungsi Sales)
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
-    nmonths = months_between(d1, d2) if (d1 and d2) else 1
-    bands = cfg.get('scoring_bands', [])
-
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    m = kpi_metrics(cond, params)
-    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
-
-    pot = potensi_total(tgl_dari, tgl_sampai, pic, divisi)
-    default_omzet_t = next((k['target'] for k in cfg.get('kpi', []) if k['id'] == 'omzet'), 2500000000)
-    omzet_target_eff = sum_months(cfg.get('omzet_target', {}), d1, d2, nmonths, default_omzet_t) if (d1 and d2) else default_omzet_t
-    umbrella_val = sum_months(cfg.get('umbrella_manual', {}), d1, d2, nmonths, 0)
-
-    rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('kpi', []):
-        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
-        target_eff = target
-        if basis == 'omzet_monthly':
-            actual = m['total_omzet']; target_eff = omzet_target_eff
-        elif basis == 'repeat_vs_target':
-            actual = m['repeat_omzet']; target_eff = (target / 100.0) * omzet_target_eff
-        elif basis == 'closing_rate_new':
-            actual = nf['closing_rate_new']
-        elif basis == 'umbrella_manual':
-            actual = umbrella_val; target_eff = target * nmonths
-        elif basis == 'potensi_total':
-            actual = pot; target_eff = target * nmonths
-        else:
-            actual = 0
-        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
-        sc = score_from_ach(ach, bands)
-        weighted = round(sc * w, 2)
-        total_w += weighted
-        total_ach_w += ach * w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
-                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
-                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
-                     'ach': ach, 'score': sc, 'weighted': weighted})
-
-    total_ach = round(total_ach_w, 1)
-    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
-    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
-                    'total_ach': total_ach, 'label': label, 'months': nmonths})
-
-@app.route('/api/kpi-fungsi')
-@login_required
-def api_kpi_fungsi():
-    """KPI per fungsi sales (individu). Sales dipilih lewat filter PIC."""
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, pic, divisi = get_args()
-    sales_list = cfg.get('fungsi_sales', [])
-    if not pic or pic not in sales_list:
-        return jsonify({'valid': False, 'sales_list': sales_list})
-
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
-    nmonths = months_between(d1, d2) if (d1 and d2) else 1
-    bands = cfg.get('scoring_bands', [])
-
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
-    m = kpi_metrics(cond, params)
-    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
-
-    omzet_target_eff = sales_omzet_target(pic, d1, d2, nmonths, cfg)
-    umbrella_val = sum_months(cfg.get('fungsi_umbrella', {}).get(pic, {}), d1, d2, nmonths, 0)
-
-    rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('fungsi_kpi', []):
-        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
-        target_eff = target
-        if basis == 'omzet_sales':
-            actual = m['total_omzet']; target_eff = omzet_target_eff
-        elif basis == 'repeat_sales':
-            actual = m['repeat_omzet']; target_eff = (target / 100.0) * omzet_target_eff
-        elif basis == 'closing_rate_new':
-            actual = nf['closing_rate_new']
-        elif basis == 'gross_margin':
-            actual = m['persen_margin']
-        elif basis == 'umbrella_sales':
-            actual = umbrella_val; target_eff = target * nmonths
-        else:
-            actual = 0
-        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
-        sc = score_from_ach(ach, bands)
-        weighted = round(sc * w, 2)
-        total_w += weighted
-        total_ach_w += ach * w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
-                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
-                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
-                     'ach': ach, 'score': sc, 'weighted': weighted})
-
-    total_ach = round(total_ach_w, 1)
-    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
-    return jsonify({'valid': True, 'sales': pic, 'rows': rows, 'total_kpi': round(total_w, 2),
-                    'total_ach': total_ach, 'label': label, 'months': nmonths})
-
-@app.route('/api/kpi-marketing')
-@login_required
-def api_kpi_marketing():
-    """KPI fungsi Marketing — team-wide (tidak per PIC). ROI pakai belanja iklan manual."""
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, _pic, divisi = get_args()
-
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
-    nmonths = months_between(d1, d2) if (d1 and d2) else 1
-    bands = cfg.get('scoring_bands', [])
-
-    cond, params = build_where(tgl_dari, tgl_sampai, None, divisi)
-    m = kpi_metrics(cond, params)
-    omzet_new = m['omzet_new']  # non-repeat (konsisten dgn Ringkasan & tabel Customer)
-    potensi = potensi_total(tgl_dari, tgl_sampai, None, divisi)
-    qleads = qualified_leads_count(tgl_dari, tgl_sampai, divisi)
-    adspend = sum_months(cfg.get('marketing_adspend', {}), d1, d2, nmonths, 0)
-
-    rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('marketing_kpi', []):
-        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
-        target_eff = target
-        if basis == 'potensi_total':
-            actual = potensi; target_eff = target * nmonths
-        elif basis == 'qualified_leads':
-            actual = qleads; target_eff = target * nmonths
-        elif basis == 'roi_ads':
-            actual = round(omzet_new / adspend, 1) if adspend > 0 else 0
-        else:
-            actual = 0
-        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
-        sc = score_from_ach(ach, bands)
-        weighted = round(sc * w, 2)
-        total_w += weighted
-        total_ach_w += ach * w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'],
-                     'target': target_eff, 'unit': k.get('unit', ''), 'note': k.get('note', ''),
-                     'actual': round(actual, 1) if isinstance(actual, float) else actual,
-                     'ach': ach, 'score': sc, 'weighted': weighted})
-
-    total_ach = round(total_ach_w, 1)
-    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
-    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach,
-                    'label': label, 'months': nmonths,
-                    'adspend': adspend, 'omzet_new': omzet_new})
-
-
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+// ── Init ──
+document.addEventListener('DOMContentLoaded', async () => {
+  setRange('month', false);
+  const f = await fetchJSON('/api/filters');
+  const picSel=document.getElementById('f-pic');
+  f.pics.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;picSel.appendChild(o);});
+  const divSel=document.getElementById('f-divisi');
+  f.sub_divisions.forEach(d=>{const o=document.createElement('option');o.value=d;o.textContent=d;divSel.appendChild(o);});
+  document.getElementById('f-dari').addEventListener('change',()=>markChip(null));
+  document.getElementById('f-sampai').addEventListener('change',()=>markChip(null));
+  loadAll();
+});
+
+function getParams(){
+  const p=new URLSearchParams();
+  const dari=document.getElementById('f-dari').value, sampai=document.getElementById('f-sampai').value;
+  const pic=document.getElementById('f-pic').value, divisi=document.getElementById('f-divisi').value;
+  if(dari)p.set('tgl_dari',dari); if(sampai)p.set('tgl_sampai',sampai);
+  if(pic)p.set('pic',pic); if(divisi)p.set('divisi',divisi);
+  return p.toString();
+}
+function yearParams(){
+  const p=new URLSearchParams();
+  const tahun=document.getElementById('f-dari').value?.slice(0,4)||new Date().getFullYear();
+  const pic=document.getElementById('f-pic').value, divisi=document.getElementById('f-divisi').value;
+  p.set('tahun',tahun); if(pic)p.set('pic',pic); if(divisi)p.set('divisi',divisi);
+  return p.toString();
+}
+function resetFilter(){ document.getElementById('f-pic').value=''; document.getElementById('f-divisi').value=''; setRange('month'); }
+
+async function loadAll(){
+  CACHE = {};
+  document.getElementById('last-update').textContent='Memuat…';
+  await renderView();
+  document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+}
+
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
+function kpiTab(t){
+  state.kpitab=t;
+  ['divisi','fungsi','marketing'].forEach(x=>{
+    document.getElementById('kt-'+x).classList.toggle('active',x===t);
+    document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
+  });
+  renderView();
+}
+const SUB_TASKS = {
+  produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
+  margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan]],
+  customer:[['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
+  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
+  bonus:[['bonus-table',loadBonus]],
+};
+async function renderView(){
+  const q = getParams();
+  let tasks;
+  if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
+  else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
+  else tasks = TOP_TASKS[state.view]||[];
+  await Promise.allSettled(tasks.map(async ([target, fn]) => {
+    const el = document.getElementById(target);
+    if (!(el.tagName==='CANVAS' && charts[target])) setMsg(target,'Memuat…');
+    try { await fn(q); setMsg(target,null); }
+    catch (e) { console.error(target,e); setMsg(target,'⚠️ Gagal memuat — coba klik Terapkan lagi'); }
+  }));
+}
+
+// ── KPI ──
+async function loadKpi(q){
+  const d=await fetchJSON('/api/kpi?'+q); const D=d.delta||{};
+  document.getElementById('kpi-fin').innerHTML=`
+    ${kpiCard('a-orange','💰','Total Omzet',formatRp(d.total_omzet),trendSub(D.total_omzet))}
+    ${kpiCard('a-brown','📦','Total Modal',formatRp(d.total_modal),trendSub(D.total_modal))}
+    ${kpiCard('a-green','📈','Margin',formatRp(d.total_margin),`<span class="pill ${marginClass(d.persen_margin)}">${d.persen_margin}% omzet</span>${deltaPill(D.total_margin)}`)}
+    ${kpiCard('a-blue','🧾','Total Order',fmtInt(d.total_order),`<span class="muted">${fmtInt(d.total_deal)} deal</span>${deltaPill(D.total_order)}`)}
+    ${kpiCard('a-amber','🛒','Average Purchase',formatRp(d.avg_purchase),trendSub(D.avg_purchase))}`;
+  document.getElementById('kpi-cust').innerHTML=`
+    ${kpiCard('a-orange','🎯','Closing Rate',d.closing_rate+'%',`<span class="pill ${rateClass(d.closing_rate)}">order masuk</span>${deltaPill(D.closing_rate)}`)}
+    ${kpiCard('a-amber','🔁','Repeat Order',fmtInt(d.total_repeat),`<span class="muted">${d.persen_repeat}% dari deal</span>${deltaPill(D.total_repeat)}`)}
+    ${kpiCard('a-orange','💸','Repeat dari Omzet',formatRp(d.repeat_omzet),`<span class="pill">${d.persen_repeat_omzet}% omzet</span>${deltaPill(D.repeat_omzet)}`)}
+    ${kpiCard('a-leaf','✨','New Customer (Deal)',fmtInt(d.total_new),`<span class="muted">dari ${fmtInt(d.qualified_new)} leads online</span>${deltaPill(D.total_new)}`)}
+    ${kpiCard('a-green','🆕','Omzet New',formatRp(d.omzet_new),`<span class="muted">non-repeat (semua sumber)</span>${deltaPill(D.omzet_new)}`)}
+    ${kpiCard('a-blue','📲','Closing Rate New',d.closing_rate_new+'%',`<span class="pill ${rateClass(d.closing_rate_new)}">${fmtInt(d.total_new)}/${fmtInt(d.qualified_new)} leads</span>${deltaPill(D.closing_rate_new)}`)}`;
+}
+function kpiCard(a,ic,label,val,sub){return `<div class="kpi-card ${a}"><div class="top"><div class="label">${label}</div><div class="ic">${ic}</div></div><div class="value">${val}</div>${sub?`<div class="sub">${sub}</div>`:''}</div>`;}
+function deltaPill(v){ if(v==null) return ''; const up=v>=0; return `<span class="delta ${up?'good':'bad'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; }
+function trendSub(v){ if(v==null) return `<span class="muted">vs periode lalu</span>`; return `${deltaPill(v)}<span class="muted">vs periode lalu</span>`; }
+function marginClass(p){p=parseFloat(p);return p>=25?'good':(p<15?'warn':'');}
+function rateClass(p){p=parseFloat(p);return p>=40?'good':(p<20?'warn':'');}
+
+// ── Produk ──
+async function loadBahan(q){
+  const rows=await fetchJSON('/api/sales-by-bahan?'+q);
+  renderChart('c-bahan','doughnut',{labels:rows.map(r=>r.jenis_bahan),datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
+}
+async function loadTrendBahan(){ trendLine('c-trend-bahan', await fetchJSON('/api/trend-bahan?'+yearParams()), 'jenis_bahan'); }
+async function loadTrend(){ trendLine('c-trend', await fetchJSON('/api/trend-omzet?'+yearParams()), 'kategori_produksi'); }
+function trendLine(id,rows,key){
+  const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const cats=[...new Set(rows.map(r=>r[key]))];
+  const datasets=cats.map((cat,i)=>({label:cat,
+    data:months.map((_,mi)=>{const r=rows.find(r=>r[key]===cat&&parseInt(r.bulan?.slice(5))===mi+1);return r?r.omzet:0;}),
+    borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length]+'22',tension:0.35,fill:false,pointRadius:3,pointHoverRadius:5,borderWidth:2}));
+  renderChart(id,'line',{labels:months,datasets},{
+    plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}},
+    scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+}
+async function loadKategori(q){
+  const rows=await fetchJSON('/api/kategori?'+q);
+  barH('c-kategori',rows.map(r=>r.kategori_produksi),rows.map(r=>r.omzet),'#e9852b');
+}
+// ── Margin ──
+async function loadSalesByMargin(q){
+  const rows=await fetchJSON('/api/sales-by-margin?'+q);
+  const order=['Low (<10%)','Medium (10-20%)','High (>20%)','Tidak diketahui'];
+  const colMap={'Low (<10%)':'#cf4b3a','Medium (10-20%)':'#d99327','High (>20%)':'#2f9e6f','Tidak diketahui':'#b8a89a'};
+  rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
+  renderChart('c-margin','bar',{labels:rows.map(r=>r.bucket),
+    datasets:[{label:'Omzet',data:rows.map(r=>r.omzet),backgroundColor:rows.map(r=>colMap[r.bucket]||'#999'),borderRadius:6,maxBarThickness:70,_orders:rows.map(r=>r.orders)}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Omzet: ${formatRp(c.parsed.y)} · ${c.dataset._orders[c.dataIndex]} order`}}},
+     scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+}
+async function loadMarginBulanan(){
+  const rows=await fetchJSON('/api/margin-bulanan?'+yearParams());
+  const months=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const data=months.map((_,mi)=>{const r=rows.find(r=>parseInt(r.bulan?.slice(5))===mi+1);return r?r.persen_margin:null;});
+  renderChart('c-margin-bulan','line',{labels:months,datasets:[{label:'% Margin',data,borderColor:'#4e9a3f',backgroundColor:'#4e9a3f22',tension:0.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.y}%`}}},
+     scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+}
+// ── Customer ──
+async function loadLTV(q){
+  const rows=await fetchJSON('/api/lifetime-value?'+q);
+  const order=['1x','2x','3x','>=4x']; const labelMap={'1x':'1x (Baru)','2x':'2x','3x':'3x','>=4x':'≥4x (Loyal)'};
+  rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
+  renderChart('c-ltv','doughnut',{labels:rows.map(r=>labelMap[r.bucket]||r.bucket),
+    datasets:[{data:rows.map(r=>r.customers),backgroundColor:['#3b6fb0','#e9852b','#d99327','#4e9a3f'],borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} customer`}}}});
+}
+async function loadSumber(q){
+  const rows=await fetchJSON('/api/sales-by-sumber?'+q);
+  renderChart('c-sumber','doughnut',{labels:rows.map(r=>r.sumber),datasets:[{data:rows.map(r=>r.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}}}});
+}
+// ── Customer: pivot New/Repeat, Journey, SKO 10x ──
+const TIER_ORDER = ['Diamond','Ruby','Platinum','Gold','Silver','Bronze','Reguler'];
+const TIER_STYLE = {Diamond:['#E6F1FB','#0C447C'],Ruby:['#FBEAF0','#72243E'],Platinum:['#EEEDFE','#3C3489'],Gold:['#FAEEDA','#854F0B'],Silver:['#F1EFE8','#444441'],Bronze:['#FAECE7','#993C1D'],Reguler:['#F1EFE8','#5F5E5A']};
+function tierRank(t){ const i=TIER_ORDER.indexOf(t); return i<0?99:i; }
+function tierBadge(t){ const s=TIER_STYLE[t]||['#F1EFE8','#5F5E5A']; return `<span style="font-size:11.5px;padding:2px 8px;border-radius:6px;background:${s[0]};color:${s[1]}">${esc(t)}</span>`; }
+function sortBy(rows,key,dir,type){
+  const d=dir==='asc'?1:-1;
+  return rows.slice().sort((a,b)=>{
+    let x=a[key],y=b[key];
+    if(type==='num') return ((+x||0)-(+y||0))*d;
+    if(type==='tier') return (tierRank(x)-tierRank(y))*d;
+    if(x==null)return 1; if(y==null)return -1;
+    x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-d:x>y?d:0;
+  });
+}
+function sortHead(cols,state,fn){
+  return cols.map(([k,label,type])=>{
+    const arrow=state.key===k?(state.dir==='asc'?' ▲':' ▼'):'';
+    return `<th class="${type==='num'?'num':''}" style="cursor:pointer" onclick="${fn}('${k}')">${label}${arrow}</th>`;
+  }).join('');
+}
+
+const DNR={rows:[],key:'total',dir:'desc'};
+const DNR_COLS=[['nama','Customer','str'],['omzet_new','Omzet New','num'],['omzet_repeat','Omzet Repeat','num'],['total','Total','num']];
+async function loadDealNvR(q){ const rows=await fetchJSON('/api/deal-new-repeat?'+q); rows.forEach(r=>r.total=r.omzet_new+r.omzet_repeat); DNR.rows=rows; renderDNR(); }
+function setDnrSort(k){ if(DNR.key===k)DNR.dir=DNR.dir==='asc'?'desc':'asc'; else{DNR.key=k;DNR.dir='asc';} renderDNR(); }
+function renderDNR(){
+  const rows=sortBy(DNR.rows,DNR.key,DNR.dir,(DNR_COLS.find(c=>c[0]===DNR.key)||[])[2]);
+  const body=rows.map(r=>`<tr>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td class="num" style="color:#993C1D">${r.omzet_new?formatRp(r.omzet_new):'–'}</td>
+    <td class="num" style="color:#854F0B">${r.omzet_repeat?formatRp(r.omzet_repeat):'–'}</td>
+    <td class="num" style="font-weight:600">${formatRp(r.total)}</td>
+  </tr>`).join('');
+  document.getElementById('dnr-table').innerHTML=`<table><thead><tr>${sortHead(DNR_COLS,DNR,'setDnrSort')}</tr></thead><tbody>${body||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
+const JRN={rows:[],key:'potensi',dir:'desc'};
+const JRN_COLS=[['nama','Customer','str'],['instansi','Instansi','str'],['pic','PIC','str'],['orders','Order','num'],['potensi','Potensi','num']];
+async function loadJourney(q){ JRN.rows=await fetchJSON('/api/journey?'+q); renderJourney(); }
+function setJrnSort(k){ if(JRN.key===k)JRN.dir=JRN.dir==='asc'?'desc':'asc'; else{JRN.key=k;JRN.dir='asc';} renderJourney(); }
+function renderJourney(){
+  const rows=sortBy(JRN.rows,JRN.key,JRN.dir,(JRN_COLS.find(c=>c[0]===JRN.key)||[])[2]);
+  const body=rows.map(r=>`<tr>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
+    <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
+    <td class="num">${fmtInt(r.orders)}</td>
+    <td class="num" style="font-weight:600">${formatRp(r.potensi)}</td>
+  </tr>`).join('');
+  document.getElementById('journey-table').innerHTML=`<table><thead><tr>${sortHead(JRN_COLS,JRN,'setJrnSort')}</tr></thead><tbody>${body||'<tr><td colspan="5" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
+async function loadSko(q){
+  const rows=await fetchJSON('/api/sko-achievement?'+q);
+  const wp=rows.map(r=>({...r,pct:Math.min(Math.round(r.jml/10*100),100)}));
+  const n=wp.length;
+  const avg=n?Math.round(wp.reduce((s,r)=>s+r.pct,0)/n):0;
+  const done=wp.filter(r=>r.pct>=100).length;
+  document.getElementById('sko-summary').innerHTML=`
+    ${kpiCard('a-amber','📊','Rata-rata Achievement',avg+'%',`<span class="muted">${fmtInt(n)} customer</span>`)}
+    ${kpiCard('a-green','🏆','Sudah 100%',fmtInt(done),`<span class="muted">capai target 10x</span>`)}
+    ${kpiCard('a-blue','📦','Total Customer',fmtInt(n),`<span class="muted">deal periode ini</span>`)}`;
+  const body=wp.map(r=>{
+    const col=r.pct>=100?'var(--green)':r.pct>=70?'var(--amber)':'var(--red)';
+    return `<tr>
+      <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+      <td class="num">${fmtInt(r.jml)}</td>
+      <td style="width:42%"><div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;height:8px;background:#f1ece6;border-radius:4px;overflow:hidden"><div style="width:${r.pct}%;height:100%;background:${col}"></div></div>
+        <span style="flex:0 0 38px;text-align:right;font-weight:600;color:${col}">${r.pct}%</span></div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('sko-ach').innerHTML=`<table><thead><tr><th>Customer</th><th class="num">Order (SKO)</th><th>Achievement</th></tr></thead><tbody>${body||'<tr><td colspan="3" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+
+// ── Penjualan ──
+async function loadKatOmzet(q){
+  const rows=await fetchJSON('/api/kategori-omzet?'+q);
+  const order=['>100 jt','50-100 jt','30-50 jt','<30 jt'];
+  rows.sort((a,b)=>order.indexOf(a.bucket)-order.indexOf(b.bucket));
+  renderChart('c-kat-omzet','bar',{labels:rows.map(r=>r.bucket),
+    datasets:[{label:'Jumlah Order',data:rows.map(r=>r.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omzet:rows.map(r=>r.omzet)}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · omzet ${formatRp(c.dataset._omzet[c.dataIndex])}`}}},
+     scales:{y:{ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+}
+async function loadTopSales(q){
+  const rows=await fetchJSON('/api/top-sales?'+q);
+  document.getElementById('tbl-top-sales').innerHTML=`<table>
+    <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
+    <tbody>${rows.map((r,i)=>`<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:500">${r.PIC}</td><td class="num">${fmtInt(r.total_order)}</td><td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td></tr>`).join('')}</tbody></table>`;
+}
+// ── Produksi ──
+async function loadProduksi(q){
+  const d=await fetchJSON('/api/produksi?'+q);
+  renderChart('c-produksi','doughnut',{labels:['Berjalan','Tuntas','Belum SPK'],
+    datasets:[{data:[d.berjalan,d.tuntas,d.belum_spk],backgroundColor:['#3b6fb0','#2f9e6f','#d99327'],borderWidth:2,borderColor:'#fff'}]},
+    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
+}
+
+// ── Detail Order ──
+const DETAIL = { rows:[], term:'', key:'tanggal', dir:'desc' };
+const DCOLS = [
+  ['nama','Customer','str'],['sko','SKO','str'],['sumber','Sumber','str'],
+  ['nama_produk','Produk','str'],['tanggal','Tanggal','str'],['quantity','Qty','num'],
+  ['harga_modal','Harga Modal','rp'],['harga_jual','Harga Jual','rp'],
+  ['total_harga','Total Harga','rp'],['persen_margin','Margin %','pct'],
+];
+function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
+function esc(s,attr){ s=(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); return attr?s.replace(/"/g,'&quot;'):s; }
+async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
+function onDetailSearch(v){ DETAIL.term = v.trim().toLowerCase(); renderDetail(); }
+function setSort(k){ if(DETAIL.key===k) DETAIL.dir = DETAIL.dir==='asc'?'desc':'asc'; else { DETAIL.key=k; DETAIL.dir='asc'; } renderDetail(); }
+function detailFiltered(){
+  let rows = DETAIL.rows.slice();
+  if(DETAIL.term) rows = rows.filter(r=>[r.nama,r.sko,r.nama_produk,r.sumber].join(' ').toLowerCase().includes(DETAIL.term));
+  const k=DETAIL.key, dir=DETAIL.dir==='asc'?1:-1, type=colType(k);
+  rows.sort((a,b)=>{
+    let x=a[k], y=b[k];
+    if(x==null) return 1; if(y==null) return -1;
+    if(type==='str'){ x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-dir:x>y?dir:0; }
+    return (x-y)*dir;
+  });
+  return rows;
+}
+function renderDetail(){
+  const rows = detailFiltered();
+  document.getElementById('detail-count').textContent = `${rows.length} baris`;
+  const head = DCOLS.map(([k,label])=>{
+    const arrow = DETAIL.key===k ? (DETAIL.dir==='asc'?' ▲':' ▼') : '';
+    const cls = colType(k)==='str' ? '' : 'num';
+    return `<th class="${cls}" onclick="setSort('${k}')">${label}${arrow}</th>`;
+  }).join('');
+  const body = rows.map(r=>`<tr>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+    <td title="${esc(r.sumber,1)}">${esc(r.sumber)||'-'}</td>
+    <td title="${esc(r.nama_produk,1)}">${esc(r.nama_produk)||'-'}</td>
+    <td>${r.tanggal||'-'}</td>
+    <td class="num">${fmtInt(r.quantity)}</td>
+    <td class="num">${formatRpFull(r.harga_modal)}</td>
+    <td class="num">${formatRpFull(r.harga_jual)}</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.total_harga)}</td>
+    <td class="num">${r.persen_margin}%</td>
+  </tr>`).join('');
+  document.getElementById('detail-table').innerHTML =
+    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="10" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportDetailCSV(){
+  const rows = detailFiltered();
+  const lines = [DCOLS.map(c=>c[1]).join(',')];
+  rows.forEach(r=>{
+    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.total_harga,r.persen_margin];
+    lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='detail-order-risepack.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Monitoring Potensi ──
+const MON = { rows:[], term:'', key:'tgl_kontak', dir:'desc' };
+const MCOLS = [
+  ['tgl_kontak','Tgl Kontak','str'],['nama','Customer','str'],['instansi','Instansi','str'],
+  ['pic','PIC','str'],['status_deal','Status Deal','str'],['potensi','Potensi','num'],['terisi','Status Potensi','bool'],
+];
+function monColType(k){ return (MCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
+async function loadMonitoring(q){ MON.rows = await fetchJSON('/api/monitoring-potensi?'+q); renderMonAll(); }
+function renderMonAll(){ renderMonSummary(); renderMonPIC(); renderMon(); }
+function onMonSearch(v){ MON.term = v.trim().toLowerCase(); renderMon(); }
+function setMonSort(k){ if(MON.key===k) MON.dir = MON.dir==='asc'?'desc':'asc'; else { MON.key=k; MON.dir='asc'; } renderMon(); }
+
+function renderMonSummary(){
+  const rows = MON.rows;
+  const total = rows.length;
+  const terisi = rows.filter(r=>r.terisi).length;
+  const belum = total - terisi;
+  const pct = total ? Math.round(terisi/total*100) : 0;
+  const totalPotensi = rows.reduce((s,r)=>s+(r.potensi||0),0);
+  document.getElementById('mon-summary').innerHTML = `
+    ${kpiCard('a-blue','👥','Lead Online Baru',fmtInt(total),`<span class="muted">per waktu kontak</span>`)}
+    ${kpiCard('a-brown','💰','Total Potensi',formatRp(totalPotensi),`<span class="muted">nilai semua lead</span>`)}
+    ${kpiCard('a-green','✅','Potensi Sudah Diisi',fmtInt(terisi),`<span class="pill good">${pct}% lengkap</span>`)}
+    ${kpiCard('a-orange','⚠️','Potensi Belum Diisi',fmtInt(belum),`<span class="pill ${belum>0?'bad':'good'}">${total?Math.round(belum/total*100):0}% kosong</span>`)}
+    ${kpiCard('a-amber','📊','Kelengkapan',pct+'%',`<span class="muted">${fmtInt(terisi)} dari ${fmtInt(total)}</span>`)}`;
+}
+function renderMonPIC(){
+  const map = {};
+  MON.rows.forEach(r=>{
+    const k = r.pic || '(tanpa PIC)';
+    if(!map[k]) map[k]={total:0,belum:0};
+    map[k].total++; if(!r.terisi) map[k].belum++;
+  });
+  const arr = Object.entries(map).map(([pic,v])=>({pic,...v,pct:v.total?Math.round(v.belum/v.total*100):0}))
+                    .sort((a,b)=>b.belum-a.belum);
+  document.getElementById('mon-pic').innerHTML = `<table>
+    <thead><tr><th>PIC / Sales</th><th class="num">Total Customer</th><th class="num">Belum Diisi</th><th class="num">% Belum</th></tr></thead>
+    <tbody>${arr.map(r=>`<tr>
+      <td style="font-weight:500">${esc(r.pic)}</td>
+      <td class="num">${fmtInt(r.total)}</td>
+      <td class="num" style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
+      <td class="num">${r.pct}%</td>
+    </tr>`).join('')||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function monFiltered(){
+  let rows = MON.rows.slice();
+  if(document.getElementById('mon-only').checked) rows = rows.filter(r=>!r.terisi);
+  if(MON.term) rows = rows.filter(r=>[r.nama,r.instansi,r.pic,r.status_deal].join(' ').toLowerCase().includes(MON.term));
+  const k=MON.key, dir=MON.dir==='asc'?1:-1, type=monColType(k);
+  rows.sort((a,b)=>{
+    let x=a[k], y=b[k];
+    if(type==='bool'){ return ((x?1:0)-(y?1:0))*dir; }
+    if(x==null) return 1; if(y==null) return -1;
+    if(type==='str'){ x=(''+x).toLowerCase(); y=(''+y).toLowerCase(); return x<y?-dir:x>y?dir:0; }
+    return (x-y)*dir;
+  });
+  return rows;
+}
+function renderMon(){
+  const rows = monFiltered();
+  document.getElementById('mon-count').textContent = `${rows.length} lead`;
+  const head = MCOLS.map(([k,label])=>{
+    const arrow = MON.key===k ? (MON.dir==='asc'?' ▲':' ▼') : '';
+    const cls = (k==='potensi') ? 'num' : '';
+    return `<th class="${cls}" style="cursor:pointer" onclick="setMonSort('${k}')">${label}${arrow}</th>`;
+  }).join('');
+  const body = rows.map(r=>`<tr>
+    <td>${r.tgl_kontak||'-'}</td>
+    <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+    <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
+    <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
+    <td>${esc(r.status_deal)||'-'}</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.potensi)}</td>
+    <td>${r.terisi?'<span class="pill good">Sudah diisi</span>':'<span class="pill bad">Belum diisi</span>'}</td>
+  </tr>`).join('');
+  document.getElementById('mon-table').innerHTML = `<table>
+    <thead><tr>${head}</tr></thead>
+    <tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportMonCSV(){
+  const rows = monFiltered();
+  const head = ['Tgl Kontak','Customer','Instansi','PIC','Status Deal','Potensi','Status Potensi'];
+  const lines = [head.join(',')];
+  rows.forEach(r=>{
+    const vals=[r.tgl_kontak,r.nama,r.instansi,r.pic,r.status_deal,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
+    lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='monitoring-potensi-risepack.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── KPI scorecard (Divisi & Fungsi) ──
+function renderScorecard(d, sumId, tblId){
+  const lblClass = d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
+  document.getElementById(sumId).innerHTML=`
+    ${kpiCard('a-orange','🏆','Total KPI',d.total_kpi+' / 6',`<span class="muted">skor tertimbang</span>`)}
+    ${kpiCard('a-green','📊','Total Achievement',d.total_ach+'%',`<span class="pill ${lblClass}">${esc(d.label)}</span>`)}
+    ${kpiCard('a-blue','📅','Periode',fmtInt(d.months)+' bulan',`<span class="muted">${d.sales?('Sales: '+esc(d.sales)):'rentang terpilih'}</span>`)}`;
+  const fmtVal=(v,u)=> u==='Rp'?formatRp(v):(u==='%'?(v+'%'):(u==='x'?(v+'x'):(fmtInt(v)+(u?(' '+u):''))));
+  const body=d.rows.map((r,i)=>{
+    const col=r.score>=5?'var(--green)':(r.score>=3?'var(--amber)':'var(--red)');
+    return `<tr>
+      <td>${i+1}</td>
+      <td style="font-weight:500">${esc(r.name)}<div class="muted">${esc(r.note)}</div></td>
+      <td class="num">${r.weight}%</td>
+      <td class="num">${fmtVal(r.target,r.unit)}</td>
+      <td class="num" style="font-weight:600">${fmtVal(r.actual,r.unit)}</td>
+      <td class="num" style="color:${col};font-weight:600">${r.ach}%</td>
+      <td class="num"><span style="display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700">${r.score}</span></td>
+      <td class="num" style="font-weight:600">${r.weighted.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById(tblId).innerHTML=`<table>
+    <thead><tr><th>#</th><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th class="num">Skor</th><th class="num">Weighted</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--border-strong)">
+      <td colspan="5" style="text-align:right;font-weight:700;padding:12px 11px">TOTAL</td>
+      <td class="num" style="font-weight:700">${d.total_ach}%</td>
+      <td></td>
+      <td class="num" style="font-weight:700">${d.total_kpi}</td>
+    </tr></tfoot></table>`;
+}
+async function loadKpiScore(q){ renderScorecard(await fetchJSON('/api/kpi-score?'+q), 'kpi-score-summary', 'kpi-table'); }
+async function loadKpiFungsi(q){
+  const d = await fetchJSON('/api/kpi-fungsi?'+q);
+  if(!d.valid){
+    document.getElementById('fungsi-summary').innerHTML='';
+    document.getElementById('fungsi-table').innerHTML=`<div class="loading">Pilih salah satu sales di filter <b>PIC</b> di atas: ${(d.sales_list||[]).map(esc).join(' · ')}</div>`;
+    return;
+  }
+  renderScorecard(d, 'fungsi-summary', 'fungsi-table');
+}
+async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-marketing?'+q), 'marketing-summary', 'marketing-table'); }
+
+// ── Bonus Achievement Sales ──
+const BON={rows:[],term:'',key:'tgl_pelunasan',dir:'desc'};
+const BON_COLS=[['nama','Nama','str'],['sko','SKO','str'],['nama_produk','Produk','str'],['sumber','Sumber','str'],['pic','PIC','str'],['tgl_pelunasan','Pelunasan','str'],['tgl_jatuh_tempo','Jatuh Tempo','str'],['hari_telat','Hari Telat','num'],['margin','Margin','num'],['bonus','Bonus','num'],['denda','Denda','num'],['net','Net Bonus','num']];
+async function loadBonus(q){ BON.rows=await fetchJSON('/api/bonus?'+q); renderBon(); }
+function onBonSearch(v){ BON.term=v.trim().toLowerCase(); renderBon(); }
+function setBonSort(k){ if(BON.key===k)BON.dir=BON.dir==='asc'?'desc':'asc'; else{BON.key=k;BON.dir='asc';} renderBon(); }
+function bonFiltered(){
+  let rows=BON.rows.slice();
+  if(BON.term) rows=rows.filter(r=>[r.nama,r.sko,r.pic,r.sumber].join(' ').toLowerCase().includes(BON.term));
+  return sortBy(rows,BON.key,BON.dir,(BON_COLS.find(c=>c[0]===BON.key)||[])[2]);
+}
+function renderBon(){
+  const rows=bonFiltered();
+  const tBonus=rows.reduce((s,r)=>s+r.bonus,0), tDenda=rows.reduce((s,r)=>s+r.denda,0), tNet=rows.reduce((s,r)=>s+r.net,0);
+  document.getElementById('bonus-summary').innerHTML=`
+    ${kpiCard('a-green','🏅','Net Bonus',formatRp(tNet),`<span class="muted">${fmtInt(rows.length)} order lunas</span>`)}
+    ${kpiCard('a-blue','💰','Total Bonus',formatRp(tBonus),`<span class="muted">sebelum denda</span>`)}
+    ${kpiCard('a-orange','⚠️','Total Denda',formatRp(tDenda),`<span class="muted">potongan telat bayar</span>`)}`;
+  document.getElementById('bonus-count').textContent=`${rows.length} baris`;
+  const body=rows.map(r=>{
+    const late=r.hari_telat>0;
+    return `<tr>
+      <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
+      <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+      <td title="${esc(r.nama_produk,1)}" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.nama_produk)||'-'}</td>
+      <td>${esc(r.sumber)||'-'}</td>
+      <td>${esc(r.pic)||'-'}</td>
+      <td>${r.tgl_pelunasan||'-'}</td>
+      <td>${r.tgl_jatuh_tempo||'-'}</td>
+      <td class="num" style="color:${late?'var(--red)':'var(--ink-3)'}">${r.hari_telat}</td>
+      <td class="num">${formatRp(r.margin)}</td>
+      <td class="num">${formatRp(r.bonus)}</td>
+      <td class="num" style="color:${r.denda>0?'var(--red)':'var(--ink-3)'}">${r.denda?formatRp(r.denda):'–'}</td>
+      <td class="num" style="font-weight:700;color:var(--green)">${formatRp(r.net)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('bonus-table').innerHTML=`<table style="min-width:1220px"><thead><tr>${sortHead(BON_COLS,BON,'setBonSort')}</tr></thead><tbody>${body||'<tr><td colspan="12" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+}
+function exportBonCSV(){
+  const rows=bonFiltered();
+  const lines=[BON_COLS.map(c=>c[1]).join(',')];
+  rows.forEach(r=>{
+    const vals=[r.nama,r.sko,r.nama_produk,r.sumber,r.pic,r.tgl_pelunasan,r.tgl_jatuh_tempo,r.hari_telat,r.margin,r.bonus,r.denda,r.net];
+    lines.push(vals.map(v=>{v=(v==null?'':String(v));return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}).join(','));
+  });
+  const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='bonus-sales-risepack.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Helpers ──
+function barH(id,labels,data,color){
+  renderChart(id,'bar',{labels,datasets:[{label:'Omzet',data,backgroundColor:color,borderRadius:5,maxBarThickness:22}]},{
+    indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Omzet: ${formatRp(c.parsed.x)}`}}},
+    scales:{x:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},y:{grid:{display:false}}}});
+}
+function renderChart(id,type,data,options={}){
+  if(charts[id]) charts[id].destroy();
+  const ctx=document.getElementById(id).getContext('2d');
+  charts[id]=new Chart(ctx,{type,data,options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{font:{size:11.5}}},tooltip:{backgroundColor:'#2a211b',padding:10,cornerRadius:8,titleFont:{weight:'600'}}},...options}});
+}
+function formatRp(n){ if(!n) return 'Rp 0'; if(n>=1e9) return 'Rp '+(n/1e9).toFixed(1)+' M'; if(n>=1e6) return 'Rp '+(n/1e6).toFixed(1)+' jt'; return 'Rp '+Number(n).toLocaleString('id-ID'); }
+function formatRpShort(n){ if(n>=1e9) return (n/1e9).toFixed(1)+'M'; if(n>=1e6) return (n/1e6).toFixed(0)+'jt'; return n; }
+function formatRpFull(n){ return 'Rp '+Number(n||0).toLocaleString('id-ID'); }
+function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
+</script>
+</body>
+</html>
