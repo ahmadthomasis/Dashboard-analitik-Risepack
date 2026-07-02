@@ -1179,7 +1179,7 @@ def api_ontime():
     try:
         view = query(f"""
             SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
-                   MAX(o.jenis_bahan) AS jenis, MAX(o.vendor) AS vendor,
+                   MAX(o.jenis_bahan) AS jenis,
                    MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
             FROM order_risepack o
             WHERE {' AND '.join(vcond)}
