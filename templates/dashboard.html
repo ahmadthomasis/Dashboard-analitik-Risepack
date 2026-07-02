@@ -376,11 +376,19 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         </div>
 
         <div id="prodview-infull" style="display:none">
-          <div class="kpi-grid" id="deliv-if-cards" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
-          <div class="card"><h3>Tren In Full Delivery</h3><div class="ch-sub">% order dikirim lengkap (qty kirim ≥ qty pesan), per bulan pengiriman</div><div class="chart-wrap"><canvas id="c-if-trend"></canvas></div></div>
+          <div class="kpi-grid" id="deliv-if-cards" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-bottom:14px"><div class="loading">Memuat…</div></div>
+          <div class="grid-2">
+            <div class="card"><h3>Tren In Full Delivery</h3><div class="ch-sub">% order dikirim lengkap per bulan pengiriman</div><div class="chart-wrap" style="height:210px"><canvas id="c-if-trend"></canvas></div></div>
+            <div class="card"><h3>In Full per Jenis Produk</h3><div class="ch-sub">Total order · In Full vs Kurang · per jenis_bahan</div><div class="chart-wrap" style="height:210px"><canvas id="c-if-type"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>In Full per Vendor</h3><div class="ch-sub">Total order per vendor · In Full (hijau) vs Kurang (oranye) · maks 12 vendor</div><div class="chart-wrap" style="height:270px"><canvas id="c-if-vendor"></canvas></div></div>
           <div class="card" style="margin-top:15px">
             <h3>Order Kurang / Belum Dikirim</h3>
-            <div class="ch-sub">Basis: semua order Selesai Produksi · yang belum ada surat jalan = belum dikirim</div>
+            <div class="ch-sub">Basis: semua order Selesai Produksi · belum ada surat jalan = belum dikirim</div>
+            <div class="toolbar" style="margin:12px 0 6px">
+              <input id="if-search" type="text" placeholder="🔎 Cari SKO / produk / PIC / vendor…" oninput="onIfSearch(this.value)">
+              <span class="muted" id="if-count"></span>
+            </div>
             <div class="table-wrap" id="if-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
@@ -803,25 +811,65 @@ async function loadInfull(q){
    +kpiCard('a-orange','📉','Kurang Kirim',fmtInt(IF.kurang),`<span class="muted">qty kirim < qty pesan</span>`)
    +kpiCard('a-amber','🚚','Belum Dikirim',fmtInt(IF.belum),`<span class="muted">selesai produksi, belum ada surat jalan</span>`)
    +kpiCard('a-brown','🏭','Selesai Produksi',fmtInt(IF.total),`<span class="muted">total order (denominator)</span>`);
-  renderChart('c-if-trend','line',{labels:tr.map(t=>t.bulan),
-    datasets:[{label:'% In Full',data:tr.map(t=>t.if_pct),borderColor:'#e9852b',backgroundColor:'#e9852b22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+  const oneMonth=tr.length<=1;
+  renderChart('c-if-trend',oneMonth?'bar':'line',{labels:tr.map(t=>t.bulan),
+    datasets:[oneMonth
+      ? {label:'% In Full',data:tr.map(t=>t.if_pct),backgroundColor:'#e9852b',borderRadius:8,maxBarThickness:70}
+      : {label:'% In Full',data:tr.map(t=>t.if_pct),borderColor:'#e9852b',backgroundColor:'#e9852b22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
     {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`In Full: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
-  const short=d.rows.filter(r=>r.if_status==='Kurang'||r.if_status==='Belum Dikirim')
-                    .sort((a,b)=>(a.if_status==='Kurang'?0:1)-(b.if_status==='Kurang'?0:1));
-  document.getElementById('if-table').innerHTML=`<table style="min-width:820px"><thead><tr>
-      <th>SKO</th><th>Customer</th><th>Produk</th><th>PIC</th><th class="num">Dipesan</th><th class="num">Dikirim</th><th class="num">Kurang</th><th>Status</th>
+  const bt=d.by_type||[];
+  const dsT=[
+    {label:'In Full',data:bt.map(t=>t.in_full),backgroundColor:'#2f9e6f',stack:'s',maxBarThickness:80},
+    {label:'Kurang',data:bt.map(t=>t.kurang),backgroundColor:'#e9852b',stack:'s',maxBarThickness:80},
+  ];
+  if(bt.some(t=>t.belum>0)) dsT.push({label:'Belum dikirim',data:bt.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'s',maxBarThickness:80});
+  renderChart('c-if-type','bar',{labels:bt.map(t=>t.jenis),datasets:dsT},{
+    plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.y)}`,
+        afterbody:it=>{const t=bt[it[0].dataIndex];return `Total ${fmtInt(t.total)} · In Full ${t.total?Math.round(t.in_full/t.total*100):0}%`;}}}},
+    scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}}}});
+  const bv=(d.by_vendor||[]).filter(t=>t.vendor&&t.vendor!=='(tanpa vendor)');
+  if(!bv.length){
+    if(charts['c-if-vendor']){charts['c-if-vendor'].destroy(); delete charts['c-if-vendor'];}
+    setMsg('c-if-vendor','Data vendor belum tersedia');
+  } else {
+    setMsg('c-if-vendor',null);
+    const dsV=[
+      {label:'In Full',data:bv.map(t=>t.in_full),backgroundColor:'#2f9e6f',stack:'v',maxBarThickness:20},
+      {label:'Kurang',data:bv.map(t=>t.kurang),backgroundColor:'#e9852b',stack:'v',maxBarThickness:20},
+    ];
+    if(bv.some(t=>t.belum>0)) dsV.push({label:'Belum dikirim',data:bv.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'v',maxBarThickness:20});
+    renderChart('c-if-vendor','bar',{labels:bv.map(t=>t.vendor),datasets:dsV},{
+      indexAxis:'y',
+      plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.x)}`,
+          afterbody:it=>{const t=bv[it[0].dataIndex];return `Total ${fmtInt(t.total)} · In Full ${t.total?Math.round(t.in_full/t.total*100):0}%`;}}}},
+      scales:{x:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},y:{stacked:true,grid:{display:false}}}});
+  }
+  IFT.rows=d.rows.filter(r=>r.if_status==='Kurang'||r.if_status==='Belum Dikirim')
+                 .sort((a,b)=>(a.if_status==='Kurang'?0:1)-(b.if_status==='Kurang'?0:1));
+  renderIfTable();
+}
+const IFT={rows:[],term:''};
+function onIfSearch(v){ IFT.term=(v||'').trim().toLowerCase(); renderIfTable(); }
+function renderIfTable(){
+  let rows=IFT.rows;
+  if(IFT.term) rows=rows.filter(r=>[r.sko,r.produk,r.pic,r.vendor,r.if_status].map(x=>x||'').join(' ').toLowerCase().includes(IFT.term));
+  const cnt=document.getElementById('if-count'); if(cnt) cnt.textContent=`${rows.length} order`;
+  document.getElementById('if-table').innerHTML=`<table style="min-width:900px"><thead><tr>
+      <th>SKO</th><th>Produk</th><th>PIC</th><th>Vendor</th><th class="num">Dipesan</th><th class="num">Dikirim</th><th class="num">Kurang</th><th>Status</th>
     </tr></thead><tbody>${
-      short.length? short.map(r=>`<tr>
+      rows.length? rows.map(r=>`<tr>
         <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
-        <td>${esc(r.customer)||'-'}</td>
         <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
         <td>${esc(r.pic)||'-'}</td>
+        <td>${esc(r.vendor)||'-'}</td>
         <td class="num">${fmtInt(r.qty_dipesan)}</td>
         <td class="num">${r.qty_dikirim!=null?fmtInt(r.qty_dikirim):'–'}</td>
         <td class="num" style="color:var(--red);font-weight:600">${r.kurang!=null?fmtInt(r.kurang):(r.if_status==='Belum Dikirim'?fmtInt(r.qty_dipesan):'–')}</td>
         <td><span class="pill ${r.if_status==='Kurang'?'warn':''}">${esc(r.if_status)}</span></td>
-      </tr>`).join('') : '<tr><td colspan="8" class="loading">Semua order terkirim lengkap 🎉</td></tr>'
+      </tr>`).join('') : `<tr><td colspan="8" class="loading">${IFT.term?'Tidak ada yang cocok':'Semua order terkirim lengkap 🎉'}</td></tr>`
     }</tbody></table>`;
 }
 
