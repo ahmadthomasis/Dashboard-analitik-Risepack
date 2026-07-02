@@ -365,8 +365,12 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           </div>
           <div class="card" style="margin-top:15px"><h3>Ontime per Vendor</h3><div class="ch-sub">Total SPK per vendor · Ontime (hijau) vs Telat (oranye) · maks 12 vendor</div><div class="chart-wrap" style="height:270px"><canvas id="c-otd-vendor"></canvas></div></div>
           <div class="card" style="margin-top:15px">
-            <h3>Proyek Terlambat</h3>
-            <div class="ch-sub">Tanggal selesai (tb_spks) vs deadline produksi (FAW) · universe = proyek FAW · dimensi Vendor menyusul setelah konfirmasi kolom</div>
+            <h3>Daftar Proyek Produksi</h3>
+            <div class="ch-sub">Tanggal selesai (tb_spks) vs deadline produksi (FAW) · terlambat tampil di atas</div>
+            <div class="toolbar" style="margin:12px 0 6px">
+              <input id="ont-search" type="text" placeholder="🔎 Cari SKO / produk / PIC / vendor…" oninput="onOntSearch(this.value)">
+              <span class="muted" id="ont-count"></span>
+            </div>
             <div class="table-wrap" id="otd-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
@@ -722,18 +726,20 @@ async function loadOntime(q){
    +kpiCard('a-green','⏱️','% Ontime Produksi',pctTxt(d.pct),`<span class="muted">${fmtInt(d.ontime)} tepat / ${fmtInt(d.ontime+d.telat)}</span>`)
    +kpiCard('a-blue','✅','Ontime',fmtInt(d.ontime),d.belum?`<span class="muted">${fmtInt(d.belum)} belum jatuh tempo</span>`:'<span class="muted">selesai ≤ deadline</span>')
    +kpiCard('a-orange','⚠️','Telat',fmtInt(d.telat),d.avg_delay!=null?`<span class="pill warn">rata-rata ${d.avg_delay} hari</span>`:'<span class="muted">—</span>');
-  const tr=d.trend;
-  renderChart('c-otd-trend','line',{labels:tr.map(t=>t.bulan),
-    datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),borderColor:'#2f9e6f',backgroundColor:'#2f9e6f22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+  const tr=d.trend, oneMonth=tr.length<=1;
+  renderChart('c-otd-trend',oneMonth?'bar':'line',{labels:tr.map(t=>t.bulan),
+    datasets:[oneMonth
+      ? {label:'% Ontime',data:tr.map(t=>t.ot_pct),backgroundColor:'#2f9e6f',borderRadius:8,maxBarThickness:70}
+      : {label:'% Ontime',data:tr.map(t=>t.ot_pct),borderColor:'#2f9e6f',backgroundColor:'#2f9e6f22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
     {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Ontime: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
   const bt=d.by_type||[];
   const hasBelum=bt.some(t=>t.belum>0);
   const dsType=[
-    {label:'Ontime',data:bt.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'s',borderRadius:{topLeft:0,topRight:0},maxBarThickness:46},
-    {label:'Telat',data:bt.map(t=>t.telat),backgroundColor:'#e9852b',stack:'s',maxBarThickness:46},
+    {label:'Ontime',data:bt.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'s',maxBarThickness:80},
+    {label:'Telat',data:bt.map(t=>t.telat),backgroundColor:'#e9852b',stack:'s',maxBarThickness:80},
   ];
-  if(hasBelum) dsType.push({label:'Belum jatuh tempo',data:bt.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'s',maxBarThickness:46});
+  if(hasBelum) dsType.push({label:'Belum jatuh tempo',data:bt.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'s',maxBarThickness:80});
   renderChart('c-otd-type','bar',{labels:bt.map(t=>t.jenis),datasets:dsType},{
     plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.y)}`,
@@ -757,11 +763,19 @@ async function loadOntime(q){
           afterbody:it=>{const t=bv[it[0].dataIndex],dd=t.ontime+t.telat;return `Total ${fmtInt(t.total)} · Ontime ${dd?Math.round(t.ontime/dd*100):0}%`;}}}},
       scales:{x:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},y:{stacked:true,grid:{display:false}}}});
   }
-  const rows=d.rows.slice().sort((a,b)=>{
+  ONT.rows=d.rows.slice().sort((a,b)=>{
     const la=a.status&&a.status.indexOf('Terlambat')===0?1:0, lb=b.status&&b.status.indexOf('Terlambat')===0?1:0;
     if(la!==lb) return lb-la;
     return (b.delay??0)-(a.delay??0);
   });
+  renderOntTable();
+}
+const ONT={rows:[],term:''};
+function onOntSearch(v){ ONT.term=(v||'').trim().toLowerCase(); renderOntTable(); }
+function renderOntTable(){
+  let rows=ONT.rows;
+  if(ONT.term) rows=rows.filter(r=>[r.sko,r.produk,r.pic,r.vendor,r.status].map(x=>x||'').join(' ').toLowerCase().includes(ONT.term));
+  const cnt=document.getElementById('ont-count'); if(cnt) cnt.textContent=`${rows.length} proyek`;
   document.getElementById('otd-table').innerHTML=`<table style="min-width:900px"><thead><tr>
       <th>SKO</th><th>Produk</th><th>PIC</th><th>Vendor</th><th>Deadline Produksi</th><th>Tanggal Selesai</th><th class="num">Telat (hari)</th><th>Ontime Produksi</th>
     </tr></thead><tbody>${
@@ -776,7 +790,7 @@ async function loadOntime(q){
           <td>${r.tgl_selesai||'<span class="muted">belum selesai</span>'}</td>
           <td class="num" style="color:${late?'var(--red)':'var(--ink-3)'};font-weight:${late?600:400}">${r.delay!=null?fmtInt(r.delay):'–'}</td>
           <td><span class="pill ${late?'warn':'good'}">${late?'Terlambat':esc(r.status)}</span></td>
-        </tr>`;}).join('') : '<tr><td colspan="8" class="loading">Tidak ada proyek pada periode ini</td></tr>'
+        </tr>`;}).join('') : `<tr><td colspan="8" class="loading">${ONT.term?'Tidak ada yang cocok':'Tidak ada proyek pada periode ini'}</td></tr>`
     }</tbody></table>`;
 }
 
