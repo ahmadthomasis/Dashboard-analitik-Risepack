@@ -1178,6 +1178,7 @@ def api_ontime():
         vparams.append(divisi)
     view = query(f"""
         SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+               MAX(o.jenis_bahan) AS jenis,
                MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
         FROM order_risepack o
         WHERE {' AND '.join(vcond)}
@@ -1197,6 +1198,7 @@ def api_ontime():
     total = ontime = telat = belum = 0
     delay_sum = delay_n = 0
     trend = {}
+    by_type = {}
     rows = []
     for f in faw:
         k = f['sko_key']
@@ -1218,6 +1220,16 @@ def api_ontime():
                 status = 'Terlambat (belum selesai)'; telat += 1
             else:
                 status = 'Belum Jatuh Tempo'; belum += 1; counted = False
+
+        jn = (v.get('jenis') or '(lain)').strip() or '(lain)'
+        bt = by_type.setdefault(jn, {'jenis': jn, 'total': 0, 'ontime': 0, 'telat': 0, 'belum': 0})
+        bt['total'] += 1
+        if status == 'On Time':
+            bt['ontime'] += 1
+        elif status.startswith('Terlambat'):
+            bt['telat'] += 1
+        else:
+            bt['belum'] += 1
         if dl is not None and counted:
             b = dl.strftime('%Y-%m')
             t = trend.setdefault(b, {'n': 0, 'ot': 0})
@@ -1234,11 +1246,14 @@ def api_ontime():
     trend_list = [{'bulan': b, 'ot_pct': round(v['ot'] / v['n'] * 100, 1) if v['n'] else None,
                    'n': v['n']} for b, v in sorted(trend.items())]
 
+    by_type_list = sorted(by_type.values(), key=lambda x: -x['total'])[:12]
+
     return jsonify({
         'total': total, 'ontime': ontime, 'telat': telat, 'belum': belum,
         'pct': round(ontime / (ontime + telat) * 100, 1) if (ontime + telat) else None,
         'avg_delay': round(delay_sum / delay_n, 1) if delay_n else None,
         'trend': trend_list,
+        'by_type': by_type_list,
         'rows': rows[:3000],
     })
 
