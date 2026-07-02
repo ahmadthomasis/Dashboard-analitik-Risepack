@@ -991,7 +991,7 @@ def api_delivery():
                MAX(o.sko_key)     AS sko_key,
                MAX(o.name)        AS pic,
                MAX(o.nama)        AS customer,
-               MAX(o.nama_produk) AS produk,
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk,
                SUM(o.jumlah_produk) AS qty_dipesan
         {BASE}
           AND o.status_order = 'Selesai Produksi'
