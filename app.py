@@ -1176,14 +1176,17 @@ def api_ontime():
     if divisi:
         vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         vparams.append(divisi)
-    view = query(f"""
-        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
-               MAX(o.jenis_bahan) AS jenis, MAX(o.vendor) AS vendor,
-               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
-        FROM order_risepack o
-        WHERE {' AND '.join(vcond)}
-        GROUP BY o.sko_key
-    """, vparams)
+    try:
+        view = query(f"""
+            SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+                   MAX(o.jenis_bahan) AS jenis, MAX(o.vendor) AS vendor,
+                   MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
+            FROM order_risepack o
+            WHERE {' AND '.join(vcond)}
+            GROUP BY o.sko_key
+        """, vparams)
+    except Exception as e:
+        return jsonify({'_error': str(e), 'step': 'view'}), 200
     v_map = {r['sko_key']: r for r in view}
     filtered = bool(pic or divisi)
 
