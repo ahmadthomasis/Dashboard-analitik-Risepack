@@ -991,6 +991,7 @@ def api_delivery():
                MAX(o.sko_key)     AS sko_key,
                MAX(o.name)        AS pic,
                MAX(o.nama)        AS customer,
+               MAX(o.jenis_bahan) AS jenis,
                MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk,
                SUM(o.jumlah_produk) AS qty_dipesan
         {BASE}
@@ -1027,6 +1028,15 @@ def api_delivery():
                 try: cur.execute("SET SESSION max_execution_time=20000")  # MySQL: ms
                 except Exception: pass
             step = 'base';        cur.execute(base_sql, params); base = cur.fetchall()
+            _bk = [b['sko_key'] for b in base if b.get('sko_key')]
+            if _bk:
+                _ph = ','.join(['%s'] * len(_bk))
+                step = 'vendor'
+                cur.execute(f"SELECT sko_key, MAX(vendor_ve) AS vendor FROM tb_spks "
+                            f"WHERE sko_key IN ({_ph}) GROUP BY sko_key", _bk)
+                sv_rows = cur.fetchall()
+            else:
+                sv_rows = []
             step = 'surat_jalan'; cur.execute(sj_sql);           sj_rows = cur.fetchall()
             step = 'faws';        cur.execute(fw_sql);           fw_rows = cur.fetchall()
             cur.close()
@@ -1039,12 +1049,14 @@ def api_delivery():
 
     sj_map = {r['sko']: r for r in sj_rows}
     fw_map = {r['sko_key']: r['deadline'] for r in fw_rows}
+    sv_map = {r['sko_key']: r['vendor'] for r in sv_rows}
 
     data = []
     for b in base:
         sj = sj_map.get(b['sko'])
         data.append({
             'sko': b['sko'], 'pic': b['pic'], 'customer': b['customer'], 'produk': b['produk'],
+            'jenis': b.get('jenis'), 'vendor': sv_map.get(b['sko_key']),
             'qty_dipesan': b['qty_dipesan'],
             'qty_dikirim': sj['qty_dikirim'] if sj else None,
             'tgl_kirim':  sj['tgl_kirim']  if sj else None,
@@ -1068,6 +1080,8 @@ def api_delivery():
     ot_total = ot_ontime = ot_telat = ot_belum = 0
     delay_sum = delay_n = 0
     trend = {}
+    by_type = {}
+    by_vendor = {}
     rows = []
     for r in data:
         qd = float(r['qty_dipesan'] or 0)
@@ -1085,6 +1099,18 @@ def api_delivery():
                 if_status = 'In Full'; if_full += 1
             else:
                 if_status = 'Kurang'; if_kurang += 1
+
+            jn = (r.get('jenis') or '(lain)').strip() or '(lain)'
+            bt = by_type.setdefault(jn, {'jenis': jn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
+            vn = (r.get('vendor') or '(tanpa vendor)').strip() or '(tanpa vendor)'
+            bv = by_vendor.setdefault(vn, {'vendor': vn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
+            bt['total'] += 1; bv['total'] += 1
+            if if_status == 'In Full':
+                bt['in_full'] += 1; bv['in_full'] += 1
+            elif if_status == 'Kurang':
+                bt['kurang'] += 1; bv['kurang'] += 1
+            else:
+                bt['belum'] += 1; bv['belum'] += 1
 
         ot_status = None
         if dl is not None:
@@ -1114,6 +1140,7 @@ def api_delivery():
 
         rows.append({
             'sko': r['sko'], 'pic': r['pic'], 'customer': r['customer'], 'produk': r['produk'],
+            'vendor': r.get('vendor'),
             'qty_dipesan': qd, 'qty_dikirim': qk,
             'kurang': (qd - qk) if (qk is not None and qd > qk) else None,
             'tgl_kirim': fmt_date(r['tgl_kirim']), 'deadline': fmt_date(r['deadline']),
@@ -1126,6 +1153,8 @@ def api_delivery():
                    'ot_pct': round(v['ontime'] / v['dl'] * 100, 1) if v['dl'] else None,
                    'dikirim': v['dikirim']}
                   for b, v in sorted(trend.items())]
+    by_type_list = sorted(by_type.values(), key=lambda x: -x['total'])[:12]
+    by_vendor_list = sorted(by_vendor.values(), key=lambda x: -x['total'])[:12]
 
     return jsonify({
         'in_full': {'total': if_total, 'in_full': if_full, 'kurang': if_kurang, 'belum': if_belum,
@@ -1134,6 +1163,8 @@ def api_delivery():
                     'pct': round(ot_ontime / (ot_ontime + ot_telat) * 100, 1) if (ot_ontime + ot_telat) else None,
                     'avg_delay': round(delay_sum / delay_n, 1) if delay_n else None},
         'trend': trend_list,
+        'by_type': by_type_list,
+        'by_vendor': by_vendor_list,
         'rows': rows[:3000],
     })
 
