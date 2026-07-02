@@ -999,10 +999,7 @@ def api_delivery():
           {cond}
         GROUP BY o.sko
     """
-    base = query(base_sql, params)
-
-    # Tabel kecil di-query terpisah lalu digabung di Python (hindari join berat).
-    sj_rows = query("""
+    sj_sql = """
         SELECT sjd.kode_order AS sko,
                SUM(sjd.quantity)    AS qty_dikirim,
                MAX(s.delivery_date) AS tgl_kirim
@@ -1010,13 +1007,29 @@ def api_delivery():
         JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
         WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
         GROUP BY sjd.kode_order
-    """)
-    fw_rows = query("""
+    """
+    fw_sql = """
         SELECT sko_key, MIN(tgl_deadline) AS deadline
         FROM tb_faws
         WHERE sko_key IS NOT NULL AND tgl_deadline IS NOT NULL
         GROUP BY sko_key
-    """)
+    """
+    # SATU koneksi untuk ketiga query + batas waktu eksekusi (fail-fast, lepas koneksi cepat).
+    conn = mysql.connector.connect(**DB_CONFIG)
+    try:
+        cur = conn.cursor(dictionary=True)
+        try: cur.execute("SET SESSION max_statement_time=20")   # MariaDB: detik
+        except Exception:
+            try: cur.execute("SET SESSION max_execution_time=20000")  # MySQL: ms
+            except Exception: pass
+        cur.execute(base_sql, params); base = cur.fetchall()
+        cur.execute(sj_sql);           sj_rows = cur.fetchall()
+        cur.execute(fw_sql);           fw_rows = cur.fetchall()
+        cur.close()
+    finally:
+        try: conn.close()
+        except Exception: pass
+
     sj_map = {r['sko']: r for r in sj_rows}
     fw_map = {r['sko_key']: r['deadline'] for r in fw_rows}
 
