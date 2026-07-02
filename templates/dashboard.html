@@ -762,8 +762,8 @@ async function loadOntime(q){
     if(la!==lb) return lb-la;
     return (b.delay??0)-(a.delay??0);
   });
-  document.getElementById('otd-table').innerHTML=`<table style="min-width:860px"><thead><tr>
-      <th>SKO</th><th>Produk</th><th>PIC</th><th>Deadline Produksi</th><th>Tanggal Selesai</th><th class="num">Telat (hari)</th><th>Ontime Produksi</th>
+  document.getElementById('otd-table').innerHTML=`<table style="min-width:900px"><thead><tr>
+      <th>SKO</th><th>Produk</th><th>PIC</th><th>Vendor</th><th>Deadline Produksi</th><th>Tanggal Selesai</th><th class="num">Telat (hari)</th><th>Ontime Produksi</th>
     </tr></thead><tbody>${
       rows.length? rows.map(r=>{
         const late=r.status&&r.status.indexOf('Terlambat')===0;
@@ -771,11 +771,12 @@ async function loadOntime(q){
           <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
           <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
           <td>${esc(r.pic)||'-'}</td>
+          <td>${esc(r.vendor)||'-'}</td>
           <td>${r.deadline||'-'}</td>
           <td>${r.tgl_selesai||'<span class="muted">belum selesai</span>'}</td>
           <td class="num" style="color:${late?'var(--red)':'var(--ink-3)'};font-weight:${late?600:400}">${r.delay!=null?fmtInt(r.delay):'–'}</td>
           <td><span class="pill ${late?'warn':'good'}">${late?'Terlambat':esc(r.status)}</span></td>
-        </tr>`;}).join('') : '<tr><td colspan="7" class="loading">Tidak ada proyek pada periode ini</td></tr>'
+        </tr>`;}).join('') : '<tr><td colspan="8" class="loading">Tidak ada proyek pada periode ini</td></tr>'
     }</tbody></table>`;
 }
 
