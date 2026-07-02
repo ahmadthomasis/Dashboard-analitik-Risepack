@@ -359,10 +359,10 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
         <div id="prodview-otd" style="display:none">
           <div class="kpi-grid" id="deliv-otd-cards" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
-          <div class="card"><h3>Tren On Time Delivery</h3><div class="ch-sub">% dikirim tepat waktu (≤ deadline produksi), per bulan pengiriman</div><div class="chart-wrap"><canvas id="c-otd-trend"></canvas></div></div>
+          <div class="card"><h3>Tren Ontime Produksi</h3><div class="ch-sub">% proyek selesai tepat waktu (tgl selesai ≤ deadline produksi), per bulan deadline</div><div class="chart-wrap"><canvas id="c-otd-trend"></canvas></div></div>
           <div class="card" style="margin-top:15px">
-            <h3>Order Telat / Overdue</h3>
-            <div class="ch-sub">Dibanding deadline produksi (FAW) · hanya order ber-deadline · cakupan data terbatas pada order yang punya FAW & surat jalan</div>
+            <h3>Proyek Terlambat</h3>
+            <div class="ch-sub">Tanggal selesai (tb_spks) vs deadline produksi (FAW) · universe = proyek FAW · dimensi Vendor menyusul setelah konfirmasi kolom</div>
             <div class="table-wrap" id="otd-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
@@ -521,7 +521,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
-  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['c-produksi',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadDelivery]] : [['deliv-if-cards',loadDelivery]]);
+  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['c-produksi',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : [['deliv-if-cards',loadInfull]]);
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -709,40 +709,46 @@ async function loadProduksi(q){
     {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
 }
 
-// ── On Time Delivery & In Full Delivery ──
+// ── On Time Produksi (meniru halaman Ontime app) ──
 function pctTxt(v){ return v==null?'–':v+'%'; }
-async function loadDelivery(q){
-  const d=await fetchJSON('/api/delivery?'+q);
-  const OT=d.on_time, IF=d.in_full, tr=d.trend;
-
-  // ── On Time Delivery ──
+async function loadOntime(q){
+  const d=await fetchJSON('/api/ontime?'+q);
   document.getElementById('deliv-otd-cards').innerHTML=
-    kpiCard('a-green','⏱️','On Time Delivery',pctTxt(OT.pct),`<span class="muted">${fmtInt(OT.on_time)} tepat / ${fmtInt(OT.on_time+OT.telat)} order</span>`)
-   +kpiCard('a-orange','⚠️','Telat / Overdue',fmtInt(OT.telat),OT.avg_delay!=null?`<span class="pill warn">rata-rata ${OT.avg_delay} hari</span>`:'<span class="muted">—</span>')
-   +kpiCard('a-blue','⏳','Belum Jatuh Tempo',fmtInt(OT.belum),`<span class="muted">belum kirim, deadline belum lewat</span>`)
-   +kpiCard('a-brown','🎯','Order Ber-deadline',fmtInt(OT.total),`<span class="muted">punya deadline FAW</span>`);
+    kpiCard('a-brown','🏭','Total Project',fmtInt(d.total),`<span class="muted">proyek produksi (FAW)</span>`)
+   +kpiCard('a-green','⏱️','% Ontime Produksi',pctTxt(d.pct),`<span class="muted">${fmtInt(d.ontime)} tepat / ${fmtInt(d.ontime+d.telat)}</span>`)
+   +kpiCard('a-blue','✅','Ontime',fmtInt(d.ontime),d.belum?`<span class="muted">${fmtInt(d.belum)} belum jatuh tempo</span>`:'<span class="muted">selesai ≤ deadline</span>')
+   +kpiCard('a-orange','⚠️','Telat',fmtInt(d.telat),d.avg_delay!=null?`<span class="pill warn">rata-rata ${d.avg_delay} hari</span>`:'<span class="muted">—</span>');
+  const tr=d.trend;
   renderChart('c-otd-trend','line',{labels:tr.map(t=>t.bulan),
-    datasets:[{label:'% On Time',data:tr.map(t=>t.ot_pct),borderColor:'#2f9e6f',backgroundColor:'#2f9e6f22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
-    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`On Time: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
+    datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),borderColor:'#2f9e6f',backgroundColor:'#2f9e6f22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Ontime: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
      scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
-  const late=d.rows.filter(r=>r.ot_status&&r.ot_status.indexOf('Telat')===0)
-                   .sort((a,b)=>(b.delay??-1)-(a.delay??-1));
-  document.getElementById('otd-table').innerHTML=`<table style="min-width:820px"><thead><tr>
-      <th>SKO</th><th>Customer</th><th>Produk</th><th>PIC</th><th>Tgl Kirim</th><th>Deadline</th><th class="num">Telat (hari)</th><th>Status</th>
+  const rows=d.rows.slice().sort((a,b)=>{
+    const la=a.status&&a.status.indexOf('Terlambat')===0?1:0, lb=b.status&&b.status.indexOf('Terlambat')===0?1:0;
+    if(la!==lb) return lb-la;
+    return (b.delay??0)-(a.delay??0);
+  });
+  document.getElementById('otd-table').innerHTML=`<table style="min-width:860px"><thead><tr>
+      <th>SKO</th><th>Produk</th><th>PIC</th><th>Deadline Produksi</th><th>Tanggal Selesai</th><th class="num">Telat (hari)</th><th>Ontime Produksi</th>
     </tr></thead><tbody>${
-      late.length? late.map(r=>`<tr>
-        <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
-        <td>${esc(r.customer)||'-'}</td>
-        <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
-        <td>${esc(r.pic)||'-'}</td>
-        <td>${r.tgl_kirim||'<span class="muted">belum kirim</span>'}</td>
-        <td>${r.deadline||'-'}</td>
-        <td class="num" style="color:var(--red);font-weight:600">${r.delay!=null?fmtInt(r.delay):'–'}</td>
-        <td><span class="pill warn">${esc(r.ot_status)}</span></td>
-      </tr>`).join('') : '<tr><td colspan="8" class="loading">Tidak ada order telat 🎉</td></tr>'
+      rows.length? rows.map(r=>{
+        const late=r.status&&r.status.indexOf('Terlambat')===0;
+        return `<tr>
+          <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+          <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
+          <td>${esc(r.pic)||'-'}</td>
+          <td>${r.deadline||'-'}</td>
+          <td>${r.tgl_selesai||'<span class="muted">belum selesai</span>'}</td>
+          <td class="num" style="color:${late?'var(--red)':'var(--ink-3)'};font-weight:${late?600:400}">${r.delay!=null?fmtInt(r.delay):'–'}</td>
+          <td><span class="pill ${late?'warn':'good'}">${late?'Terlambat':esc(r.status)}</span></td>
+        </tr>`;}).join('') : '<tr><td colspan="7" class="loading">Tidak ada proyek pada periode ini</td></tr>'
     }</tbody></table>`;
+}
 
-  // ── In Full Delivery ──
+// ── In Full Delivery ──
+async function loadInfull(q){
+  const d=await fetchJSON('/api/delivery?'+q);
+  const IF=d.in_full, tr=d.trend;
   document.getElementById('deliv-if-cards').innerHTML=
     kpiCard('a-green','📦','In Full Delivery',pctTxt(IF.pct),`<span class="muted">${fmtInt(IF.in_full)} lengkap / ${fmtInt(IF.total)} order</span>`)
    +kpiCard('a-orange','📉','Kurang Kirim',fmtInt(IF.kurang),`<span class="muted">qty kirim < qty pesan</span>`)
