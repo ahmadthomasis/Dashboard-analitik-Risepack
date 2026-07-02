@@ -739,18 +739,24 @@ async function loadOntime(q){
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.y)}`,
         afterbody:it=>{const t=bt[it[0].dataIndex],d=t.ontime+t.telat;return `Total ${fmtInt(t.total)} · Ontime ${d?Math.round(t.ontime/d*100):0}%`;}}}},
     scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}}}});
-  const bv=d.by_vendor||[];
-  const dsVen=[
-    {label:'Ontime',data:bv.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'v',maxBarThickness:20},
-    {label:'Telat',data:bv.map(t=>t.telat),backgroundColor:'#e9852b',stack:'v',maxBarThickness:20},
-  ];
-  if(bv.some(t=>t.belum>0)) dsVen.push({label:'Belum jatuh tempo',data:bv.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'v',maxBarThickness:20});
-  renderChart('c-otd-vendor','bar',{labels:bv.map(t=>t.vendor),datasets:dsVen},{
-    indexAxis:'y',
-    plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
-      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.x)}`,
-        afterbody:it=>{const t=bv[it[0].dataIndex],dd=t.ontime+t.telat;return `Total ${fmtInt(t.total)} · Ontime ${dd?Math.round(t.ontime/dd*100):0}%`;}}}},
-    scales:{x:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},y:{stacked:true,grid:{display:false}}}});
+  const bv=(d.by_vendor||[]).filter(t=>t.vendor&&t.vendor!=='(tanpa vendor)');
+  if(!bv.length){
+    if(charts['c-otd-vendor']){charts['c-otd-vendor'].destroy(); delete charts['c-otd-vendor'];}
+    setMsg('c-otd-vendor','Kolom vendor belum terhubung — menunggu konfirmasi kolom sumber');
+  } else {
+    setMsg('c-otd-vendor',null);
+    const dsVen=[
+      {label:'Ontime',data:bv.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'v',maxBarThickness:20},
+      {label:'Telat',data:bv.map(t=>t.telat),backgroundColor:'#e9852b',stack:'v',maxBarThickness:20},
+    ];
+    if(bv.some(t=>t.belum>0)) dsVen.push({label:'Belum jatuh tempo',data:bv.map(t=>t.belum),backgroundColor:'#b8a89a',stack:'v',maxBarThickness:20});
+    renderChart('c-otd-vendor','bar',{labels:bv.map(t=>t.vendor),datasets:dsVen},{
+      indexAxis:'y',
+      plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.x)}`,
+          afterbody:it=>{const t=bv[it[0].dataIndex],dd=t.ontime+t.telat;return `Total ${fmtInt(t.total)} · Ontime ${dd?Math.round(t.ontime/dd*100):0}%`;}}}},
+      scales:{x:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},y:{stacked:true,grid:{display:false}}}});
+  }
   const rows=d.rows.slice().sort((a,b)=>{
     const la=a.status&&a.status.indexOf('Terlambat')===0?1:0, lb=b.status&&b.status.indexOf('Terlambat')===0?1:0;
     if(la!==lb) return lb-la;
