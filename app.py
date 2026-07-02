@@ -985,38 +985,51 @@ def api_delivery():
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
-    sql = f"""
-        SELECT
-            o.sko,
-            MAX(o.name)        AS pic,
-            MAX(o.nama)        AS customer,
-            MAX(o.nama_produk) AS produk,
-            SUM(o.jumlah_produk) AS qty_dipesan,
-            MAX(sj.qty_dikirim)  AS qty_dikirim,
-            MAX(sj.tgl_kirim)    AS tgl_kirim,
-            MAX(fw.deadline)     AS deadline
-        FROM order_risepack o
-        LEFT JOIN (
-            SELECT sjd.kode_order,
-                   SUM(sjd.quantity)     AS qty_dikirim,
-                   MAX(s.delivery_date)  AS tgl_kirim
-            FROM tb_surat_jalan_detail sjd
-            JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
-            WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
-            GROUP BY sjd.kode_order
-        ) sj ON sj.kode_order = o.sko
-        LEFT JOIN (
-            SELECT sko_key, MIN(tgl_deadline) AS deadline
-            FROM tb_faws WHERE sko_key IS NOT NULL AND tgl_deadline IS NOT NULL
-            GROUP BY sko_key
-        ) fw ON fw.sko_key = o.sko_key
-        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
+    # Query view SENDIRIAN (mergeable, cepat) — jangan join view dgn tabel lain.
+    base_sql = f"""
+        SELECT o.sko,
+               MAX(o.sko_key)     AS sko_key,
+               MAX(o.name)        AS pic,
+               MAX(o.nama)        AS customer,
+               MAX(o.nama_produk) AS produk,
+               SUM(o.jumlah_produk) AS qty_dipesan
+        {BASE}
           AND o.status_order = 'Selesai Produksi'
           AND o.sko IS NOT NULL
           {cond}
         GROUP BY o.sko
     """
-    data = query(sql, params)
+    base = query(base_sql, params)
+
+    # Tabel kecil di-query terpisah lalu digabung di Python (hindari join berat).
+    sj_rows = query("""
+        SELECT sjd.kode_order AS sko,
+               SUM(sjd.quantity)    AS qty_dikirim,
+               MAX(s.delivery_date) AS tgl_kirim
+        FROM tb_surat_jalan_detail sjd
+        JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
+        WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
+        GROUP BY sjd.kode_order
+    """)
+    fw_rows = query("""
+        SELECT sko_key, MIN(tgl_deadline) AS deadline
+        FROM tb_faws
+        WHERE sko_key IS NOT NULL AND tgl_deadline IS NOT NULL
+        GROUP BY sko_key
+    """)
+    sj_map = {r['sko']: r for r in sj_rows}
+    fw_map = {r['sko_key']: r['deadline'] for r in fw_rows}
+
+    data = []
+    for b in base:
+        sj = sj_map.get(b['sko'])
+        data.append({
+            'sko': b['sko'], 'pic': b['pic'], 'customer': b['customer'], 'produk': b['produk'],
+            'qty_dipesan': b['qty_dipesan'],
+            'qty_dikirim': sj['qty_dikirim'] if sj else None,
+            'tgl_kirim':  sj['tgl_kirim']  if sj else None,
+            'deadline':   fw_map.get(b['sko_key']),
+        })
 
     today = datetime.now().date()
     def to_date(v):
