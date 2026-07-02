@@ -973,6 +973,137 @@ def api_kpi_marketing():
                     'label': label, 'months': nmonths,
                     'adspend': adspend, 'omzet_new': omzet_new})
 
+@app.route('/api/delivery')
+@login_required
+def api_delivery():
+    """On Time Delivery & In Full Delivery.
+       Universe : order 'Selesai Produksi'.
+       Deadline : tb_faws.tgl_deadline (deadline produksi)  -> join sko_key.
+       Qty kirim: tb_surat_jalan_detail.quantity            -> join kode_order = sko.
+       Tgl kirim: tb_surat_jalan.delivery_date.
+       On time  = tgl kirim <= deadline.  In full = qty dikirim >= qty dipesan."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+
+    sql = f"""
+        SELECT
+            o.sko,
+            MAX(o.name)        AS pic,
+            MAX(o.nama)        AS customer,
+            MAX(o.nama_produk) AS produk,
+            SUM(o.jumlah_produk) AS qty_dipesan,
+            MAX(sj.qty_dikirim)  AS qty_dikirim,
+            MAX(sj.tgl_kirim)    AS tgl_kirim,
+            MAX(fw.deadline)     AS deadline
+        FROM order_risepack o
+        LEFT JOIN (
+            SELECT sjd.kode_order,
+                   SUM(sjd.quantity)     AS qty_dikirim,
+                   MAX(s.delivery_date)  AS tgl_kirim
+            FROM tb_surat_jalan_detail sjd
+            JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
+            WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
+            GROUP BY sjd.kode_order
+        ) sj ON sj.kode_order = o.sko
+        LEFT JOIN (
+            SELECT sko_key, MIN(tgl_deadline) AS deadline
+            FROM tb_faws WHERE sko_key IS NOT NULL AND tgl_deadline IS NOT NULL
+            GROUP BY sko_key
+        ) fw ON fw.sko_key = o.sko_key
+        WHERE (o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)
+          AND o.status_order = 'Selesai Produksi'
+          AND o.sko IS NOT NULL
+          {cond}
+        GROUP BY o.sko
+    """
+    data = query(sql, params)
+
+    today = datetime.now().date()
+    def to_date(v):
+        if v is None:
+            return None
+        if isinstance(v, datetime):
+            return v.date()
+        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'):
+            return v
+        try:
+            return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
+        except Exception:
+            return None
+
+    if_total = if_full = if_kurang = if_belum = 0
+    ot_total = ot_ontime = ot_telat = ot_belum = 0
+    delay_sum = delay_n = 0
+    trend = {}
+    rows = []
+    for r in data:
+        qd = float(r['qty_dipesan'] or 0)
+        qk = r['qty_dikirim']
+        qk = float(qk) if qk is not None else None
+        tk = to_date(r['tgl_kirim'])
+        dl = to_date(r['deadline'])
+
+        if_status = None
+        if qd > 0:
+            if_total += 1
+            if qk is None or qk <= 0:
+                if_status = 'Belum Dikirim'; if_belum += 1
+            elif qk >= qd:
+                if_status = 'In Full'; if_full += 1
+            else:
+                if_status = 'Kurang'; if_kurang += 1
+
+        ot_status = None
+        if dl is not None:
+            ot_total += 1
+            if tk is not None:
+                if tk <= dl:
+                    ot_status = 'On Time'; ot_ontime += 1
+                else:
+                    ot_status = 'Telat'; ot_telat += 1
+                    delay_sum += (tk - dl).days; delay_n += 1
+            else:
+                if dl < today:
+                    ot_status = 'Telat (belum kirim)'; ot_telat += 1
+                else:
+                    ot_status = 'Belum Jatuh Tempo'; ot_belum += 1
+
+        if tk is not None:
+            bl = tk.strftime('%Y-%m')
+            t = trend.setdefault(bl, {'dikirim': 0, 'if_full': 0, 'dl': 0, 'ontime': 0})
+            t['dikirim'] += 1
+            if qd > 0 and qk is not None and qk >= qd:
+                t['if_full'] += 1
+            if dl is not None:
+                t['dl'] += 1
+                if tk <= dl:
+                    t['ontime'] += 1
+
+        rows.append({
+            'sko': r['sko'], 'pic': r['pic'], 'customer': r['customer'], 'produk': r['produk'],
+            'qty_dipesan': qd, 'qty_dikirim': qk,
+            'kurang': (qd - qk) if (qk is not None and qd > qk) else None,
+            'tgl_kirim': fmt_date(r['tgl_kirim']), 'deadline': fmt_date(r['deadline']),
+            'if_status': if_status, 'ot_status': ot_status,
+            'delay': ((tk - dl).days if (tk and dl and tk > dl) else None),
+        })
+
+    trend_list = [{'bulan': b,
+                   'if_pct': round(v['if_full'] / v['dikirim'] * 100, 1) if v['dikirim'] else None,
+                   'ot_pct': round(v['ontime'] / v['dl'] * 100, 1) if v['dl'] else None,
+                   'dikirim': v['dikirim']}
+                  for b, v in sorted(trend.items())]
+
+    return jsonify({
+        'in_full': {'total': if_total, 'in_full': if_full, 'kurang': if_kurang, 'belum': if_belum,
+                    'pct': round(if_full / if_total * 100, 1) if if_total else None},
+        'on_time': {'total': ot_total, 'on_time': ot_ontime, 'telat': ot_telat, 'belum': ot_belum,
+                    'pct': round(ot_ontime / (ot_ontime + ot_telat) * 100, 1) if (ot_ontime + ot_telat) else None,
+                    'avg_delay': round(delay_sum / delay_n, 1) if delay_n else None},
+        'trend': trend_list,
+        'rows': rows[:3000],
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
