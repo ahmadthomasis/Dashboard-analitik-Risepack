@@ -1015,20 +1015,27 @@ def api_delivery():
         GROUP BY sko_key
     """
     # SATU koneksi untuk ketiga query + batas waktu eksekusi (fail-fast, lepas koneksi cepat).
-    conn = mysql.connector.connect(**DB_CONFIG)
+    # DIAGNOSTIK SEMENTARA: tangkap error asli + langkah mana yang gagal.
+    import time as _t
+    step, t0 = 'connect', _t.time()
     try:
-        cur = conn.cursor(dictionary=True)
-        try: cur.execute("SET SESSION max_statement_time=20")   # MariaDB: detik
-        except Exception:
-            try: cur.execute("SET SESSION max_execution_time=20000")  # MySQL: ms
+        conn = mysql.connector.connect(**DB_CONFIG)
+        try:
+            cur = conn.cursor(dictionary=True)
+            try: cur.execute("SET SESSION max_statement_time=20")       # MariaDB: detik
+            except Exception:
+                try: cur.execute("SET SESSION max_execution_time=20000")  # MySQL: ms
+                except Exception: pass
+            step = 'base';        cur.execute(base_sql, params); base = cur.fetchall()
+            step = 'surat_jalan'; cur.execute(sj_sql);           sj_rows = cur.fetchall()
+            step = 'faws';        cur.execute(fw_sql);           fw_rows = cur.fetchall()
+            cur.close()
+        finally:
+            try: conn.close()
             except Exception: pass
-        cur.execute(base_sql, params); base = cur.fetchall()
-        cur.execute(sj_sql);           sj_rows = cur.fetchall()
-        cur.execute(fw_sql);           fw_rows = cur.fetchall()
-        cur.close()
-    finally:
-        try: conn.close()
-        except Exception: pass
+    except Exception as e:
+        return jsonify({'_error': str(e), 'step': step,
+                        'detik': round(_t.time() - t0, 1)}), 200
 
     sj_map = {r['sko']: r for r in sj_rows}
     fw_map = {r['sko_key']: r['deadline'] for r in fw_rows}
