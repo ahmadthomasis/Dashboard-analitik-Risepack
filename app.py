@@ -1137,6 +1137,111 @@ def api_delivery():
         'rows': rows[:3000],
     })
 
+@app.route('/api/ontime')
+@login_required
+def api_ontime():
+    """On Time PRODUKSI — meniru halaman 'Ontime' di app.
+       Universe : proyek FAW (SKO ber-deadline), difilter berdasar tgl_deadline dalam periode.
+       Deadline : tb_faws.tgl_deadline (produksi).
+       Selesai  : tb_spks.tgl_selesai_all.
+       On time  = tgl_selesai_all <= tgl_deadline. Belum selesai & lewat deadline = telat."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+
+    # 1) FAW = universe + deadline produksi (filter periode by tgl_deadline)
+    fcond, fparams = ["f.sko_key IS NOT NULL", "f.tgl_deadline IS NOT NULL"], []
+    if tgl_dari:  fcond.append("f.tgl_deadline >= %s"); fparams.append(tgl_dari)
+    if tgl_sampai: fcond.append("f.tgl_deadline <= %s"); fparams.append(tgl_sampai)
+    faw = query(f"""
+        SELECT f.sko_key, MIN(f.tgl_deadline) AS deadline
+        FROM tb_faws f
+        WHERE {' AND '.join(fcond)}
+        GROUP BY f.sko_key
+    """, fparams)
+    keys = [r['sko_key'] for r in faw]
+    if not keys:
+        return jsonify({'total': 0, 'ontime': 0, 'telat': 0, 'belum': 0,
+                        'pct': None, 'avg_delay': None, 'trend': [], 'rows': []})
+
+    ph = ','.join(['%s'] * len(keys))
+    # 2) tb_spks = tanggal selesai per sko_key
+    spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS tgl_selesai "
+                 f"FROM tb_spks WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
+    sp_map = {r['sko_key']: r['tgl_selesai'] for r in spks}
+
+    # 3) label (SKO, produk, PIC) dari view + filter pic/divisi
+    vcond = [f"o.sko_key IN ({ph})"]
+    vparams = list(keys)
+    if pic:
+        vcond.append("o.name = %s"); vparams.append(pic)
+    if divisi:
+        vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        vparams.append(divisi)
+    view = query(f"""
+        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
+        FROM order_risepack o
+        WHERE {' AND '.join(vcond)}
+        GROUP BY o.sko_key
+    """, vparams)
+    v_map = {r['sko_key']: r for r in view}
+    filtered = bool(pic or divisi)
+
+    today = datetime.now().date()
+    def to_date(v):
+        if v is None: return None
+        if isinstance(v, datetime): return v.date()
+        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'): return v
+        try: return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
+        except Exception: return None
+
+    total = ontime = telat = belum = 0
+    delay_sum = delay_n = 0
+    trend = {}
+    rows = []
+    for f in faw:
+        k = f['sko_key']
+        if filtered and k not in v_map:
+            continue
+        dl = to_date(f['deadline'])
+        sel = to_date(sp_map.get(k))
+        v = v_map.get(k, {})
+        total += 1
+        counted = True
+        if sel is not None:
+            if sel <= dl:
+                status = 'On Time'; ontime += 1
+            else:
+                status = 'Terlambat'; telat += 1
+                delay_sum += (sel - dl).days; delay_n += 1
+        else:
+            if dl is not None and dl < today:
+                status = 'Terlambat (belum selesai)'; telat += 1
+            else:
+                status = 'Belum Jatuh Tempo'; belum += 1; counted = False
+        if dl is not None and counted:
+            b = dl.strftime('%Y-%m')
+            t = trend.setdefault(b, {'n': 0, 'ot': 0})
+            t['n'] += 1
+            if status == 'On Time':
+                t['ot'] += 1
+        rows.append({
+            'sko': v.get('sko'), 'pic': v.get('pic'), 'produk': v.get('produk'),
+            'deadline': fmt_date(f['deadline']), 'tgl_selesai': fmt_date(sp_map.get(k)),
+            'status': status,
+            'delay': ((sel - dl).days if (sel and dl and sel > dl) else None),
+        })
+
+    trend_list = [{'bulan': b, 'ot_pct': round(v['ot'] / v['n'] * 100, 1) if v['n'] else None,
+                   'n': v['n']} for b, v in sorted(trend.items())]
+
+    return jsonify({
+        'total': total, 'ontime': ontime, 'telat': telat, 'belum': belum,
+        'pct': round(ontime / (ontime + telat) * 100, 1) if (ontime + telat) else None,
+        'avg_delay': round(delay_sum / delay_n, 1) if delay_n else None,
+        'trend': trend_list,
+        'rows': rows[:3000],
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
