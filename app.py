@@ -1163,10 +1163,10 @@ def api_ontime():
                         'pct': None, 'avg_delay': None, 'trend': [], 'rows': []})
 
     ph = ','.join(['%s'] * len(keys))
-    # 2) tb_spks = tanggal selesai per sko_key
-    spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS tgl_selesai "
+    # 2) tb_spks = tanggal selesai (tgl_selesai_all) + vendor (vendor_ve) per sko_key
+    spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS tgl_selesai, MAX(vendor_ve) AS vendor "
                  f"FROM tb_spks WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
-    sp_map = {r['sko_key']: r['tgl_selesai'] for r in spks}
+    sp_map = {r['sko_key']: r for r in spks}
 
     # 3) label (SKO, produk, PIC) dari view + filter pic/divisi
     vcond = [f"o.sko_key IN ({ph})"]
@@ -1208,8 +1208,9 @@ def api_ontime():
         k = f['sko_key']
         if filtered and k not in v_map:
             continue
+        sp = sp_map.get(k) or {}
         dl = to_date(f['deadline'])
-        sel = to_date(sp_map.get(k))
+        sel = to_date(sp.get('tgl_selesai'))
         v = v_map.get(k, {})
         total += 1
         counted = True
@@ -1227,7 +1228,7 @@ def api_ontime():
 
         jn = (v.get('jenis') or '(lain)').strip() or '(lain)'
         bt = by_type.setdefault(jn, {'jenis': jn, 'total': 0, 'ontime': 0, 'telat': 0, 'belum': 0})
-        vn = (v.get('vendor') or '(tanpa vendor)').strip() or '(tanpa vendor)'
+        vn = (sp.get('vendor') or '(tanpa vendor)').strip() or '(tanpa vendor)'
         bv = by_vendor.setdefault(vn, {'vendor': vn, 'total': 0, 'ontime': 0, 'telat': 0, 'belum': 0})
         bt['total'] += 1; bv['total'] += 1
         if status == 'On Time':
@@ -1244,7 +1245,8 @@ def api_ontime():
                 t['ot'] += 1
         rows.append({
             'sko': v.get('sko'), 'pic': v.get('pic'), 'produk': v.get('produk'),
-            'deadline': fmt_date(f['deadline']), 'tgl_selesai': fmt_date(sp_map.get(k)),
+            'vendor': sp.get('vendor'),
+            'deadline': fmt_date(f['deadline']), 'tgl_selesai': fmt_date(sp.get('tgl_selesai')),
             'status': status,
             'delay': ((sel - dl).days if (sel and dl and sel > dl) else None),
         })
