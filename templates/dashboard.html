@@ -99,6 +99,18 @@ main{padding:24px 26px;}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
 .grid-2-wide{display:grid;grid-template-columns:1.5fr 1fr;gap:15px;}
+.ov-row{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr;gap:15px;}
+@media (max-width:1200px){.ov-row{grid-template-columns:1fr 1fr;}}
+@media (max-width:620px){.ov-row{grid-template-columns:1fr;}}
+.ov-card{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--border-strong);border-radius:14px;padding:18px 19px 17px;box-shadow:var(--shadow);display:flex;flex-direction:column;}
+.ov-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.ov-label{font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink-3);font-weight:700;}
+.ov-ic{font-size:17px;line-height:1;}
+.ov-value{font-size:30px;font-weight:800;line-height:1.05;margin-top:12px;color:var(--ink);}
+.ov-brk{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto;padding-top:15px;}
+.ov-chip{background:var(--cream);border:1px solid var(--border);border-radius:9px;padding:5px 11px;font-size:10px;text-transform:uppercase;letter-spacing:.02em;color:var(--ink-3);font-weight:600;line-height:1.3;}
+.ov-chip b{display:block;font-size:14px;color:var(--ink);font-weight:700;text-transform:none;letter-spacing:0;margin-top:2px;}
+.ov-foot{margin-top:auto;padding-top:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3);flex-wrap:wrap;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:19px;box-shadow:var(--shadow);}
 .card h3{font-size:13px;font-weight:700;letter-spacing:-.01em;}
 .card .ch-sub{font-size:11.5px;color:var(--ink-3);margin:2px 0 15px;}
@@ -352,7 +364,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
         </div>
 
         <div id="prodview-status">
-          <div class="kpi-grid" id="ov-cards" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"><div class="loading">Memuat…</div></div>
+          <div id="ov-cards"><div class="loading">Memuat…</div></div>
         </div>
 
         <div id="prodview-otd" style="display:none">
@@ -719,14 +731,36 @@ async function loadTopSales(q){
 async function loadProduksi(q){
   const [ov,ot,dl]=await Promise.all([
     fetchJSON('/api/overview?'+q), fetchJSON('/api/ontime?'+q), fetchJSON('/api/delivery?'+q)]);
-  const cx=n=>n>=1e6?(n/1e6).toFixed(1)+' jt':(n>=1e3?Math.round(n/1e3)+' rb':fmtInt(n));
-  const brk=(ov.by_jenis||[]).slice(0,4).map(x=>`${esc(x.jenis)} ${cx(x.pcs)}`).join(' · ');
+  const cx=n=>n>=1e6?(n/1e6).toFixed(2)+' jt':(n>=1e3?(n/1e3).toFixed(1)+' rb':fmtInt(n));
   const IF=dl.in_full;
-  document.getElementById('ov-cards').innerHTML=
-    kpiCard('a-blue','🏭','Jumlah Produksi (pcs)',fmtInt(ov.total_pcs),`<span class="muted">${brk||'—'}</span>`)
-   +kpiCard('a-green','📋','Total SPK',fmtInt(ov.spk.total),`<span class="muted">${fmtInt(ov.spk.tuntas)} tuntas · ${fmtInt(ov.spk.berjalan)} berjalan</span>`)
-   +kpiCard('a-orange','⏱️','On Time Delivery',fmtInt(ot.ontime),`<span class="pill ${ot.pct>=85?'good':(ot.pct<60?'warn':'')}">${ot.pct==null?'–':ot.pct+'%'} ontime</span>`)
-   +kpiCard('a-amber','📦','In Full Delivery',fmtInt(IF.in_full),`<span class="pill ${IF.pct>=90?'good':''}">${IF.pct==null?'–':IF.pct+'%'} in full</span>`);
+  const chips=(ov.by_jenis||[]).slice(0,4).map(x=>`<div class="ov-chip">${esc(x.jenis)}<b>${cx(x.pcs)}</b></div>`).join('');
+  const otPill=ot.pct==null?'<span class="muted">–</span>':`<span class="pill ${ot.pct>=85?'good':(ot.pct<60?'warn':'')}">${ot.pct}% ontime</span>`;
+  const ifPill=IF.pct==null?'<span class="muted">–</span>':`<span class="pill ${IF.pct>=90?'good':(IF.pct<70?'warn':'')}">${IF.pct}% in full</span>`;
+  document.getElementById('ov-cards').innerHTML=`<div class="ov-row">
+    <div class="ov-card" style="border-top-color:var(--blue)">
+      <div class="ov-top"><span class="ov-label">Jumlah Produksi (pcs)</span><span class="ov-ic">🏭</span></div>
+      <div class="ov-value">${fmtInt(ov.total_pcs)}</div>
+      <div class="ov-brk">${chips||'<span class="muted">—</span>'}</div>
+    </div>
+    <div class="ov-card" style="border-top-color:var(--green)">
+      <div class="ov-top"><span class="ov-label">Total SPK</span><span class="ov-ic">📋</span></div>
+      <div class="ov-value">${fmtInt(ov.spk.total)}</div>
+      <div class="ov-brk">
+        <div class="ov-chip">Tuntas<b style="color:var(--green)">${fmtInt(ov.spk.tuntas)}</b></div>
+        <div class="ov-chip">Berjalan<b style="color:var(--amber)">${fmtInt(ov.spk.berjalan)}</b></div>
+      </div>
+    </div>
+    <div class="ov-card" style="border-top-color:var(--amber)">
+      <div class="ov-top"><span class="ov-label">On Time Delivery</span><span class="ov-ic">⏱️</span></div>
+      <div class="ov-value">${fmtInt(ot.ontime)}</div>
+      <div class="ov-foot">${otPill}<span>dari ${fmtInt(ot.ontime+ot.telat)} proyek</span></div>
+    </div>
+    <div class="ov-card" style="border-top-color:#c9760f">
+      <div class="ov-top"><span class="ov-label">In Full Delivery</span><span class="ov-ic">📦</span></div>
+      <div class="ov-value">${fmtInt(IF.in_full)}</div>
+      <div class="ov-foot">${ifPill}<span>dari ${fmtInt(IF.total)} order</span></div>
+    </div>
+  </div>`;
 }
 
 // ── On Time Produksi (meniru halaman Ontime app) ──
