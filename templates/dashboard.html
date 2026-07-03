@@ -346,15 +346,13 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
       <!-- PRODUKSI -->
       <section id="view-produksi" class="view">
         <div class="subtabs">
-          <button class="subtab active" id="pt-status" onclick="prodTab('status')">🏭 Status</button>
+          <button class="subtab active" id="pt-status" onclick="prodTab('status')">📊 Overview</button>
           <button class="subtab" id="pt-otd" onclick="prodTab('otd')">⏱️ On Time Delivery</button>
           <button class="subtab" id="pt-infull" onclick="prodTab('infull')">📦 In Full Delivery</button>
         </div>
 
         <div id="prodview-status">
-          <div class="grid-2">
-            <div class="card"><h3>Status Produksi</h3><div class="ch-sub">Distribusi order per status</div><div class="chart-wrap"><canvas id="c-produksi"></canvas></div></div>
-          </div>
+          <div class="kpi-grid" id="ov-cards" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr))"><div class="loading">Memuat…</div></div>
         </div>
 
         <div id="prodview-otd" style="display:none">
@@ -537,7 +535,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
-  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['c-produksi',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : [['deliv-if-cards',loadInfull]]);
+  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['ov-cards',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : [['deliv-if-cards',loadInfull]]);
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -717,12 +715,18 @@ async function loadTopSales(q){
     <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:500">${r.PIC}</td><td class="num">${fmtInt(r.total_order)}</td><td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td></tr>`).join('')}</tbody></table>`;
 }
-// ── Produksi ──
+// ── Produksi Overview ──
 async function loadProduksi(q){
-  const d=await fetchJSON('/api/produksi?'+q);
-  renderChart('c-produksi','doughnut',{labels:['Berjalan','Tuntas','Belum SPK'],
-    datasets:[{data:[d.berjalan,d.tuntas,d.belum_spk],backgroundColor:['#3b6fb0','#2f9e6f','#d99327'],borderWidth:2,borderColor:'#fff'}]},
-    {cutout:'60%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,padding:13,font:{size:11.5}}},tooltip:{callbacks:{label:c=>`${c.label}: ${fmtInt(c.parsed)} order`}}}});
+  const [ov,ot,dl]=await Promise.all([
+    fetchJSON('/api/overview?'+q), fetchJSON('/api/ontime?'+q), fetchJSON('/api/delivery?'+q)]);
+  const cx=n=>n>=1e6?(n/1e6).toFixed(1)+' jt':(n>=1e3?Math.round(n/1e3)+' rb':fmtInt(n));
+  const brk=(ov.by_jenis||[]).slice(0,4).map(x=>`${esc(x.jenis)} ${cx(x.pcs)}`).join(' · ');
+  const IF=dl.in_full;
+  document.getElementById('ov-cards').innerHTML=
+    kpiCard('a-blue','🏭','Jumlah Produksi (pcs)',fmtInt(ov.total_pcs),`<span class="muted">${brk||'—'}</span>`)
+   +kpiCard('a-green','📋','Total SPK',fmtInt(ov.spk.total),`<span class="muted">${fmtInt(ov.spk.tuntas)} tuntas · ${fmtInt(ov.spk.berjalan)} berjalan</span>`)
+   +kpiCard('a-orange','⏱️','On Time Delivery',fmtInt(ot.ontime),`<span class="pill ${ot.pct>=85?'good':(ot.pct<60?'warn':'')}">${ot.pct==null?'–':ot.pct+'%'} ontime</span>`)
+   +kpiCard('a-amber','📦','In Full Delivery',fmtInt(IF.in_full),`<span class="pill ${IF.pct>=90?'good':''}">${IF.pct==null?'–':IF.pct+'%'} in full</span>`);
 }
 
 // ── On Time Produksi (meniru halaman Ontime app) ──
