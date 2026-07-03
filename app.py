@@ -995,6 +995,10 @@ def api_delivery():
     spks = query(f"SELECT sko_key, MAX(vendor_ve) AS vendor FROM tb_spks "
                  f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
     sv_map = {r['sko_key']: r['vendor'] for r in spks}
+    prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
+                 f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' "
+                 f"GROUP BY sko_key", keys)
+    pr_map = {r['sko_key']: r['produk'] for r in prod}
 
     vcond = [f"o.sko_key IN ({ph})"]; vp = list(keys)
     if pic:
@@ -1070,7 +1074,7 @@ def api_delivery():
                 t['if_full'] += 1
 
         rows.append({
-            'sko': sko, 'pic': v.get('pic'), 'produk': v.get('produk'), 'vendor': sv_map.get(k),
+            'sko': sko, 'pic': v.get('pic'), 'produk': pr_map.get(k) or v.get('produk'), 'vendor': sv_map.get(k),
             'qty_dipesan': qd, 'qty_dikirim': qk,
             'kurang': (qd - qk) if (qk is not None and qd > qk) else None,
             'tgl_kirim': fmt_date(sjr['tgl_kirim']) if sjr else None,
@@ -1121,6 +1125,10 @@ def api_ontime():
     spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS tgl_selesai, MAX(vendor_ve) AS vendor "
                  f"FROM tb_spks WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
     sp_map = {r['sko_key']: r for r in spks}
+    prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
+                 f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' "
+                 f"GROUP BY sko_key", keys)
+    pr_map = {r['sko_key']: r['produk'] for r in prod}
 
     # 3) label (SKO, produk, PIC) dari view + filter pic/divisi
     vcond = [f"o.sko_key IN ({ph})"]
@@ -1198,7 +1206,7 @@ def api_ontime():
             if status == 'On Time':
                 t['ot'] += 1
         rows.append({
-            'sko': v.get('sko'), 'pic': v.get('pic'), 'produk': v.get('produk'),
+            'sko': v.get('sko'), 'pic': v.get('pic'), 'produk': pr_map.get(k) or v.get('produk'),
             'vendor': sp.get('vendor'),
             'deadline': fmt_date(f['deadline']), 'tgl_selesai': fmt_date(sp.get('tgl_selesai')),
             'status': status,
