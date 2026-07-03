@@ -499,7 +499,7 @@ def api_detail():
     tgl_dari, tgl_sampai, pic, divisi = get_args()
     cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
     sql = f"""
-        SELECT o.sko, o.nama, o.sumber,
+        SELECT o.sko, o.sko_key, o.jenis_bahan, o.nama, o.sumber,
                TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,''))) AS nama_produk,
                o.tgl_omzet_realtime AS tanggal,
                o.jumlah_produk AS quantity,
@@ -512,15 +512,28 @@ def api_detail():
         LIMIT 2000
     """
     rows = query(sql, params)
+
+    # Nama produk asli dari tb_produksis (cocok per sko_key + jenis_bahan, fallback per sko_key)
+    keys = list({r['sko_key'] for r in rows if r.get('sko_key')})
+    pr_pair, pr_sko = {}, {}
+    if keys:
+        ph = ','.join(['%s'] * len(keys))
+        for p in query(f"SELECT sko_key, jenis_bahan, nama_produk FROM tb_produksis "
+                       f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> ''", keys):
+            pr_sko.setdefault(p['sko_key'], p['nama_produk'])
+            pr_pair[(p['sko_key'], (p['jenis_bahan'] or '').strip())] = p['nama_produk']
+
     out = []
     for r in rows:
         qty   = float(r['quantity'] or 0)
         total = float(r['total_harga'] or 0)
         modal = float(r['modal_sales'] or 0)
         tgl = r['tanggal']
+        jb = (r.get('jenis_bahan') or '').strip()
+        nm = pr_pair.get((r['sko_key'], jb)) or pr_sko.get(r['sko_key']) or (r['nama_produk'] or '').strip()
         out.append({
             'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
-            'nama_produk': (r['nama_produk'] or '').strip(),
+            'nama_produk': nm,
             'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
             'quantity': int(qty),
             'harga_jual': float(r['harga_jual'] or 0),
