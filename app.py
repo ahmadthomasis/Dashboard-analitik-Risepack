@@ -976,192 +976,115 @@ def api_kpi_marketing():
 @app.route('/api/delivery')
 @login_required
 def api_delivery():
-    """On Time Delivery & In Full Delivery.
-       Universe : order 'Selesai Produksi'.
-       Deadline : tb_faws.tgl_deadline (deadline produksi)  -> join sko_key.
-       Qty kirim: tb_surat_jalan_detail.quantity            -> join kode_order = sko.
-       Tgl kirim: tb_surat_jalan.delivery_date.
-       On time  = tgl kirim <= deadline.  In full = qty dikirim >= qty dipesan."""
+    """In Full Delivery — universe SAMA dengan On Time (proyek FAW, filter tgl_deadline).
+       Qty dipesan: SUM(jumlah_produk) view. Qty dikirim: tb_surat_jalan_detail (kode_order=sko).
+       In Full = qty dikirim >= qty dipesan."""
     tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
 
-    # Query view SENDIRIAN (mergeable, cepat) — jangan join view dgn tabel lain.
-    base_sql = f"""
-        SELECT o.sko,
-               MAX(o.sko_key)     AS sko_key,
-               MAX(o.name)        AS pic,
-               MAX(o.nama)        AS customer,
-               MAX(o.jenis_bahan) AS jenis,
+    # 1) FAW = universe (filter periode by tgl_deadline) — identik dengan /api/ontime
+    fcond, fp = ["f.sko_key IS NOT NULL", "f.tgl_deadline IS NOT NULL"], []
+    if tgl_dari:  fcond.append("f.tgl_deadline >= %s"); fp.append(tgl_dari)
+    if tgl_sampai: fcond.append("f.tgl_deadline <= %s"); fp.append(tgl_sampai)
+    faw = query(f"SELECT DISTINCT f.sko_key FROM tb_faws f WHERE {' AND '.join(fcond)}", fp)
+    keys = [r['sko_key'] for r in faw]
+    if not keys:
+        return jsonify({'in_full': {'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0, 'pct': None},
+                        'trend': [], 'by_type': [], 'by_vendor': [], 'rows': []})
+
+    ph = ','.join(['%s'] * len(keys))
+    spks = query(f"SELECT sko_key, MAX(vendor_ve) AS vendor FROM tb_spks "
+                 f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
+    sv_map = {r['sko_key']: r['vendor'] for r in spks}
+
+    vcond = [f"o.sko_key IN ({ph})"]; vp = list(keys)
+    if pic:
+        vcond.append("o.name = %s"); vp.append(pic)
+    if divisi:
+        vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        vp.append(divisi)
+    view = query(f"""
+        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic, MAX(o.jenis_bahan) AS jenis,
                MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk,
                SUM(o.jumlah_produk) AS qty_dipesan
-        {BASE}
-          AND o.status_order = 'Selesai Produksi'
-          AND o.sko IS NOT NULL
-          {cond}
-        GROUP BY o.sko
-    """
-    sj_sql = """
-        SELECT sjd.kode_order AS sko,
-               SUM(sjd.quantity)    AS qty_dikirim,
-               MAX(s.delivery_date) AS tgl_kirim
+        FROM order_risepack o WHERE {' AND '.join(vcond)} GROUP BY o.sko_key
+    """, vp)
+    v_map = {v['sko_key']: v for v in view}
+
+    sj = query("""
+        SELECT sjd.kode_order AS sko, SUM(sjd.quantity) AS qty_dikirim, MAX(s.delivery_date) AS tgl_kirim
         FROM tb_surat_jalan_detail sjd
         JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
         WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
         GROUP BY sjd.kode_order
-    """
-    fw_sql = """
-        SELECT sko_key, MIN(tgl_deadline) AS deadline
-        FROM tb_faws
-        WHERE sko_key IS NOT NULL AND tgl_deadline IS NOT NULL
-        GROUP BY sko_key
-    """
-    # SATU koneksi untuk ketiga query + batas waktu eksekusi (fail-fast, lepas koneksi cepat).
-    # DIAGNOSTIK SEMENTARA: tangkap error asli + langkah mana yang gagal.
-    import time as _t
-    step, t0 = 'connect', _t.time()
-    try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        try:
-            cur = conn.cursor(dictionary=True)
-            try: cur.execute("SET SESSION max_statement_time=20")       # MariaDB: detik
-            except Exception:
-                try: cur.execute("SET SESSION max_execution_time=20000")  # MySQL: ms
-                except Exception: pass
-            step = 'base';        cur.execute(base_sql, params); base = cur.fetchall()
-            _bk = [b['sko_key'] for b in base if b.get('sko_key')]
-            if _bk:
-                _ph = ','.join(['%s'] * len(_bk))
-                step = 'vendor'
-                cur.execute(f"SELECT sko_key, MAX(vendor_ve) AS vendor FROM tb_spks "
-                            f"WHERE sko_key IN ({_ph}) GROUP BY sko_key", _bk)
-                sv_rows = cur.fetchall()
-            else:
-                sv_rows = []
-            step = 'surat_jalan'; cur.execute(sj_sql);           sj_rows = cur.fetchall()
-            step = 'faws';        cur.execute(fw_sql);           fw_rows = cur.fetchall()
-            cur.close()
-        finally:
-            try: conn.close()
-            except Exception: pass
-    except Exception as e:
-        return jsonify({'_error': str(e), 'step': step,
-                        'detik': round(_t.time() - t0, 1)}), 200
+    """)
+    sj_map = {r['sko']: r for r in sj}
 
-    sj_map = {r['sko']: r for r in sj_rows}
-    fw_map = {r['sko_key']: r['deadline'] for r in fw_rows}
-    sv_map = {r['sko_key']: r['vendor'] for r in sv_rows}
+    filtered = bool(pic or divisi)
+    scope = list(v_map.keys()) if filtered else keys
 
-    data = []
-    for b in base:
-        sj = sj_map.get(b['sko'])
-        data.append({
-            'sko': b['sko'], 'pic': b['pic'], 'customer': b['customer'], 'produk': b['produk'],
-            'jenis': b.get('jenis'), 'vendor': sv_map.get(b['sko_key']),
-            'qty_dipesan': b['qty_dipesan'],
-            'qty_dikirim': sj['qty_dikirim'] if sj else None,
-            'tgl_kirim':  sj['tgl_kirim']  if sj else None,
-            'deadline':   fw_map.get(b['sko_key']),
-        })
-
-    today = datetime.now().date()
     def to_date(v):
-        if v is None:
-            return None
-        if isinstance(v, datetime):
-            return v.date()
-        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'):
-            return v
-        try:
-            return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
-        except Exception:
-            return None
+        if v is None: return None
+        if isinstance(v, datetime): return v.date()
+        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'): return v
+        try: return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
+        except Exception: return None
 
     if_total = if_full = if_kurang = if_belum = 0
-    ot_total = ot_ontime = ot_telat = ot_belum = 0
-    delay_sum = delay_n = 0
     trend = {}
     by_type = {}
     by_vendor = {}
     rows = []
-    for r in data:
-        qd = float(r['qty_dipesan'] or 0)
-        qk = r['qty_dikirim']
-        qk = float(qk) if qk is not None else None
-        tk = to_date(r['tgl_kirim'])
-        dl = to_date(r['deadline'])
+    for k in scope:
+        v = v_map.get(k, {})
+        sko = v.get('sko')
+        qd = float(v.get('qty_dipesan') or 0)
+        sjr = sj_map.get(sko) if sko else None
+        qk = float(sjr['qty_dikirim']) if (sjr and sjr['qty_dikirim'] is not None) else None
+        tk = to_date(sjr['tgl_kirim']) if sjr else None
 
-        if_status = None
-        if qd > 0:
-            if_total += 1
-            if qk is None or qk <= 0:
-                if_status = 'Belum Dikirim'; if_belum += 1
-            elif qk >= qd:
-                if_status = 'In Full'; if_full += 1
-            else:
-                if_status = 'Kurang'; if_kurang += 1
+        if_total += 1
+        if qk is None or qk <= 0:
+            st = 'Belum Dikirim'; if_belum += 1
+        elif qd <= 0 or qk >= qd:
+            st = 'In Full'; if_full += 1
+        else:
+            st = 'Kurang'; if_kurang += 1
 
-            jn = (r.get('jenis') or '(lain)').strip() or '(lain)'
-            bt = by_type.setdefault(jn, {'jenis': jn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
-            vn = (r.get('vendor') or '(tanpa vendor)').strip() or '(tanpa vendor)'
-            bv = by_vendor.setdefault(vn, {'vendor': vn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
-            bt['total'] += 1; bv['total'] += 1
-            if if_status == 'In Full':
-                bt['in_full'] += 1; bv['in_full'] += 1
-            elif if_status == 'Kurang':
-                bt['kurang'] += 1; bv['kurang'] += 1
-            else:
-                bt['belum'] += 1; bv['belum'] += 1
-
-        ot_status = None
-        if dl is not None:
-            ot_total += 1
-            if tk is not None:
-                if tk <= dl:
-                    ot_status = 'On Time'; ot_ontime += 1
-                else:
-                    ot_status = 'Telat'; ot_telat += 1
-                    delay_sum += (tk - dl).days; delay_n += 1
-            else:
-                if dl < today:
-                    ot_status = 'Telat (belum kirim)'; ot_telat += 1
-                else:
-                    ot_status = 'Belum Jatuh Tempo'; ot_belum += 1
+        jn = (v.get('jenis') or '(lain)').strip() or '(lain)'
+        bt = by_type.setdefault(jn, {'jenis': jn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
+        vn = (sv_map.get(k) or '(tanpa vendor)').strip() or '(tanpa vendor)'
+        bv = by_vendor.setdefault(vn, {'vendor': vn, 'total': 0, 'in_full': 0, 'kurang': 0, 'belum': 0})
+        bt['total'] += 1; bv['total'] += 1
+        if st == 'In Full':
+            bt['in_full'] += 1; bv['in_full'] += 1
+        elif st == 'Kurang':
+            bt['kurang'] += 1; bv['kurang'] += 1
+        else:
+            bt['belum'] += 1; bv['belum'] += 1
 
         if tk is not None:
             bl = tk.strftime('%Y-%m')
-            t = trend.setdefault(bl, {'dikirim': 0, 'if_full': 0, 'dl': 0, 'ontime': 0})
+            t = trend.setdefault(bl, {'dikirim': 0, 'if_full': 0})
             t['dikirim'] += 1
-            if qd > 0 and qk is not None and qk >= qd:
+            if st == 'In Full':
                 t['if_full'] += 1
-            if dl is not None:
-                t['dl'] += 1
-                if tk <= dl:
-                    t['ontime'] += 1
 
         rows.append({
-            'sko': r['sko'], 'pic': r['pic'], 'customer': r['customer'], 'produk': r['produk'],
-            'vendor': r.get('vendor'),
+            'sko': sko, 'pic': v.get('pic'), 'produk': v.get('produk'), 'vendor': sv_map.get(k),
             'qty_dipesan': qd, 'qty_dikirim': qk,
             'kurang': (qd - qk) if (qk is not None and qd > qk) else None,
-            'tgl_kirim': fmt_date(r['tgl_kirim']), 'deadline': fmt_date(r['deadline']),
-            'if_status': if_status, 'ot_status': ot_status,
-            'delay': ((tk - dl).days if (tk and dl and tk > dl) else None),
+            'tgl_kirim': fmt_date(sjr['tgl_kirim']) if sjr else None,
+            'if_status': st,
         })
 
-    trend_list = [{'bulan': b,
-                   'if_pct': round(v['if_full'] / v['dikirim'] * 100, 1) if v['dikirim'] else None,
-                   'ot_pct': round(v['ontime'] / v['dl'] * 100, 1) if v['dl'] else None,
-                   'dikirim': v['dikirim']}
-                  for b, v in sorted(trend.items())]
+    trend_list = [{'bulan': b, 'if_pct': round(v['if_full'] / v['dikirim'] * 100, 1) if v['dikirim'] else None,
+                   'dikirim': v['dikirim']} for b, v in sorted(trend.items())]
     by_type_list = sorted(by_type.values(), key=lambda x: -x['total'])[:12]
     by_vendor_list = sorted(by_vendor.values(), key=lambda x: -x['total'])[:12]
 
     return jsonify({
         'in_full': {'total': if_total, 'in_full': if_full, 'kurang': if_kurang, 'belum': if_belum,
                     'pct': round(if_full / if_total * 100, 1) if if_total else None},
-        'on_time': {'total': ot_total, 'on_time': ot_ontime, 'telat': ot_telat, 'belum': ot_belum,
-                    'pct': round(ot_ontime / (ot_ontime + ot_telat) * 100, 1) if (ot_ontime + ot_telat) else None,
-                    'avg_delay': round(delay_sum / delay_n, 1) if delay_n else None},
         'trend': trend_list,
         'by_type': by_type_list,
         'by_vendor': by_vendor_list,
