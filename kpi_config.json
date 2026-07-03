@@ -3,6 +3,7 @@
   "scoring_bands": [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
   "labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
   "ring_thresholds": {"ring1": 100000000, "ring2": 30000000},
+  "reject_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZgPbCPJ_jREkfZMkgNRIX1v8bw-MvQywSnXHdBrMB70IMUlbrgwCt22faCV19FD6iaQxh7oDYBm4S/pub?gid=1699073558&single=true&output=csv",
 
   "kpi": [
     {"id": "omzet",       "name": "Omzet",                "weight": 40, "target": 2500000000, "basis": "omzet_monthly",     "unit": "Rp", "note": "Target per bulan (atur di omzet_target)"},
