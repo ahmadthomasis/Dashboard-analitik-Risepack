@@ -1298,6 +1298,62 @@ def api_ontime():
         'rows': rows[:3000],
     })
 
+@app.route('/api/overview')
+@login_required
+def api_overview():
+    """Produksi Overview: total pcs per jenis + SPK (tuntas/berjalan).
+       Universe = proyek FAW (deadline dalam periode). Selesai = tb_spks.tgl_selesai_all."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+
+    fcond, fp = ["f.sko_key IS NOT NULL", "f.tgl_deadline IS NOT NULL"], []
+    if tgl_dari:  fcond.append("f.tgl_deadline >= %s"); fp.append(tgl_dari)
+    if tgl_sampai: fcond.append("f.tgl_deadline <= %s"); fp.append(tgl_sampai)
+    faw = query(f"SELECT DISTINCT f.sko_key FROM tb_faws f WHERE {' AND '.join(fcond)}", fp)
+    keys = [r['sko_key'] for r in faw]
+    if not keys:
+        return jsonify({'total_pcs': 0, 'by_jenis': [],
+                        'spk': {'total': 0, 'tuntas': 0, 'berjalan': 0}})
+
+    ph = ','.join(['%s'] * len(keys))
+    spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS sel FROM tb_spks "
+                 f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
+    sp_map = {r['sko_key']: r['sel'] for r in spks}
+
+    vcond = [f"o.sko_key IN ({ph})"]
+    vp = list(keys)
+    if pic:
+        vcond.append("o.name = %s"); vp.append(pic)
+    if divisi:
+        vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        vp.append(divisi)
+    view = query(f"""
+        SELECT o.sko_key, MAX(o.jenis_bahan) AS jenis, SUM(o.jumlah_produk) AS pcs
+        FROM order_risepack o WHERE {' AND '.join(vcond)} GROUP BY o.sko_key
+    """, vp)
+    pcs_by_key = {v['sko_key']: float(v['pcs'] or 0) for v in view}
+    jenis_by_key = {v['sko_key']: ((v['jenis'] or '(lain)').strip() or '(lain)') for v in view}
+
+    scope = list(pcs_by_key.keys()) if (pic or divisi) else keys
+    by_jenis = {}
+    total_pcs = spk_total = tuntas = berjalan = 0
+    for k in scope:
+        spk_total += 1
+        if sp_map.get(k) is not None:
+            tuntas += 1
+        else:
+            berjalan += 1
+        pcs = pcs_by_key.get(k, 0.0)
+        total_pcs += pcs
+        jn = jenis_by_key.get(k, '(lain)')
+        by_jenis[jn] = by_jenis.get(jn, 0.0) + pcs
+
+    by_jenis_list = sorted(({'jenis': k, 'pcs': v} for k, v in by_jenis.items()),
+                           key=lambda x: -x['pcs'])
+    return jsonify({
+        'total_pcs': total_pcs, 'by_jenis': by_jenis_list,
+        'spk': {'total': spk_total, 'tuntas': tuntas, 'berjalan': berjalan},
+    })
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
