@@ -186,6 +186,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
     <button class="nav-item" data-view="monitoring" onclick="showView('monitoring')"><span class="i">🎯</span> Monitoring Potensi</button>
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
+    <button class="nav-item" data-view="reject" onclick="showView('reject')"><span class="i">🧾</span> Reject Finance</button>
     <div class="spacer"></div>
     <div class="side-card">
       <div class="h">Risepack Analytics</div>
@@ -403,6 +404,25 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           </div>
         </div>
       </section>
+
+      <!-- REJECT FINANCE -->
+      <section id="view-reject" class="view">
+        <div class="kpi-grid" id="rej-cards" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))"><div class="loading">Memuat…</div></div>
+        <div class="grid-2" style="margin-top:15px">
+          <div class="card"><h3>Reject Cost per Penanggung Jawab</h3><div class="ch-sub">Total biaya reject per divisi penanggung</div><div class="chart-wrap" style="height:240px"><canvas id="c-rej-pj"></canvas></div></div>
+          <div class="card"><h3>Top PIC Penanggung Reject</h3><div class="ch-sub">Siapa yang menanggung biaya reject terbanyak</div><div class="chart-wrap" style="height:240px"><canvas id="c-rej-pic"></canvas></div></div>
+        </div>
+        <div class="card" style="margin-top:15px"><h3>Reject Cost per Jenis Reject</h3><div class="ch-sub">Kategori penyebab reject terbesar</div><div class="chart-wrap" style="height:240px"><canvas id="c-rej-jenis"></canvas></div></div>
+        <div class="card" style="margin-top:15px">
+          <h3>Detail Reject</h3>
+          <div class="ch-sub">Sumber: Google Sheet "Data Reject Finance" (tab 2026)</div>
+          <div class="toolbar" style="margin:12px 0 6px">
+            <input id="rej-search" type="text" placeholder="🔎 Cari kode order / produk / jenis / PIC / penanggung…" oninput="onRejSearch(this.value)">
+            <span class="muted" id="rej-count"></span>
+          </div>
+          <div class="table-wrap" id="rej-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -419,6 +439,7 @@ const PAGE = {
   detail:['Detail Order','Cek data cepat per order'],
   monitoring:['Monitoring Potensi','Customer baru online & kelengkapan input potensi'],
   produksi:['Produksi','Status order produksi'],
+  reject:['Reject Finance','Biaya reject — sumber Google Sheet'],
 };
 const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan',bonus:'Bonus'};
 Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
@@ -518,7 +539,7 @@ async function loadAll(){
   document.getElementById('last-update').textContent='Diperbarui '+new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
 }
 
-const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]] };
+const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]], reject:[['rej-cards',loadReject]] };
 function kpiTab(t){
   state.kpitab=t;
   ['divisi','fungsi','marketing'].forEach(x=>{
@@ -1155,6 +1176,47 @@ function exportBonCSV(){
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='bonus-sales-risepack.csv'; a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Reject Finance ──
+const REJ={rows:[],term:''};
+function rejBar(id,labels,data,color){
+  renderChart(id,'bar',{labels,datasets:[{label:'Biaya',data,backgroundColor:color,borderRadius:5,maxBarThickness:26}]},{
+    indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Biaya: ${formatRp(c.parsed.x)}`}}},
+    scales:{x:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},y:{grid:{display:false}}}});
+}
+async function loadReject(q){
+  const d=await fetchJSON('/api/reject?'+q);
+  if(d._error){ setMsg('rej-cards',d._error); document.getElementById('rej-table').innerHTML=`<div class="loading">${esc(d._error)}</div>`; return; }
+  const pj0=d.by_pj[0], pic0=d.by_pic[0];
+  document.getElementById('rej-cards').innerHTML=
+    kpiCard('a-orange','🧾','Total Reject Cost',formatRp(d.total_cost),`<span class="muted">${fmtInt(d.count)} item reject</span>`)
+   +kpiCard('a-brown','🏭','Penanggung Terbesar',esc(pj0?pj0.label:'—'),pj0?`<span class="muted">${formatRp(pj0.cost)}</span>`:'')
+   +kpiCard('a-amber','🧑‍🔧','PIC Terbanyak',esc(pic0?pic0.label:'—'),pic0?`<span class="muted">${formatRp(pic0.cost)}</span>`:'');
+  rejBar('c-rej-pj',d.by_pj.map(x=>x.label),d.by_pj.map(x=>x.cost),'#cf4b3a');
+  rejBar('c-rej-pic',d.by_pic.map(x=>x.label),d.by_pic.map(x=>x.cost),'#7a5230');
+  rejBar('c-rej-jenis',d.by_jenis.map(x=>x.label),d.by_jenis.map(x=>x.cost),'#d99327');
+  REJ.rows=d.rows; renderRejTable();
+}
+function onRejSearch(v){ REJ.term=(v||'').trim().toLowerCase(); renderRejTable(); }
+function renderRejTable(){
+  let rows=REJ.rows;
+  if(REJ.term) rows=rows.filter(r=>[r.kode_order,r.produk,r.jenis,r.pic,r.pj].map(x=>x||'').join(' ').toLowerCase().includes(REJ.term));
+  const tot=rows.reduce((s,r)=>s+r.debit,0);
+  const c=document.getElementById('rej-count'); if(c) c.textContent=`${rows.length} item · ${formatRp(tot)}`;
+  document.getElementById('rej-table').innerHTML=`<table style="min-width:940px"><thead><tr>
+      <th>Tanggal</th><th>Kode Order</th><th>Produk</th><th>Jenis Reject</th><th>Penanggung</th><th>PIC</th><th class="num">Biaya</th>
+    </tr></thead><tbody>${
+      rows.length? rows.map(r=>`<tr>
+        <td>${esc(r.tanggal)||'-'}</td>
+        <td title="${esc(r.kode_order,1)}">${esc(r.kode_order)||'-'}</td>
+        <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
+        <td>${esc(r.jenis)||'-'}</td>
+        <td>${esc(r.pj)||'-'}</td>
+        <td>${esc(r.pic)||'-'}</td>
+        <td class="num" style="font-weight:600;color:var(--red)">${formatRp(r.debit)}</td>
+      </tr>`).join('') : `<tr><td colspan="7" class="loading">${REJ.term?'Tidak ada yang cocok':'Tidak ada data'}</td></tr>`
+    }</tbody></table>`;
 }
 
 // ── Helpers ──
