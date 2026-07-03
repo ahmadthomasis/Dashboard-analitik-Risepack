@@ -407,6 +407,11 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
       <!-- REJECT FINANCE -->
       <section id="view-reject" class="view">
+        <div class="toolbar" style="margin-bottom:14px;gap:10px">
+          <select id="rej-f-pj" onchange="onRejFilter()"><option value="">Semua Penanggung</option></select>
+          <select id="rej-f-pic" onchange="onRejFilter()"><option value="">Semua PIC</option></select>
+          <span class="muted" id="rej-filterinfo"></span>
+        </div>
         <div class="kpi-grid" id="rej-cards" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))"><div class="loading">Memuat…</div></div>
         <div class="grid-2" style="margin-top:15px">
           <div class="card"><h3>Reject Cost per Penanggung Jawab</h3><div class="ch-sub">Total biaya reject per divisi penanggung</div><div class="chart-wrap" style="height:240px"><canvas id="c-rej-pj"></canvas></div></div>
@@ -1179,7 +1184,7 @@ function exportBonCSV(){
 }
 
 // ── Reject Finance ──
-const REJ={rows:[],term:''};
+const REJ={all:[],pj:'',pic:'',term:''};
 function rejBar(id,labels,data,color){
   renderChart(id,'bar',{labels,datasets:[{label:'Biaya',data,backgroundColor:color,borderRadius:5,maxBarThickness:26}]},{
     indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`Biaya: ${formatRp(c.parsed.x)}`}}},
@@ -1188,19 +1193,46 @@ function rejBar(id,labels,data,color){
 async function loadReject(q){
   const d=await fetchJSON('/api/reject?'+q);
   if(d._error){ setMsg('rej-cards',d._error); document.getElementById('rej-table').innerHTML=`<div class="loading">${esc(d._error)}</div>`; return; }
-  const pj0=d.by_pj[0], pic0=d.by_pic[0];
+  REJ.all=d.rows;
+  fillRejSel('rej-f-pj','pj',REJ.pj,'Semua Penanggung');
+  fillRejSel('rej-f-pic','pic',REJ.pic,'Semua PIC');
+  renderReject();
+}
+function fillRejSel(id,key,cur,label){
+  const vals=[...new Set(REJ.all.map(r=>r[key]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+  const sel=document.getElementById(id); if(!sel) return;
+  sel.innerHTML=`<option value="">${label}</option>`+vals.map(v=>`<option value="${esc(v,1)}">${esc(v)}</option>`).join('');
+  sel.value=cur||'';
+}
+function onRejFilter(){
+  REJ.pj=document.getElementById('rej-f-pj').value;
+  REJ.pic=document.getElementById('rej-f-pic').value;
+  renderReject();
+}
+function rejFiltered(){
+  return REJ.all.filter(r=>(!REJ.pj||r.pj===REJ.pj)&&(!REJ.pic||r.pic===REJ.pic));
+}
+function renderReject(){
+  const rows=rejFiltered();
+  const agg=k=>{const m={};rows.forEach(r=>{const key=r[k]||'(kosong)';m[key]=(m[key]||0)+r.debit;});
+    return Object.entries(m).map(([label,cost])=>({label,cost})).sort((a,b)=>b.cost-a.cost);};
+  const total=rows.reduce((s,r)=>s+r.debit,0);
+  const byPj=agg('pj'), byPic=agg('pic').slice(0,12), byJenis=agg('jenis').slice(0,12);
+  const pj0=byPj[0], pic0=byPic[0];
   document.getElementById('rej-cards').innerHTML=
-    kpiCard('a-orange','🧾','Total Reject Cost',formatRp(d.total_cost),`<span class="muted">${fmtInt(d.count)} item reject</span>`)
+    kpiCard('a-orange','🧾','Total Reject Cost',formatRp(total),`<span class="muted">${fmtInt(rows.length)} item reject</span>`)
    +kpiCard('a-brown','🏭','Penanggung Terbesar',esc(pj0?pj0.label:'—'),pj0?`<span class="muted">${formatRp(pj0.cost)}</span>`:'')
    +kpiCard('a-amber','🧑‍🔧','PIC Terbanyak',esc(pic0?pic0.label:'—'),pic0?`<span class="muted">${formatRp(pic0.cost)}</span>`:'');
-  rejBar('c-rej-pj',d.by_pj.map(x=>x.label),d.by_pj.map(x=>x.cost),'#cf4b3a');
-  rejBar('c-rej-pic',d.by_pic.map(x=>x.label),d.by_pic.map(x=>x.cost),'#7a5230');
-  rejBar('c-rej-jenis',d.by_jenis.map(x=>x.label),d.by_jenis.map(x=>x.cost),'#d99327');
-  REJ.rows=d.rows; renderRejTable();
+  rejBar('c-rej-pj',byPj.map(x=>x.label),byPj.map(x=>x.cost),'#cf4b3a');
+  rejBar('c-rej-pic',byPic.map(x=>x.label),byPic.map(x=>x.cost),'#7a5230');
+  rejBar('c-rej-jenis',byJenis.map(x=>x.label),byJenis.map(x=>x.cost),'#d99327');
+  const fi=document.getElementById('rej-filterinfo');
+  if(fi) fi.textContent=(REJ.pj||REJ.pic)?`Filter: ${[REJ.pj,REJ.pic].filter(Boolean).join(' · ')}`:'';
+  renderRejTable();
 }
 function onRejSearch(v){ REJ.term=(v||'').trim().toLowerCase(); renderRejTable(); }
 function renderRejTable(){
-  let rows=REJ.rows;
+  let rows=rejFiltered();
   if(REJ.term) rows=rows.filter(r=>[r.kode_order,r.produk,r.jenis,r.pic,r.pj].map(x=>x||'').join(' ').toLowerCase().includes(REJ.term));
   const tot=rows.reduce((s,r)=>s+r.debit,0);
   const c=document.getElementById('rej-count'); if(c) c.textContent=`${rows.length} item · ${formatRp(tot)}`;
