@@ -1324,6 +1324,29 @@ def _num(s):
     except Exception:
         return 0.0
 
+_RJ_MONTHS = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7,
+              'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+              'mei': 5, 'agu': 8, 'ags': 8, 'agt': 8, 'okt': 10, 'des': 12}
+
+def _reject_date(s):
+    """Parse 'DD Mon YYYY' (mis. '05 Jan 2026' / '20 May 2026') -> date."""
+    p = str(s or '').strip().split()
+    if len(p) < 3:
+        return None
+    try:
+        m = _RJ_MONTHS.get(p[1][:3].lower())
+        if not m:
+            return None
+        return datetime(int(p[2]), m, int(p[0])).date()
+    except Exception:
+        return None
+
+def _pdate(s):
+    try:
+        return datetime.strptime(s, '%Y-%m-%d').date()
+    except Exception:
+        return None
+
 @app.route('/api/reject')
 @login_required
 def api_reject():
@@ -1336,6 +1359,9 @@ def api_reject():
     except Exception as e:
         return jsonify({'_error': f'Gagal membaca Google Sheet: {e}'}), 200
 
+    tgl_dari, tgl_sampai, _pic, _div = get_args()
+    d1, d2 = _pdate(tgl_dari), _pdate(tgl_sampai)
+
     total = 0.0
     count = 0
     by_pj, by_pic, by_jenis = {}, {}, {}
@@ -1344,6 +1370,13 @@ def api_reject():
         debit = _num(r.get('Debit'))
         if debit <= 0:
             continue
+        # Filter periode berdasar kolom Tanggal (lewati yang di luar rentang; yg tak terbaca tetap ikut)
+        rd = _reject_date(r.get('Tanggal'))
+        if rd is not None:
+            if d1 and rd < d1:
+                continue
+            if d2 and rd > d2:
+                continue
         pj = (r.get('Penanggung Jawab') or '').strip() or '(kosong)'
         pic = (r.get('PIC') or '').strip() or '(kosong)'
         jn = (r.get('Jenis Reject') or '').strip() or '(kosong)'
