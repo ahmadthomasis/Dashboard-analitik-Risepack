@@ -1299,5 +1299,79 @@ def api_overview():
     })
 
 
+# ─── Reject Finance (sumber: Google Sheet published CSV) ─────────
+_REJECT_CACHE = {'ts': 0.0, 'rows': None, 'url': None}
+
+def _fetch_reject_rows(url):
+    import time, urllib.request, csv, io
+    now = time.time()
+    if (_REJECT_CACHE['rows'] is not None and _REJECT_CACHE['url'] == url
+            and now - _REJECT_CACHE['ts'] < 120):
+        return _REJECT_CACHE['rows']
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        text = resp.read().decode('utf-8', errors='replace')
+    rows = list(csv.DictReader(io.StringIO(text)))
+    _REJECT_CACHE.update(ts=now, rows=rows, url=url)
+    return rows
+
+def _num(s):
+    s = str(s or '').replace('Rp', '').replace(',', '').replace(' ', '').strip()
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except Exception:
+        return 0.0
+
+@app.route('/api/reject')
+@login_required
+def api_reject():
+    cfg = load_kpi_config()
+    url = cfg.get('reject_csv_url')
+    if not url:
+        return jsonify({'_error': 'URL CSV reject belum diisi di kpi_config.json (reject_csv_url).'}), 200
+    try:
+        raw = _fetch_reject_rows(url)
+    except Exception as e:
+        return jsonify({'_error': f'Gagal membaca Google Sheet: {e}'}), 200
+
+    total = 0.0
+    count = 0
+    by_pj, by_pic, by_jenis = {}, {}, {}
+    rows = []
+    for r in raw:
+        debit = _num(r.get('Debit'))
+        if debit <= 0:
+            continue
+        pj = (r.get('Penanggung Jawab') or '').strip() or '(kosong)'
+        pic = (r.get('PIC') or '').strip() or '(kosong)'
+        jn = (r.get('Jenis Reject') or '').strip() or '(kosong)'
+        total += debit
+        count += 1
+        by_pj[pj] = by_pj.get(pj, 0.0) + debit
+        by_pic[pic] = by_pic.get(pic, 0.0) + debit
+        by_jenis[jn] = by_jenis.get(jn, 0.0) + debit
+        rows.append({
+            'tanggal': (r.get('Tanggal') or '').strip(),
+            'kode_order': (r.get('Kode Order') or '').strip(),
+            'produk': (r.get('Nama Produk') or '').strip(),
+            'jenis': jn, 'pj': pj, 'pic': pic, 'debit': debit,
+        })
+
+    def tolist(d, n=None):
+        lst = sorted(({'label': k, 'cost': v} for k, v in d.items()), key=lambda x: -x['cost'])
+        return lst[:n] if n else lst
+
+    rows.sort(key=lambda x: -x['debit'])
+    return jsonify({
+        'total_cost': total, 'count': count,
+        'by_pj': tolist(by_pj),
+        'by_pic': tolist(by_pic, 12),
+        'by_jenis': tolist(by_jenis, 12),
+        'rows': rows[:3000],
+    })
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
