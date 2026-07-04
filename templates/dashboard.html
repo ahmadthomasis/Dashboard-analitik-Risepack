@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --brown:#2a201a;--brown-2:#3a2d24;--brown-line:#4a3a2e;
@@ -187,21 +187,21 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .pres-stage-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto;}
 .pres-slide{width:min(94vw,1280px);aspect-ratio:16/9;background:#fff;border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.45);overflow:hidden;position:relative;display:flex;flex-direction:column;}
 /* header bar slide */
-.ps-head{background:#2a211b;color:#fff;padding:20px 34px;font-size:34px;font-weight:800;letter-spacing:-.5px;flex:none;}
-.ps-head .yr{color:#e9852b;}
-.ps-body{flex:1;padding:22px 34px;overflow:hidden;display:flex;flex-direction:column;gap:14px;}
-.ps-note{font-size:15px;color:#e9852b;font-style:italic;font-weight:600;}
+.ps-head{background:#2a211b;color:#fff;padding:22px 36px;font-family:'Poppins','Inter',sans-serif;font-size:30px;font-weight:700;letter-spacing:-.2px;line-height:1.12;flex:none;display:flex;align-items:baseline;gap:12px;}
+.ps-head .yr{color:#e9852b;font-weight:600;font-size:24px;letter-spacing:.2px;}
+.ps-body{flex:1;padding:24px 36px 26px;overflow:hidden;display:flex;flex-direction:column;gap:15px;}
+.ps-note{font-size:14px;color:#9c7a4a;font-style:italic;font-weight:500;}
 /* cover / divider */
 .ps-cover{background:#12332e;color:#fff;justify-content:center;align-items:flex-start;padding:0;}
 .ps-cover .inner{padding:0 8%;}
-.ps-cover .kicker{color:#e9852b;font-weight:700;letter-spacing:3px;font-size:18px;margin-bottom:14px;}
-.ps-cover h1{font-size:58px;font-weight:800;line-height:1.05;margin:0;}
-.ps-cover .sub{margin-top:18px;font-size:22px;color:#bcd3cc;}
+.ps-cover .kicker{color:#e9852b;font-weight:600;letter-spacing:3px;font-size:16px;margin-bottom:16px;font-family:'Poppins','Inter',sans-serif;}
+.ps-cover h1{font-family:'Poppins','Inter',sans-serif;font-size:56px;font-weight:800;line-height:1.04;margin:0;letter-spacing:-1px;}
+.ps-cover .sub{margin-top:20px;font-size:20px;color:#bcd3cc;font-weight:400;}
 .ps-cover .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
 .ps-cover .logo{position:absolute;top:34px;right:44px;width:80px;height:80px;border-radius:50%;background:#2a211b;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:15px;}
 .ps-cover .logo b{color:#e9852b;}
 .ps-div{background:#12332e;color:#fff;justify-content:center;align-items:center;text-align:center;}
-.ps-div h2{font-size:60px;font-weight:800;letter-spacing:1px;margin:0;text-transform:uppercase;}
+.ps-div h2{font-family:'Poppins','Inter',sans-serif;font-size:56px;font-weight:800;letter-spacing:.5px;line-height:1.06;margin:0;text-transform:uppercase;}
 .ps-div .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
 /* KPI mini cards for slides */
 .ps-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
@@ -562,6 +562,7 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <div class="seg">
       <button id="pm-bulan" class="on" onclick="presSetMode('bulan')">Bulan</button>
       <button id="pm-quartal" onclick="presSetMode('quartal')">Quartal</button>
+      <button id="pm-semester" onclick="presSetMode('semester')">Semester</button>
     </div>
     <div class="grow"></div>
     <button class="pres-btn" onclick="presNav(-1)">◀</button>
@@ -1617,10 +1618,15 @@ function mEnd(ym){const [y,m]=ym.split('-').map(Number);return `${y}-${pPad(m)}-
 function presRange(ym){return `tgl_dari=${mStart(ym)}&tgl_sampai=${mEnd(ym)}`;}
 function periodInfo(){
   const [y,m]=PRES.month.split('-').map(Number);
+  const range=(a,b)=>{const months=[];for(let mm=a;mm<=b;mm++)months.push(`${y}-${pPad(mm)}`);return months;};
   if(PRES.mode==='bulan') return {d1:mStart(PRES.month),d2:mEnd(PRES.month),months:[PRES.month],label:`${BULAN_ID[m-1]} ${y}`};
-  const q=Math.floor((m-1)/3), qs=q*3+1, months=[];
-  for(let mm=qs;mm<=m;mm++) months.push(`${y}-${pPad(mm)}`);
-  return {d1:mStart(months[0]),d2:mEnd(PRES.month),months,label:`Quartal ${q+1} ${y}`};
+  if(PRES.mode==='quartal'){
+    const q=Math.floor((m-1)/3), qs=q*3+1, months=range(qs,qs+2);   // quartal PENUH (mis. Q2 = Apr-Mei-Jun)
+    return {d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Quartal ${q+1} ${y}`};
+  }
+  // semester PENUH: S1 = Jan-Jun, S2 = Jul-Des
+  const s=m<=6?1:2, ss=s===1?1:7, months=range(ss,ss+5);
+  return {d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Semester ${s} ${y}`};
 }
 function openPresent(){
   const ov=document.getElementById('present');
@@ -1636,7 +1642,7 @@ function buildPresBar(){
   const y=2026; for(let m=1;m<=12;m++){const o=document.createElement('option');o.value=`${y}-${pPad(m)}`;o.textContent=`${BULAN_ID[m-1]} ${y}`;sel.appendChild(o);}
   sel.value=PRES.month;
 }
-function presSetMode(mode){ PRES.mode=mode; document.getElementById('pm-bulan').classList.toggle('on',mode==='bulan'); document.getElementById('pm-quartal').classList.toggle('on',mode==='quartal'); loadDeck(); }
+function presSetMode(mode){ PRES.mode=mode; ['bulan','quartal','semester'].forEach(x=>document.getElementById('pm-'+x).classList.toggle('on',x===mode)); loadDeck(); }
 function presMonthChange(v){ PRES.month=v; loadDeck(); }
 function presNav(d){ let i=PRES.idx+d; if(i<0)i=0; if(i>=PRES.slides.length)i=PRES.slides.length-1; showSlide(i); }
 function presFull(){ const ov=document.getElementById('present'); if(!document.fullscreenElement)ov.requestFullscreen?.(); else document.exitFullscreen?.(); }
@@ -1656,26 +1662,20 @@ async function loadDeck(){
     const dv='&divisi='+encodeURIComponent(PRES.divisi);           // SEMUA slide difilter PT BBI
     const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`+dv;
     const yq='tahun='+PRES.month.slice(0,4)+dv;
-    const [kpi,ontime,delivery,reject,kelolosan,complain,financial]=await Promise.all(
-      ['kpi','ontime','delivery','reject','kelolosan','complain','financial'].map(ep=>fetchJSON('/api/'+ep+'?'+per).catch(()=>({}))));
-    const [kategori,sumber,topsales,marketing,bahan,scoreDivisi,byMargin,katOmzet,dealNR,journey,trendBahan,trendOmzet,marginBulan]=await Promise.all([
-      fetchJSON('/api/kategori?'+per).catch(()=>[]),
-      fetchJSON('/api/sales-by-sumber?'+per).catch(()=>[]),
-      fetchJSON('/api/top-sales?'+per).catch(()=>[]),
-      fetchJSON('/api/kpi-marketing?'+per).catch(()=>({rows:[]})),
-      fetchJSON('/api/sales-by-bahan?'+per).catch(()=>[]),
-      fetchJSON('/api/kpi-score?'+per).catch(()=>({rows:[]})),
-      fetchJSON('/api/sales-by-margin?'+per).catch(()=>[]),
-      fetchJSON('/api/kategori-omzet?'+per).catch(()=>[]),
-      fetchJSON('/api/deal-new-repeat?'+per).catch(()=>[]),
-      fetchJSON('/api/journey?'+per).catch(()=>[]),
-      fetchJSON('/api/trend-bahan?'+yq).catch(()=>[]),
-      fetchJSON('/api/trend-omzet?'+yq).catch(()=>[]),
-      fetchJSON('/api/margin-bulanan?'+yq).catch(()=>[]),
-    ]);
-    const scoreMap={};
-    await Promise.all(P.months.map(async ym=>{ scoreMap[ym]=await fetchJSON('/api/kpi-score?'+presRange(ym)+dv).catch(()=>({rows:[]})); }));
-    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap,kategori,sumber,topsales,marketing,bahan,scoreDivisi,byMargin,katOmzet,dealNR,journey,trendBahan,trendOmzet,marginBulan};
+    // Semua request ditembak SEKALIGUS (1 gelombang) supaya reload cepat
+    const specs=[
+      ['kpi','/api/kpi?'+per,{}],['ontime','/api/ontime?'+per,{}],['delivery','/api/delivery?'+per,{}],
+      ['reject','/api/reject?'+per,{}],['kelolosan','/api/kelolosan?'+per,{}],['complain','/api/complain?'+per,{}],
+      ['financial','/api/financial?'+per,{}],['kategori','/api/kategori?'+per,[]],['sumber','/api/sales-by-sumber?'+per,[]],
+      ['topsales','/api/top-sales?'+per,[]],['marketing','/api/kpi-marketing?'+per,{rows:[]}],['bahan','/api/sales-by-bahan?'+per,[]],
+      ['scoreDivisi','/api/kpi-score?'+per,{rows:[]}],['byMargin','/api/sales-by-margin?'+per,[]],['katOmzet','/api/kategori-omzet?'+per,[]],
+      ['dealNR','/api/deal-new-repeat?'+per,[]],['journey','/api/journey?'+per,[]],
+      ['trendBahan','/api/trend-bahan?'+yq,[]],['trendOmzet','/api/trend-omzet?'+yq,[]],['marginBulan','/api/margin-bulanan?'+yq,[]],
+      ...P.months.map(ym=>['sm:'+ym,'/api/kpi-score?'+presRange(ym)+dv,{rows:[]}]),
+    ];
+    const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
+    const D={P,per,scoreMap:{}};
+    specs.forEach((s,i)=>{ if(s[0].startsWith('sm:')) D.scoreMap[s[0].slice(3)]=res[i]; else D[s[0]]=res[i]; });
     PRES.slides=buildSlides(D);
     showSlide(0);
   }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
