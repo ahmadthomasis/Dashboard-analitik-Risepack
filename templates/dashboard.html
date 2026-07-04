@@ -1653,20 +1653,29 @@ async function loadDeck(){
   stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#8a7d70;font-size:20px">Memuat data presentasi…</div>';
   const P=periodInfo();
   try{
-    const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`;
+    const dv='&divisi='+encodeURIComponent(PRES.divisi);           // SEMUA slide difilter PT BBI
+    const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`+dv;
+    const yq='tahun='+PRES.month.slice(0,4)+dv;
     const [kpi,ontime,delivery,reject,kelolosan,complain,financial]=await Promise.all(
       ['kpi','ontime','delivery','reject','kelolosan','complain','financial'].map(ep=>fetchJSON('/api/'+ep+'?'+per).catch(()=>({}))));
-    const [kategori,sumber,topsales,marketing,bahan,scoreDivisi]=await Promise.all([
+    const [kategori,sumber,topsales,marketing,bahan,scoreDivisi,byMargin,katOmzet,dealNR,journey,trendBahan,trendOmzet,marginBulan]=await Promise.all([
       fetchJSON('/api/kategori?'+per).catch(()=>[]),
       fetchJSON('/api/sales-by-sumber?'+per).catch(()=>[]),
       fetchJSON('/api/top-sales?'+per).catch(()=>[]),
       fetchJSON('/api/kpi-marketing?'+per).catch(()=>({rows:[]})),
       fetchJSON('/api/sales-by-bahan?'+per).catch(()=>[]),
-      fetchJSON('/api/kpi-score?'+per+'&divisi='+encodeURIComponent(PRES.divisi)).catch(()=>({rows:[]})),
+      fetchJSON('/api/kpi-score?'+per).catch(()=>({rows:[]})),
+      fetchJSON('/api/sales-by-margin?'+per).catch(()=>[]),
+      fetchJSON('/api/kategori-omzet?'+per).catch(()=>[]),
+      fetchJSON('/api/deal-new-repeat?'+per).catch(()=>[]),
+      fetchJSON('/api/journey?'+per).catch(()=>[]),
+      fetchJSON('/api/trend-bahan?'+yq).catch(()=>[]),
+      fetchJSON('/api/trend-omzet?'+yq).catch(()=>[]),
+      fetchJSON('/api/margin-bulanan?'+yq).catch(()=>[]),
     ]);
     const scoreMap={};
-    await Promise.all(P.months.map(async ym=>{ scoreMap[ym]=await fetchJSON('/api/kpi-score?'+presRange(ym)).catch(()=>({rows:[]})); }));
-    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap,kategori,sumber,topsales,marketing,bahan,scoreDivisi};
+    await Promise.all(P.months.map(async ym=>{ scoreMap[ym]=await fetchJSON('/api/kpi-score?'+presRange(ym)+dv).catch(()=>({rows:[]})); }));
+    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap,kategori,sumber,topsales,marketing,bahan,scoreDivisi,byMargin,katOmzet,dealNR,journey,trendBahan,trendOmzet,marginBulan};
     PRES.slides=buildSlides(D);
     showSlide(0);
   }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
@@ -1681,6 +1690,14 @@ function showSlide(i){
   document.getElementById('pres-count').textContent=`${i+1} / ${PRES.slides.length}`;
 }
 function presChart(el,type,data,options){ if(!el)return; PRES.charts.push(new Chart(el.getContext('2d'),{type,data,options:{responsive:true,maintainAspectRatio:false,...options}})); }
+function presLine(el,rows,key,title){
+  const M=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const cats=[...new Set((rows||[]).map(r=>r[key]))];
+  const ds=cats.map((c,i)=>({label:c,data:M.map((_,mi)=>{const r=rows.find(r=>r[key]===c&&parseInt((r.bulan||'').slice(5))===mi+1);return r?r.omzet:0;}),
+    borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length]+'22',tension:.35,fill:false,pointRadius:2,borderWidth:2}));
+  presChart(el,'line',{labels:M,datasets:ds},{plugins:{legend:{position:'bottom',labels:{boxWidth:8,font:{size:10}}},title:{display:true,text:title}},
+    scales:{y:{ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
+}
 
 function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
 function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
@@ -1713,8 +1730,8 @@ function buildSlides(D){
       ${sdr.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${kval(r.unit,r.target)}</td><td class="num">${kval(r.unit,r.actual)}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td>${scBadge(r.score)}</td></tr>`).join('')}
       </tbody></table>`:`<div class="ps-note">Data KPI divisi "${PRES.divisi}" kosong — cek apakah nama divisi persis (bisa diubah di kode: PRES.divisi).</div>`}
     <div class="ps-note">Scorecard OKR divisi sales, filter divisi ${PRES.divisi}. Ach = min(aktual÷target,100%).</div></div>`});
-  // 4. SALES OVERVIEW CARDS
-  const k=D.kpi||{}, dd=k.delta||{};
+  // 4. SALES OVERVIEW CARDS (+ monthly trend produk + sales by produk)
+  const k=D.kpi||{}, dd=k.delta||{}, bhn=(D.bahan||[]);
   S.push({html:head(`Sales Overview <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('Total Omzet',formatRp(k.total_omzet),dlt(dd.total_omzet))}
@@ -1728,10 +1745,33 @@ function buildSlides(D){
       ${pcard('Omzet New',formatRp(k.omzet_new),dlt(dd.omzet_new))}
       ${pcard('Closing Rate New',(k.closing_rate_new!=null?k.closing_rate_new+'%':'–'),'')}
     </div>
-    <div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ presChart(sl.querySelector('canvas'),'doughnut',
-      {labels:['Repeat','New'],datasets:[{data:[k.repeat_omzet||0,k.omzet_new||0],backgroundColor:['#e9852b','#3b6fb0'],borderWidth:2,borderColor:'#fff'}]},
-      {plugins:{legend:{position:'bottom'},title:{display:true,text:'Komposisi Omzet: Repeat vs New'}}}); }});
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presLine(cv[0],D.trendBahan,'jenis_bahan','Monthly Trend Omzet per Produk');
+      presChart(cv[1],'doughnut',{labels:bhn.map(x=>x.jenis_bahan),datasets:[{data:bhn.map(x=>x.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Sales by Produk (jenis bahan)'}}}); }});
+  // 4b. DETAIL PENJUALAN (semua data penjualan)
+  const kom=(D.katOmzet||[]), ord=['>100 jt','50-100 jt','30-50 jt','<30 jt']; kom.sort((a,b)=>ord.indexOf(a.bucket)-ord.indexOf(b.bucket));
+  const tS=(D.topsales||[]);
+  S.push({html:head(`Detail Penjualan <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Total Omzet',formatRp(k.total_omzet),dlt(dd.total_omzet))}
+      ${pcard('Total Order',fmtInt(k.total_order),dlt(dd.total_order))}
+      ${pcard('Average Purchase',formatRp(k.avg_purchase),dlt(dd.avg_purchase))}
+      ${pcard('Top Sales',esc((tS[0]||{}).PIC)||'–',tS[0]?formatRp(tS[0].total_omzet):'')}
+    </div>
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Top sales: ${tS.slice(0,3).map(t=>`${esc(t.PIC)} (${formatRp(t.total_omzet)})`).join(' · ')||'–'}.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presLine(cv[0],D.trendOmzet,'kategori_produksi','Omzet per Kategori sepanjang Tahun');
+      presChart(cv[1],'bar',{labels:kom.map(x=>x.bucket),datasets:[{data:kom.map(x=>x.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omz:kom.map(x=>x.omzet)}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Jumlah Order per Rentang Nilai'},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · ${formatRp(c.dataset._omz[c.dataIndex])}`}}},scales:{y:{ticks:{precision:0}}}}); }});
   // 5. OMZET (rich: cards + tabel + 2 grafik)
   const omzetRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'omzet');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
   const oz=scoreRow(D.scoreMap[lastYm],'omzet'), kat=(D.kategori||[]).slice(0,7), sbr=(D.sumber||[]).slice(0,6), tops=(D.topsales||[]);
@@ -1753,6 +1793,30 @@ function buildSlides(D){
         {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Omzet per Kategori Produksi'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}});
       presChart(cv[1],'doughnut',{labels:sbr.map(x=>x.sumber),datasets:[{data:sbr.map(x=>x.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
         {plugins:{legend:{position:'bottom'},title:{display:true,text:'Omzet per Sumber Leads'}}}); }});
+  // 5b. MARGIN (semua detail margin)
+  const bm=(D.byMargin||[]), mOrder=['Low (<10%)','Medium (10-20%)','High (>20%)','Tidak diketahui'];
+  const mCol={'Low (<10%)':'#cf4b3a','Medium (10-20%)':'#d99327','High (>20%)':'#2f9e6f','Tidak diketahui':'#b8a89a'};
+  bm.sort((a,b)=>mOrder.indexOf(a.bucket)-mOrder.indexOf(b.bucket));
+  const hiMargin=bm.find(x=>x.bucket==='High (>20%)')||{};
+  S.push({html:head(`Analisa MARGIN <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Total Margin',formatRp(k.total_margin),dlt(dd.total_margin))}
+      ${pcard('% Margin',(k.persen_margin!=null?k.persen_margin+'%':'–'),'dari omzet')}
+      ${pcard('Total Modal',formatRp(k.total_modal),dlt(dd.total_modal))}
+      ${pcard('Order Margin Tinggi',fmtInt(hiMargin.orders||0),'>20% margin')}
+    </div>
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Distribusi order per level margin + tren % margin sepanjang tahun.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presChart(cv[0],'bar',{labels:bm.map(x=>x.bucket),datasets:[{data:bm.map(x=>x.omzet),backgroundColor:bm.map(x=>mCol[x.bucket]||'#999'),borderRadius:6,maxBarThickness:70,_o:bm.map(x=>x.orders)}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Omzet per Level Margin'},tooltip:{callbacks:{label:c=>`${formatRp(c.parsed.y)} · ${fmtInt(c.dataset._o[c.dataIndex])} order`}}},scales:{y:{ticks:{callback:v=>formatRpShort(v)}}}});
+      const M=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+      const md=M.map((_,mi)=>{const r=(D.marginBulan||[]).find(r=>parseInt((r.bulan||'').slice(5))===mi+1);return r?r.persen_margin:null;});
+      presChart(cv[1],'line',{labels:M,datasets:[{label:'% Margin',data:md,borderColor:'#4e9a3f',backgroundColor:'#4e9a3f22',tension:.35,fill:true,pointRadius:2,borderWidth:2,spanGaps:true}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Tren % Margin per Bulan'}},scales:{y:{ticks:{callback:v=>v+'%'}}}}); }});
   // 6. DETAIL OMZET NEW (rich)
   S.push({html:head(`Detail OMZET NEW <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
@@ -1771,13 +1835,50 @@ function buildSlides(D){
         {plugins:{legend:{display:false},title:{display:true,text:'Corong: Leads → Deal'}},scales:{y:{ticks:{precision:0}}}});
       presChart(cv[1],'doughnut',{labels:['Omzet New','Omzet Repeat'],datasets:[{data:[k.omzet_new||0,k.repeat_omzet||0],backgroundColor:['#3b6fb0','#e9852b'],borderWidth:2,borderColor:'#fff'}]},
         {plugins:{legend:{position:'bottom'},title:{display:true,text:'Kontribusi Omzet New vs Repeat'}}}); }});
-  // 7. REPEAT ORDER TABLE
+  // 7. REPEAT ORDER (tabel + grafik)
   const repRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'repeat');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
+  const dnr=(D.dealNR||[]).map(r=>({...r,total:(r.omzet_new||0)+(r.omzet_repeat||0)}));
+  const topRepeat=dnr.filter(r=>r.omzet_repeat>0).sort((a,b)=>b.omzet_repeat-a.omzet_repeat).slice(0,7);
   S.push({html:head(`Capaian REPEAT ORDER <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">% Achievement</th><th class="num">Target (70%)</th><th class="num">Realisasi</th></tr></thead><tbody>
     ${repRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td class="num">${formatRp(r.target)}</td><td class="num">${formatRp(r.actual)}</td></tr>`).join('')}
     </tbody></table>
-    <div class="ps-note">Repeat order dari pelanggan lama vs target 70% omzet. Total repeat ${formatRp(k.repeat_omzet)} (${k.persen_repeat_omzet!=null?k.persen_repeat_omzet+'% omzet':'–'}).</div></div>`});
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Total repeat ${formatRp(k.repeat_omzet)} (${k.persen_repeat_omzet!=null?k.persen_repeat_omzet+'% omzet':'–'}). Target = 70% omzet.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presChart(cv[0],'doughnut',{labels:['Repeat','New'],datasets:[{data:[k.repeat_omzet||0,k.omzet_new||0],backgroundColor:['#e9852b','#3b6fb0'],borderWidth:2,borderColor:'#fff'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Komposisi Omzet: Repeat vs New'}}});
+      presChart(cv[1],'bar',{labels:topRepeat.map(x=>x.nama),datasets:[{data:topRepeat.map(x=>x.omzet_repeat),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:22}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Top Customer Repeat Order'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}}); }});
+  // 7b. DEAL NEW vs REPEAT per customer
+  const dnrTop=dnr.sort((a,b)=>b.total-a.total).slice(0,10);
+  const sumNew=dnr.reduce((s,r)=>s+(r.omzet_new||0),0), sumRep=dnr.reduce((s,r)=>s+(r.omzet_repeat||0),0);
+  S.push({html:head(`Deal: New vs Repeat <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Omzet New',formatRp(sumNew),`${fmtInt(k.total_new)} customer baru`)}
+      ${pcard('Omzet Repeat',formatRp(sumRep),`${fmtInt(k.total_repeat)} repeat`)}
+      ${pcard('Total Deal',formatRp(sumNew+sumRep),`${fmtInt(k.total_deal)} order deal`)}
+    </div>
+    <table class="ps-tab"><thead><tr><th>Customer</th><th class="num">Omzet New</th><th class="num">Omzet Repeat</th><th class="num">Total</th></tr></thead><tbody>
+    ${dnrTop.map(r=>`<tr><td>${esc(r.nama)}</td><td class="num" style="color:#993C1D">${r.omzet_new?formatRp(r.omzet_new):'–'}</td><td class="num" style="color:#854F0B">${r.omzet_repeat?formatRp(r.omzet_repeat):'–'}</td><td class="num" style="font-weight:700">${formatRp(r.total)}</td></tr>`).join('')||'<tr><td colspan="4">Tidak ada data</td></tr>'}
+    </tbody></table>
+    <div class="ps-note">Top 10 customer berdasar total omzet deal, dipecah New vs Repeat.</div></div>`});
+  // 7c. CUSTOMER FOLLOW UP (belum order)
+  const jr=(D.journey||[]).slice().sort((a,b)=>(b.potensi||0)-(a.potensi||0)).slice(0,10);
+  const totPot=(D.journey||[]).reduce((s,r)=>s+(r.potensi||0),0);
+  S.push({html:head(`Customer Follow Up <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Customer Pipeline',fmtInt((D.journey||[]).length),'belum order')}
+      ${pcard('Total Potensi',formatRp(totPot),'nilai pipeline')}
+      ${pcard('Potensi Terbesar',esc((jr[0]||{}).nama)||'–',jr[0]?formatRp(jr[0].potensi):'')}
+    </div>
+    <table class="ps-tab"><thead><tr><th>Customer</th><th>PIC</th><th class="num">Order</th><th class="num">Potensi</th></tr></thead><tbody>
+    ${jr.map(r=>`<tr><td>${esc(r.nama)}</td><td>${esc(r.pic)||'-'}</td><td class="num">${fmtInt(r.orders)}</td><td class="num" style="font-weight:600">${formatRp(r.potensi)}</td></tr>`).join('')||'<tr><td colspan="4">Tidak ada customer follow up periode ini</td></tr>'}
+    </tbody></table>
+    <div class="ps-note">Customer dalam pipeline (status Follow Up) pada ${P.label} — prioritas nilai potensi terbesar.</div></div>`});
   // 8. UMBRELLA CONTRACT (editable)
   const um=scoreRow(D.scoreMap[lastYm],'umbrella');
   S.push({html:head(`Umbrella Contract <span class="yr">${BULAN_ID[+lastYm.split('-')[1]-1]} ${lastYm.split('-')[0]}</span>`)+`<div class="ps-body">
