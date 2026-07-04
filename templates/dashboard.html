@@ -1610,7 +1610,7 @@ function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
 
 // ═══════════════ PRESENTASI (Phase 1) ═══════════════
 const BULAN_ID=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const PRES={month:'2026-06',mode:'bulan',idx:0,slides:[],charts:[]};
+const PRES={month:'2026-06',mode:'bulan',idx:0,slides:[],charts:[],divisi:'PT BBI'};
 function pPad(n){return String(n).padStart(2,'0');}
 function mStart(ym){return ym+'-01';}
 function mEnd(ym){const [y,m]=ym.split('-').map(Number);return `${y}-${pPad(m)}-${pPad(new Date(y,m,0).getDate())}`;}
@@ -1656,9 +1656,17 @@ async function loadDeck(){
     const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`;
     const [kpi,ontime,delivery,reject,kelolosan,complain,financial]=await Promise.all(
       ['kpi','ontime','delivery','reject','kelolosan','complain','financial'].map(ep=>fetchJSON('/api/'+ep+'?'+per).catch(()=>({}))));
+    const [kategori,sumber,topsales,marketing,bahan,scoreDivisi]=await Promise.all([
+      fetchJSON('/api/kategori?'+per).catch(()=>[]),
+      fetchJSON('/api/sales-by-sumber?'+per).catch(()=>[]),
+      fetchJSON('/api/top-sales?'+per).catch(()=>[]),
+      fetchJSON('/api/kpi-marketing?'+per).catch(()=>({rows:[]})),
+      fetchJSON('/api/sales-by-bahan?'+per).catch(()=>[]),
+      fetchJSON('/api/kpi-score?'+per+'&divisi='+encodeURIComponent(PRES.divisi)).catch(()=>({rows:[]})),
+    ]);
     const scoreMap={};
     await Promise.all(P.months.map(async ym=>{ scoreMap[ym]=await fetchJSON('/api/kpi-score?'+presRange(ym)).catch(()=>({rows:[]})); }));
-    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap};
+    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap,kategori,sumber,topsales,marketing,bahan,scoreDivisi};
     PRES.slides=buildSlides(D);
     showSlide(0);
   }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
@@ -1678,6 +1686,11 @@ function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
 function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
 function pcard(l,v,d){ return `<div class="ps-card"><div class="l">${l}</div><div class="v">${v}</div>${d?`<div class="d">${d}</div>`:''}</div>`; }
 function dlt(v){ if(v==null)return''; const up=v>=0; return `<span class="${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; }
+function kval(u,v){ if(v==null)return'–'; if(u==='Rp')return formatRp(v); if(u==='%')return v+'%'; if(u==='kontrak')return fmtInt(v)+' kontrak'; if(u==='x')return v+'x'; if(u==='leads')return fmtInt(v)+' leads'; return fmtInt(v); }
+function scBadge(s){ const c=s>=5?'ps-win':(s<=2?'ps-lose':''); return `<span class="ps-badge ${c}">${s}</span>`; }
+function noteKey(kind,ym){ return `pres_note_${kind}_${ym}`; }
+function getNote(kind,ym){ try{return localStorage.getItem(noteKey(kind,ym))||'';}catch(e){return'';} }
+function saveNote(kind,ym,v){ try{localStorage.setItem(noteKey(kind,ym),v);}catch(e){} }
 
 function buildSlides(D){
   const S=[], P=D.P, lastYm=P.months[P.months.length-1];
@@ -1688,7 +1701,19 @@ function buildSlides(D){
     <h1>EVALUASI<br>${P.label.toUpperCase()}</h1><div class="sub">Laporan Kinerja · PT BBI</div></div>`});
   // 2. DIVIDER SALES
   S.push({cls:'ps-div',html:`<div class="corner"></div><h2>Sales<br>Marsales</h2>`});
-  // 3. SALES OVERVIEW CARDS
+  // 3. KPI DIVISI (PT BBI) SCORECARD
+  const sd=D.scoreDivisi||{}, sdr=sd.rows||[];
+  S.push({html:head(`KPI Divisi Sales <span class="yr">${PRES.divisi}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Total KPI',`${sd.total_kpi!=null?sd.total_kpi:'–'} / 6`,'skor tertimbang')}
+      ${pcard('Total Achievement',(sd.total_ach!=null?sd.total_ach+'%':'–'),sd.label||'')}
+      ${pcard('Periode',P.label,`divisi ${PRES.divisi}`)}
+    </div>
+    ${sdr.length?`<table class="ps-tab"><thead><tr><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th>Skor</th></tr></thead><tbody>
+      ${sdr.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${kval(r.unit,r.target)}</td><td class="num">${kval(r.unit,r.actual)}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td>${scBadge(r.score)}</td></tr>`).join('')}
+      </tbody></table>`:`<div class="ps-note">Data KPI divisi "${PRES.divisi}" kosong — cek apakah nama divisi persis (bisa diubah di kode: PRES.divisi).</div>`}
+    <div class="ps-note">Scorecard OKR divisi sales, filter divisi ${PRES.divisi}. Ach = min(aktual÷target,100%).</div></div>`});
+  // 4. SALES OVERVIEW CARDS
   const k=D.kpi||{}, dd=k.delta||{};
   S.push({html:head(`Sales Overview <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
@@ -1707,31 +1732,79 @@ function buildSlides(D){
     init:(sl)=>{ presChart(sl.querySelector('canvas'),'doughnut',
       {labels:['Repeat','New'],datasets:[{data:[k.repeat_omzet||0,k.omzet_new||0],backgroundColor:['#e9852b','#3b6fb0'],borderWidth:2,borderColor:'#fff'}]},
       {plugins:{legend:{position:'bottom'},title:{display:true,text:'Komposisi Omzet: Repeat vs New'}}}); }});
-  // 4. OMZET TABLE
+  // 5. OMZET (rich: cards + tabel + 2 grafik)
   const omzetRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'omzet');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
+  const oz=scoreRow(D.scoreMap[lastYm],'omzet'), kat=(D.kategori||[]).slice(0,7), sbr=(D.sumber||[]).slice(0,6), tops=(D.topsales||[]);
+  const topN=tops.slice(0,3).map(t=>`${esc(t.PIC)} (${formatRp(t.total_omzet)})`).join(' · ');
   S.push({html:head(`Capaian OMZET <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">% Achievement</th><th class="num">Target</th><th class="num">Realisasi</th></tr></thead><tbody>
-    ${omzetRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td class="num">${formatRp(r.target)}</td><td class="num">${formatRp(r.actual)}</td></tr>`).join('')}
-    </tbody></table>
-    <div class="ps-note">Target vs realisasi omzet ${P.label}. Sumber: KPI Divisi (kpi_config.json).</div></div>`});
-  // 5. REPEAT ORDER TABLE
+    <div class="ps-cards">
+      ${pcard('Target',formatRp(oz.target),'per '+(PRES.mode==='bulan'?'bulan':'periode'))}
+      ${pcard('Realisasi',formatRp(oz.actual),dlt(dd.total_omzet))}
+      ${pcard('% Achievement',(oz.ach!=null?oz.ach+'%':'–'),'vs target')}
+      ${pcard('Total Order',fmtInt(k.total_order),`avg ${formatRp(k.avg_purchase)}`)}
+    </div>
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Achievement tertinggi: ${topN||'–'}.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presChart(cv[0],'bar',{labels:kat.map(x=>x.kategori_produksi),datasets:[{data:kat.map(x=>x.omzet),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:24}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Omzet per Kategori Produksi'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}});
+      presChart(cv[1],'doughnut',{labels:sbr.map(x=>x.sumber),datasets:[{data:sbr.map(x=>x.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Omzet per Sumber Leads'}}}); }});
+  // 6. DETAIL OMZET NEW (rich)
+  S.push({html:head(`Detail OMZET NEW <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Omzet New',formatRp(k.omzet_new),dlt(dd.omzet_new))}
+      ${pcard('New Customer (Deal)',fmtInt(k.total_new),dlt(dd.total_new))}
+      ${pcard('Qualified Leads',fmtInt(k.qualified_new),'sumber online')}
+      ${pcard('Closing Rate New',(k.closing_rate_new!=null?k.closing_rate_new+'%':'–'),`target 10%`)}
+    </div>
+    <div class="ps-two">
+      <div class="ps-chartbox"><canvas></canvas></div>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Corong customer baru: dari ${fmtInt(k.qualified_new)} leads online menjadi ${fmtInt(k.total_new)} deal (closing ${k.closing_rate_new!=null?k.closing_rate_new+'%':'–'}), menyumbang omzet ${formatRp(k.omzet_new)}.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presChart(cv[0],'bar',{labels:['Qualified Leads','Deal New'],datasets:[{data:[k.qualified_new||0,k.total_new||0],backgroundColor:['#3b6fb0','#2f9e6f'],borderRadius:8,maxBarThickness:80}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Corong: Leads → Deal'}},scales:{y:{ticks:{precision:0}}}});
+      presChart(cv[1],'doughnut',{labels:['Omzet New','Omzet Repeat'],datasets:[{data:[k.omzet_new||0,k.repeat_omzet||0],backgroundColor:['#3b6fb0','#e9852b'],borderWidth:2,borderColor:'#fff'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Kontribusi Omzet New vs Repeat'}}}); }});
+  // 7. REPEAT ORDER TABLE
   const repRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'repeat');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
   S.push({html:head(`Capaian REPEAT ORDER <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">% Achievement</th><th class="num">Target (70%)</th><th class="num">Realisasi</th></tr></thead><tbody>
     ${repRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td class="num">${formatRp(r.target)}</td><td class="num">${formatRp(r.actual)}</td></tr>`).join('')}
     </tbody></table>
-    <div class="ps-note">Repeat order dari pelanggan lama vs target 70% omzet.</div></div>`});
-  // 6. UMBRELLA / CLOSING / POTENSI
-  const sm=D.scoreMap[lastYm]||{};
-  const um=scoreRow(sm,'umbrella'),cn=scoreRow(sm,'closing_new'),po=scoreRow(sm,'potensi');
-  S.push({html:head(`Umbrella · Closing New · Potensi <span class="yr">${BULAN_ID[+lastYm.split('-')[1]-1]}</span>`)+`<div class="ps-body">
-    <div class="ps-cards c3" style="margin-top:8px">
-      ${pcard('Umbrella Contract',`${fmtInt(um.actual)} / ${fmtInt(um.target)}`,`achievement ${um.ach!=null?um.ach+'%':'–'}`)}
-      ${pcard('Closing Rate New',`${cn.actual!=null?cn.actual+'%':'–'}`,`target ${fmtInt(cn.target)}% · ach ${cn.ach!=null?cn.ach+'%':'–'}`)}
-      ${pcard('Potensi Marketing',formatRp(po.actual),`target ${formatRp(po.target)} · ach ${po.ach!=null?po.ach+'%':'–'}`)}
+    <div class="ps-note">Repeat order dari pelanggan lama vs target 70% omzet. Total repeat ${formatRp(k.repeat_omzet)} (${k.persen_repeat_omzet!=null?k.persen_repeat_omzet+'% omzet':'–'}).</div></div>`});
+  // 8. UMBRELLA CONTRACT (editable)
+  const um=scoreRow(D.scoreMap[lastYm],'umbrella');
+  S.push({html:head(`Umbrella Contract <span class="yr">${BULAN_ID[+lastYm.split('-')[1]-1]} ${lastYm.split('-')[0]}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Target',`${fmtInt(um.target)} kontrak`,'per bulan')}
+      ${pcard('Realisasi',`${fmtInt(um.actual)} kontrak`,'')}
+      ${pcard('Achievement',(um.ach!=null?um.ach+'%':'–'),um.ach>=100?'tercapai':'belum tercapai')}
     </div>
-    <div class="ps-note">Kontrak payung, closing rate customer baru, dan total nilai potensi.</div></div>`});
-  // 7. OKR MARSALES SCORE
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+      <div style="font-size:13px;color:#8a7d70;font-weight:600;margin-bottom:6px">Catatan / poin evaluasi (bisa diedit — tersimpan otomatis di browser):</div>
+      <textarea oninput="saveNote('umbrella','${lastYm}',this.value)" placeholder="• Kenapa target belum tercapai?&#10;• Kontrak yang sedang di-follow up&#10;• Rencana bulan depan" style="flex:1;width:100%;border:2px solid #ece5db;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:15.5px;line-height:1.6;color:#3a3128;resize:none">${esc(getNote('umbrella',lastYm))}</textarea>
+    </div></div>`});
+  // 9. POTENSI 3M (scorecard)
+  const po=scoreRow(D.scoreMap[lastYm],'potensi'), mk=D.marketing||{}, mkr=mk.rows||[];
+  S.push({html:head(`Potensi 3M <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Total Potensi',formatRp(po.actual),'nilai potensi baru')}
+      ${pcard('Target',formatRp(po.target),'3M / bulan')}
+      ${pcard('% Achievement',(po.ach!=null?po.ach+'%':'–'),'vs target')}
+      ${pcard('Skor',(po.score!=null?po.score+' / 6':'–'),'bobot potensi')}
+    </div>
+    ${mkr.length?`<table class="ps-tab"><thead><tr><th>KPI Marketing</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th>Skor</th></tr></thead><tbody>
+      ${mkr.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${kval(r.unit,r.target)}</td><td class="num">${kval(r.unit,r.actual)}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td>${scBadge(r.score)}</td></tr>`).join('')}
+      <tr style="font-weight:700"><td>TOTAL</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${mk.total_ach!=null?mk.total_ach+'%':'–'}</td><td>${mk.label||''}</td></tr>
+      </tbody></table>`:'<div class="ps-note">Data KPI marketing kosong untuk periode ini.</div>'}
+    <div class="ps-note">Scorecard marketing: potensi omzet, qualified leads, ROI iklan.</div></div>`});
+  // 10. OKR MARSALES SCORE
   const okrRows=P.months.map(ym=>({ym,sc:D.scoreMap[ym]||{}}));
   S.push({html:head(`OKR Marsales <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Achievement</th><th class="num">Skor KPI</th><th>Label</th></tr></thead><tbody>
