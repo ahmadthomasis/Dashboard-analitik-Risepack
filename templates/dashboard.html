@@ -96,6 +96,7 @@ main{padding:24px 26px;}
 .a-green{--accent:var(--green);--accent-soft:#e6f5ee;}
 .a-leaf{--accent:var(--leaf);--accent-soft:#eaf5e7;}
 .a-amber{--accent:var(--amber);--accent-soft:#fdf0df;}
+.a-red{--accent:var(--red);--accent-soft:#fbeae7;}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:15px;}
 .grid-2-wide{display:grid;grid-template-columns:1.5fr 1fr;gap:15px;}
@@ -363,6 +364,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           <button class="subtab active" id="pt-status" onclick="prodTab('status')">📊 Overview</button>
           <button class="subtab" id="pt-otd" onclick="prodTab('otd')">⏱️ On Time Delivery</button>
           <button class="subtab" id="pt-infull" onclick="prodTab('infull')">📦 In Full Delivery</button>
+          <button class="subtab" id="pt-kelolosan" onclick="prodTab('kelolosan')">🎯 Kelolosan Reject</button>
         </div>
 
         <div id="prodview-status">
@@ -402,6 +404,27 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
               <span class="muted" id="if-count"></span>
             </div>
             <div class="table-wrap" id="if-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+
+        <div id="prodview-kelolosan" style="display:none">
+          <div class="kpi-grid" id="kel-cards" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-bottom:14px"><div class="loading">Memuat…</div></div>
+          <div class="grid-2">
+            <div class="card"><h3>Tren % Kelolosan per Bulan</h3><div class="ch-sub">Kendala produksi ÷ jumlah SPK · makin kecil makin baik</div><div class="chart-wrap" style="height:210px"><canvas id="c-kel-trend"></canvas></div></div>
+            <div class="card"><h3>Kendala per Kategori</h3><div class="ch-sub">Jenis masalah produksi (tb_fpms) terbanyak</div><div class="chart-wrap" style="height:210px"><canvas id="c-kel-kat"></canvas></div></div>
+          </div>
+          <div class="grid-2" style="margin-top:15px">
+            <div class="card"><h3>Top Customer Terkena Kendala</h3><div class="ch-sub">Customer dengan kendala produksi terbanyak · maks 12</div><div class="chart-wrap" style="height:240px"><canvas id="c-kel-cust"></canvas></div></div>
+            <div class="card"><h3>Top PIC Terkait Kendala</h3><div class="ch-sub">PIC/sales dengan kendala produksi terbanyak · maks 12</div><div class="chart-wrap" style="height:240px"><canvas id="c-kel-pic"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px">
+            <h3>Detail Kendala Produksi</h3>
+            <div class="ch-sub">Sumber: Kendala Produksi (tb_fpms) · difilter tanggal masalah dalam periode</div>
+            <div class="toolbar" style="margin:12px 0 6px">
+              <input id="kel-search" type="text" placeholder="🔎 Cari SKO / customer / PIC / kategori…" oninput="onKelSearch(this.value)">
+              <span class="muted" id="kel-count"></span>
+            </div>
+            <div class="table-wrap" id="kel-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -575,7 +598,7 @@ function kpiTab(t){
 }
 function prodTab(t){
   state.prodtab=t;
-  ['status','otd','infull'].forEach(x=>{
+  ['status','otd','infull','kelolosan'].forEach(x=>{
     document.getElementById('pt-'+x).classList.toggle('active',x===t);
     document.getElementById('prodview-'+x).style.display = x===t?'':'none';
   });
@@ -593,7 +616,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
-  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['ov-cards',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : [['deliv-if-cards',loadInfull]]);
+  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['ov-cards',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : (state.prodtab==='infull' ? [['deliv-if-cards',loadInfull]] : [['kel-cards',loadKelolosan]]));
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -954,6 +977,60 @@ function renderIfTable(){
         <td class="num" style="color:var(--red);font-weight:600">${r.kurang!=null?fmtInt(r.kurang):(r.if_status==='Belum Dikirim'?fmtInt(r.qty_dipesan):'–')}</td>
         <td><span class="pill ${r.if_status==='Kurang'?'warn':''}">${esc(r.if_status)}</span></td>
       </tr>`).join('') : `<tr><td colspan="8" class="loading">${IFT.term?'Tidak ada yang cocok':'Semua order terkirim lengkap 🎉'}</td></tr>`
+    }</tbody></table>`;
+}
+
+// ── Kelolosan Reject ke Customer ──
+async function loadKelolosan(q){
+  const d=await fetchJSON('/api/kelolosan?'+q);
+  const kelClass=p=>p==null?'':(p<=10?'good':(p>20?'warn':''));
+  document.getElementById('kel-cards').innerHTML=
+    kpiCard('a-orange','🎯','% Kelolosan',pctTxt(d.pct),`<span class="pill ${kelClass(d.pct)}">${fmtInt(d.kendala)} kendala / ${fmtInt(d.spk)} SPK</span>`)
+   +kpiCard('a-red','⚠️','Jumlah Kendala',fmtInt(d.kendala),`<span class="muted">masalah produksi (tb_fpms)</span>`)
+   +kpiCard('a-blue','📋','Total SPK',fmtInt(d.spk),`<span class="muted">proyek FAW (pembagi)</span>`)
+   +kpiCard('a-brown','🏷️','Kategori Terbanyak',esc((d.by_kategori[0]||{}).kategori)||'–',d.by_kategori[0]?`<span class="muted">${fmtInt(d.by_kategori[0].n)} kejadian</span>`:'<span class="muted">—</span>');
+  const tr=d.trend, oneMonth=tr.length<=1;
+  renderChart('c-kel-trend',oneMonth?'bar':'line',{labels:tr.map(t=>t.bulan),
+    datasets:[oneMonth
+      ? {label:'% Kelolosan',data:tr.map(t=>t.pct),backgroundColor:'#cf4b3a',borderRadius:8,maxBarThickness:70}
+      : {label:'% Kelolosan',data:tr.map(t=>t.pct),borderColor:'#cf4b3a',backgroundColor:'#cf4b3a22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const t=tr[c.dataIndex];return `Kelolosan: ${t.pct==null?'–':t.pct+'%'} (${fmtInt(t.kendala)}/${fmtInt(t.spk)})`;}}}},
+     scales:{y:{min:0,ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+  const bk=d.by_kategori||[];
+  barH('c-kel-kat',bk.map(r=>r.kategori),bk.map(r=>r.n),'#e9852b');
+  charts['c-kel-kat'].options.scales.x.ticks.callback=v=>fmtInt(v);
+  charts['c-kel-kat'].options.plugins.tooltip.callbacks.label=c=>`${fmtInt(c.parsed.x)} kendala`;
+  charts['c-kel-kat'].update();
+  const bc=d.by_customer||[];
+  barH('c-kel-cust',bc.map(r=>r.customer),bc.map(r=>r.n),'#3b6fb0');
+  charts['c-kel-cust'].options.scales.x.ticks.callback=v=>fmtInt(v);
+  charts['c-kel-cust'].options.plugins.tooltip.callbacks.label=c=>`${fmtInt(c.parsed.x)} kendala`;
+  charts['c-kel-cust'].update();
+  const bp=d.by_pic||[];
+  barH('c-kel-pic',bp.map(r=>r.pic),bp.map(r=>r.n),'#4e9a3f');
+  charts['c-kel-pic'].options.scales.x.ticks.callback=v=>fmtInt(v);
+  charts['c-kel-pic'].options.plugins.tooltip.callbacks.label=c=>`${fmtInt(c.parsed.x)} kendala`;
+  charts['c-kel-pic'].update();
+  KEL.rows=d.rows||[];
+  renderKelTable();
+}
+const KEL={rows:[],term:''};
+function onKelSearch(v){ KEL.term=(v||'').trim().toLowerCase(); renderKelTable(); }
+function renderKelTable(){
+  let rows=KEL.rows;
+  if(KEL.term) rows=rows.filter(r=>[r.sko,r.customer,r.pic,r.jenis,r.kategori].map(x=>x||'').join(' ').toLowerCase().includes(KEL.term));
+  const cnt=document.getElementById('kel-count'); if(cnt) cnt.textContent=`${rows.length} kendala`;
+  document.getElementById('kel-table').innerHTML=`<table style="min-width:820px"><thead><tr>
+      <th>Tgl Masalah</th><th>SKO</th><th>Customer</th><th>PIC</th><th>Jenis Bahan</th><th>Kategori Masalah</th>
+    </tr></thead><tbody>${
+      rows.length? rows.map(r=>`<tr>
+        <td>${r.tgl_masalah||'-'}</td>
+        <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
+        <td title="${esc(r.customer,1)}">${esc(r.customer)||'-'}</td>
+        <td>${esc(r.pic)||'-'}</td>
+        <td>${esc(r.jenis)||'-'}</td>
+        <td><span class="pill warn">${esc(r.kategori)||'(lain)'}</span></td>
+      </tr>`).join('') : `<tr><td colspan="6" class="loading">${KEL.term?'Tidak ada yang cocok':'Tidak ada kendala pada periode ini 🎉'}</td></tr>`
     }</tbody></table>`;
 }
 
