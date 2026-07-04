@@ -1483,9 +1483,16 @@ def api_financial():
                 'gpm': round(gp / rev * 100, 1) if rev else None,
                 'npm': round(net / rev * 100, 1) if rev else None}
 
+    tgl_dari, tgl_sampai, _p, _d = get_args()
+    d1, d2 = _pdate(tgl_dari), _pdate(tgl_sampai)
+
     months = []
-    for en, ab in MONTHS:
+    for idx, (en, ab) in enumerate(MONTHS, start=1):
         if ab not in mcol:
+            continue
+        ms = datetime(2026, idx, 1).date()
+        me = datetime(2026, idx, calendar.monthrange(2026, idx)[1]).date()
+        if (d1 and me < d1) or (d2 and ms > d2):
             continue
         ci, cp = mcol[ab]
         months.append({'bulan': ab, 'invoice': blk(ci), 'po': blk(cp)})
