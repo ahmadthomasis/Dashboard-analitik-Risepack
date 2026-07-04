@@ -1151,17 +1151,14 @@ def api_ontime():
     if divisi:
         vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         vparams.append(divisi)
-    try:
-        view = query(f"""
-            SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
-                   MAX(o.jenis_bahan) AS jenis,
-                   MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
-            FROM order_risepack o
-            WHERE {' AND '.join(vcond)}
-            GROUP BY o.sko_key
-        """, vparams)
-    except Exception as e:
-        return jsonify({'_error': str(e), 'step': 'view'}), 200
+    view = query(f"""
+        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+               MAX(o.jenis_bahan) AS jenis,
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
+        FROM order_risepack o
+        WHERE {' AND '.join(vcond)}
+        GROUP BY o.sko_key
+    """, vparams)
     v_map = {r['sko_key']: r for r in view}
     filtered = bool(pic or divisi)
 
@@ -1296,6 +1293,122 @@ def api_overview():
     return jsonify({
         'total_pcs': total_pcs, 'by_jenis': by_jenis_list,
         'spk': {'total': spk_total, 'tuntas': tuntas, 'berjalan': berjalan},
+    })
+
+
+@app.route('/api/kelolosan')
+@login_required
+def api_kelolosan():
+    """Kelolosan reject ke customer.
+       % Kelolosan = jumlah kendala produksi (tb_fpms, by tgl_masalah)
+                     ÷ jumlah SPK (proyek FAW, by tgl_deadline) dalam periode.
+       Contoh Juni: 10 kendala / 112 SPK ≈ 8,9%.
+       Kendala = tb_fpms (Kendala Produksi di app). Customer/PIC via sko_key -> view."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+
+    # 1) SPK universe = proyek FAW dengan deadline dalam periode (sama seperti Overview)
+    fcond, fp = ["f.sko_key IS NOT NULL", "f.tgl_deadline IS NOT NULL"], []
+    if tgl_dari:  fcond.append("f.tgl_deadline >= %s"); fp.append(tgl_dari)
+    if tgl_sampai: fcond.append("f.tgl_deadline <= %s"); fp.append(tgl_sampai)
+    faw = query(f"SELECT f.sko_key, MIN(f.tgl_deadline) AS deadline FROM tb_faws f "
+                f"WHERE {' AND '.join(fcond)} GROUP BY f.sko_key", fp)
+
+    # 2) Kendala = tb_fpms, difilter by tgl_masalah dalam periode
+    kcond, kp = ["k.tgl_masalah IS NOT NULL"], []
+    if tgl_dari:  kcond.append("k.tgl_masalah >= %s"); kp.append(tgl_dari)
+    if tgl_sampai: kcond.append("k.tgl_masalah <= %s"); kp.append(tgl_sampai)
+    kendala = query(f"SELECT k.sko_key, k.tgl_masalah, k.kategori_masalah "
+                    f"FROM tb_fpms k WHERE {' AND '.join(kcond)}", kp)
+
+    # 3) Label (SKO/PIC/customer/jenis) dari view — untuk semua sko_key yang dipakai
+    need = set(r['sko_key'] for r in faw if r['sko_key'])
+    need |= set(r['sko_key'] for r in kendala if r['sko_key'])
+    v_map = {}
+    if need:
+        keys = list(need)
+        ph = ','.join(['%s'] * len(keys))
+        view = query(f"""
+            SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+                   MAX(o.nama_brand) AS customer, MAX(o.jenis_bahan) AS jenis,
+                   MAX(o.order_key) AS order_key
+            FROM order_risepack o WHERE o.sko_key IN ({ph}) GROUP BY o.sko_key
+        """, keys)
+        v_map = {r['sko_key']: r for r in view}
+
+    # filter pic/divisi -> himpunan sko_key yang lolos
+    def keep(k):
+        if not (pic or divisi):
+            return True
+        v = v_map.get(k)
+        if not v:
+            return False
+        if pic and (v.get('pic') or '') != pic:
+            return False
+        if divisi:
+            ok = query("SELECT 1 FROM tb_orders WHERE order_key=%s AND sub_division=%s LIMIT 1",
+                       [v.get('order_key'), divisi])
+            if not ok:
+                return False
+        return True
+
+    def ym(v):
+        return fmt_date(v)[:7] if fmt_date(v) else None
+
+    # SPK per bulan
+    spk_month, spk_total = {}, 0
+    for f in faw:
+        k = f['sko_key']
+        if not keep(k):
+            continue
+        spk_total += 1
+        b = ym(f['deadline'])
+        if b:
+            spk_month[b] = spk_month.get(b, 0) + 1
+
+    # Kendala per bulan + breakdown
+    kendala_month = {}
+    by_kat, by_cust, by_pic = {}, {}, {}
+    rows = []
+    kendala_total = 0
+    for r in kendala:
+        k = r['sko_key']
+        if not keep(k):
+            continue
+        kendala_total += 1
+        b = ym(r['tgl_masalah'])
+        if b:
+            kendala_month[b] = kendala_month.get(b, 0) + 1
+        kat = (r.get('kategori_masalah') or '(lain)').strip() or '(lain)'
+        by_kat[kat] = by_kat.get(kat, 0) + 1
+        v = v_map.get(k, {})
+        cust = (v.get('customer') or '(tanpa customer)').strip() or '(tanpa customer)'
+        pc = (v.get('pic') or '(tanpa PIC)').strip() or '(tanpa PIC)'
+        by_cust[cust] = by_cust.get(cust, 0) + 1
+        by_pic[pc] = by_pic.get(pc, 0) + 1
+        rows.append({
+            'sko': v.get('sko'), 'customer': v.get('customer'), 'pic': v.get('pic'),
+            'jenis': v.get('jenis'), 'tgl_masalah': fmt_date(r['tgl_masalah']),
+            'kategori': r.get('kategori_masalah'),
+        })
+
+    months = sorted(set(spk_month) | set(kendala_month))
+    trend = [{'bulan': b, 'kendala': kendala_month.get(b, 0), 'spk': spk_month.get(b, 0),
+              'pct': round(kendala_month.get(b, 0) / spk_month[b] * 100, 1) if spk_month.get(b) else None}
+             for b in months]
+
+    rows.sort(key=lambda x: (x['tgl_masalah'] or ''), reverse=True)
+    return jsonify({
+        'kendala': kendala_total,
+        'spk': spk_total,
+        'pct': round(kendala_total / spk_total * 100, 1) if spk_total else None,
+        'trend': trend,
+        'by_kategori': sorted(({'kategori': k, 'n': v} for k, v in by_kat.items()),
+                              key=lambda x: -x['n']),
+        'by_customer': sorted(({'customer': k, 'n': v} for k, v in by_cust.items()),
+                              key=lambda x: -x['n'])[:12],
+        'by_pic': sorted(({'pic': k, 'n': v} for k, v in by_pic.items()),
+                         key=lambda x: -x['n'])[:12],
+        'rows': rows[:3000],
     })
 
 
