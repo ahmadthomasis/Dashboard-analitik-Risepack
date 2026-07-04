@@ -365,6 +365,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
           <button class="subtab" id="pt-otd" onclick="prodTab('otd')">⏱️ On Time Delivery</button>
           <button class="subtab" id="pt-infull" onclick="prodTab('infull')">📦 In Full Delivery</button>
           <button class="subtab" id="pt-kelolosan" onclick="prodTab('kelolosan')">🎯 Kelolosan Reject</button>
+          <button class="subtab" id="pt-complain" onclick="prodTab('complain')">🛠️ Complain Handling</button>
         </div>
 
         <div id="prodview-status">
@@ -425,6 +426,24 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
               <span class="muted" id="kel-count"></span>
             </div>
             <div class="table-wrap" id="kel-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+
+        <div id="prodview-complain" style="display:none">
+          <div class="kpi-grid" id="cmp-cards" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-bottom:14px"><div class="loading">Memuat…</div></div>
+          <div class="grid-2">
+            <div class="card"><h3>Tren % Complain Handling</h3><div class="ch-sub">% solved tepat waktu (H+3) per bulan CPAR</div><div class="chart-wrap" style="height:210px"><canvas id="c-cmp-trend"></canvas></div></div>
+            <div class="card"><h3>Corrective Action</h3><div class="ch-sub">Tepat waktu vs terlambat per jenis tindakan</div><div class="chart-wrap" style="height:210px"><canvas id="c-cmp-action"></canvas></div></div>
+          </div>
+          <div class="card" style="margin-top:15px"><h3>Complain Handling per Vendor</h3><div class="ch-sub">On time (hijau) vs Over time (oranye) per vendor · maks 12</div><div class="chart-wrap" style="height:270px"><canvas id="c-cmp-vendor"></canvas></div></div>
+          <div class="card" style="margin-top:15px">
+            <h3>Detail Complain (CPAR)</h3>
+            <div class="ch-sub">Sumber: Google Sheet Masterdata QAQC (tab CPAR 2026) · tepat waktu = kolom Inspection Time · Over time tampil di atas</div>
+            <div class="toolbar" style="margin:12px 0 6px">
+              <input id="cmp-search" type="text" placeholder="🔎 Cari kode order / konsumen / produk / vendor / action…" oninput="onCmpSearch(this.value)">
+              <span class="muted" id="cmp-count"></span>
+            </div>
+            <div class="table-wrap" id="cmp-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -598,7 +617,7 @@ function kpiTab(t){
 }
 function prodTab(t){
   state.prodtab=t;
-  ['status','otd','infull','kelolosan'].forEach(x=>{
+  ['status','otd','infull','kelolosan','complain'].forEach(x=>{
     document.getElementById('pt-'+x).classList.toggle('active',x===t);
     document.getElementById('prodview-'+x).style.display = x===t?'':'none';
   });
@@ -616,7 +635,10 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
-  else if (state.view==='produksi') tasks = state.prodtab==='status' ? [['ov-cards',loadProduksi]] : (state.prodtab==='otd' ? [['deliv-otd-cards',loadOntime]] : (state.prodtab==='infull' ? [['deliv-if-cards',loadInfull]] : [['kel-cards',loadKelolosan]]));
+  else if (state.view==='produksi'){
+    const map={status:['ov-cards',loadProduksi],otd:['deliv-otd-cards',loadOntime],infull:['deliv-if-cards',loadInfull],kelolosan:['kel-cards',loadKelolosan],complain:['cmp-cards',loadComplain]};
+    tasks=[map[state.prodtab]||map.status];
+  }
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -1031,6 +1053,71 @@ function renderKelTable(){
         <td>${esc(r.jenis)||'-'}</td>
         <td><span class="pill warn">${esc(r.kategori)||'(lain)'}</span></td>
       </tr>`).join('') : `<tr><td colspan="6" class="loading">${KEL.term?'Tidak ada yang cocok':'Tidak ada kendala pada periode ini 🎉'}</td></tr>`
+    }</tbody></table>`;
+}
+
+// ── Complain Handling (CPAR, sumber Google Sheet QAQC) ──
+async function loadComplain(q){
+  const d=await fetchJSON('/api/complain?'+q);
+  if(d._error){ document.getElementById('cmp-cards').innerHTML=`<div class="card" style="grid-column:1/-1"><div class="loading">⚠️ ${esc(d._error)}</div></div>`; return; }
+  const cls=p=>p==null?'':(p>=90?'good':(p<70?'warn':''));
+  document.getElementById('cmp-cards').innerHTML=
+    kpiCard('a-green','🛠️','% Complain Handling',pctTxt(d.pct),`<span class="pill ${cls(d.pct)}">${fmtInt(d.ontime)} tepat / ${fmtInt(d.dinilai)}</span>`)
+   +kpiCard('a-blue','✅','Solved Tepat Waktu',fmtInt(d.ontime),`<span class="muted">≤ H+3 dari CPAR</span>`)
+   +kpiCard('a-orange','⏰','Terlambat',fmtInt(d.overtime),`<span class="muted">Over time (> H+3)</span>`)
+   +kpiCard('a-brown','🗂️','Total Complain',fmtInt(d.total),d.belum?`<span class="muted">${fmtInt(d.belum)} belum dinilai</span>`:'<span class="muted">semua sudah dinilai</span>');
+  const tr=d.trend, oneMonth=tr.length<=1;
+  renderChart('c-cmp-trend',oneMonth?'bar':'line',{labels:tr.map(t=>t.bulan),
+    datasets:[oneMonth
+      ? {label:'% Tepat waktu',data:tr.map(t=>t.pct),backgroundColor:'#2f9e6f',borderRadius:8,maxBarThickness:70}
+      : {label:'% Tepat waktu',data:tr.map(t=>t.pct),borderColor:'#2f9e6f',backgroundColor:'#2f9e6f22',tension:.35,fill:true,pointRadius:3,pointHoverRadius:5,borderWidth:2,spanGaps:true}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const t=tr[c.dataIndex];return `Tepat: ${t.pct==null?'–':t.pct+'%'} (${fmtInt(t.ontime)}/${fmtInt(t.n)})`;}}}},
+     scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+  const ba=d.by_action||[];
+  renderChart('c-cmp-action','bar',{labels:ba.map(t=>t.action),datasets:[
+      {label:'Tepat waktu',data:ba.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'s',maxBarThickness:80},
+      {label:'Terlambat',data:ba.map(t=>t.overtime),backgroundColor:'#e9852b',stack:'s',maxBarThickness:80}]},
+    {plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.y)}`,
+        afterbody:it=>{const t=ba[it[0].dataIndex];return `Total ${fmtInt(t.total)} · Tepat ${t.total?Math.round(t.ontime/t.total*100):0}%`;}}}},
+    scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}}}});
+  const bv=d.by_vendor||[];
+  if(!bv.length){
+    if(charts['c-cmp-vendor']){charts['c-cmp-vendor'].destroy(); delete charts['c-cmp-vendor'];}
+    setMsg('c-cmp-vendor','Belum ada data vendor pada periode ini');
+  } else {
+    setMsg('c-cmp-vendor',null);
+    renderChart('c-cmp-vendor','bar',{labels:bv.map(t=>t.vendor),datasets:[
+        {label:'Tepat waktu',data:bv.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'v',maxBarThickness:20},
+        {label:'Terlambat',data:bv.map(t=>t.overtime),backgroundColor:'#e9852b',stack:'v',maxBarThickness:20}]},
+      {indexAxis:'y',
+       plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:14,font:{size:11.5}}},
+         tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtInt(c.parsed.x)}`,
+           afterbody:it=>{const t=bv[it[0].dataIndex];return `Total ${fmtInt(t.total)} · Tepat ${t.total?Math.round(t.ontime/t.total*100):0}%`;}}}},
+       scales:{x:{stacked:true,ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},y:{stacked:true,grid:{display:false}}}});
+  }
+  CMP.rows=d.rows||[];
+  renderCmpTable();
+}
+const CMP={rows:[],term:''};
+function onCmpSearch(v){ CMP.term=(v||'').trim().toLowerCase(); renderCmpTable(); }
+function cmpBadge(s){ if(s==='On time') return '<span class="pill good">Tepat waktu</span>'; if(s==='Over time') return '<span class="pill warn">Terlambat</span>'; return '<span class="pill">Belum dinilai</span>'; }
+function renderCmpTable(){
+  let rows=CMP.rows;
+  if(CMP.term) rows=rows.filter(r=>[r.kode_order,r.konsumen,r.produk,r.vendor,r.action,r.status].map(x=>x||'').join(' ').toLowerCase().includes(CMP.term));
+  const cnt=document.getElementById('cmp-count'); if(cnt) cnt.textContent=`${rows.length} complain`;
+  document.getElementById('cmp-table').innerHTML=`<table style="min-width:960px"><thead><tr>
+      <th>CPAR Date</th><th>Kode Order</th><th>Konsumen</th><th>Produk</th><th>Vendor</th><th>Corrective Action</th><th>Ketepatan</th>
+    </tr></thead><tbody>${
+      rows.length? rows.map(r=>`<tr>
+        <td>${esc(r.cpar)||'-'}</td>
+        <td title="${esc(r.kode_order,1)}">${esc(r.kode_order)||'-'}</td>
+        <td>${esc(r.konsumen)||'-'}</td>
+        <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
+        <td>${esc(r.vendor)||'-'}</td>
+        <td>${esc(r.action)||'<span class="muted">—</span>'}</td>
+        <td>${cmpBadge(r.status)}</td>
+      </tr>`).join('') : `<tr><td colspan="7" class="loading">${CMP.term?'Tidak ada yang cocok':'Tidak ada complain pada periode ini'}</td></tr>`
     }</tbody></table>`;
 }
 
