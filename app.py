@@ -1406,5 +1406,104 @@ def api_reject():
     })
 
 
+# ─── Financial Statement (P&L PT BBI dari Google Sheet published CSV) ───
+_FIN_CACHE = {'ts': 0.0, 'rows': None, 'url': None}
+
+def _fetch_csv_grid(url):
+    import time, urllib.request, csv, io
+    now = time.time()
+    if _FIN_CACHE['rows'] is not None and _FIN_CACHE['url'] == url and now - _FIN_CACHE['ts'] < 120:
+        return _FIN_CACHE['rows']
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        text = resp.read().decode('utf-8', errors='replace')
+    rows = list(csv.reader(io.StringIO(text)))
+    _FIN_CACHE.update(ts=now, rows=rows, url=url)
+    return rows
+
+@app.route('/api/financial')
+@login_required
+def api_financial():
+    cfg = load_kpi_config()
+    url = cfg.get('financial_csv_url')
+    if not url:
+        return jsonify({'_error': 'financial_csv_url belum diisi di kpi_config.json.'}), 200
+    try:
+        grid = _fetch_csv_grid(url)
+    except Exception as e:
+        return jsonify({'_error': f'Gagal membaca Google Sheet P&L: {e}'}), 200
+
+    def cell(r, i):
+        return r[i].strip() if r is not None and i < len(r) else ''
+
+    MONTHS = [('January', 'Jan'), ('February', 'Feb'), ('March', 'Mar'), ('April', 'Apr'),
+              ('May', 'Mei'), ('June', 'Jun'), ('July', 'Jul'), ('August', 'Agu'),
+              ('September', 'Sep'), ('October', 'Okt'), ('November', 'Nov'), ('December', 'Des')]
+
+    # 1) baris header bulan + sub-header Invoice/PO
+    hdr = sub = None
+    for i, r in enumerate(grid):
+        if any(str(c).strip().startswith('January 2026') for c in r):
+            hdr = r
+            for j in range(i, min(i + 4, len(grid))):
+                if any(str(c).strip() == 'Invoice' for c in grid[j]):
+                    sub = grid[j]
+                    break
+            break
+    if hdr is None or sub is None:
+        return jsonify({'_error': 'Header bulan / Invoice-PO tidak ditemukan di sheet.'}), 200
+
+    # 2) map bulan -> (kolom Invoice, kolom PO) — pakai kemunculan pertama yg sub-header-nya Invoice
+    mcol = {}
+    for c, cv in enumerate(hdr):
+        cvs = str(cv).strip()
+        for en, ab in MONTHS:
+            if cvs.startswith(en + ' 2026') and ab not in mcol and cell(sub, c) == 'Invoice':
+                mcol[ab] = (c, c + 1)
+
+    # 3) baris metrik (cari berdasar label — tahan geser baris)
+    def find(label):
+        for r in grid:
+            if cell(r, 0) == label or cell(r, 1) == label:
+                return r
+        return None
+    r_rev = find('Total dari Revenue')
+    r_cogs = find('Total dari Cost of Sales')
+    r_ebitda = find('EBITDA')
+    r_net = find('EBIT')
+    miss = [n for n, r in [('Total dari Revenue', r_rev), ('Total dari Cost of Sales', r_cogs),
+                           ('EBITDA', r_ebitda), ('EBIT', r_net)] if r is None]
+    if miss:
+        return jsonify({'_error': 'Baris tidak ditemukan: ' + ', '.join(miss)}), 200
+
+    def blk(col):
+        rev = _num(cell(r_rev, col)); cogs = _num(cell(r_cogs, col))
+        gp = rev - cogs; eb = _num(cell(r_ebitda, col)); net = _num(cell(r_net, col))
+        return {'revenue': rev, 'cogs': cogs, 'gross_profit': gp, 'ebitda': eb, 'net_profit': net,
+                'gpm': round(gp / rev * 100, 1) if rev else None,
+                'npm': round(net / rev * 100, 1) if rev else None}
+
+    months = []
+    for en, ab in MONTHS:
+        if ab not in mcol:
+            continue
+        ci, cp = mcol[ab]
+        months.append({'bulan': ab, 'invoice': blk(ci), 'po': blk(cp)})
+
+    def totals(which):
+        t = {'revenue': 0.0, 'cogs': 0.0, 'gross_profit': 0.0, 'ebitda': 0.0, 'net_profit': 0.0}
+        for x in months:
+            for k in t:
+                t[k] += x[which][k]
+        t['gpm'] = round(t['gross_profit'] / t['revenue'] * 100, 1) if t['revenue'] else None
+        t['npm'] = round(t['net_profit'] / t['revenue'] * 100, 1) if t['revenue'] else None
+        return t
+
+    return jsonify({'months': months,
+                    'total_invoice': totals('invoice'),
+                    'total_po': totals('po'),
+                    'targets': cfg.get('financial_targets', {})})
+
+
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
