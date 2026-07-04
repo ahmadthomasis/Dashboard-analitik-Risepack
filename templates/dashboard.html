@@ -1290,38 +1290,59 @@ function renderFinancial(){
    +kpiCard('a-blue','🏭','COGS',formatRp(T.cogs),`<span class="muted">harga pokok penjualan</span>`)
    +kpiCard('a-brown','⚙️','EBITDA',formatRp(T.ebitda),`<span class="muted">sebelum pajak</span>`)
    +kpiCard('a-amber','💰','Net Profit',formatRp(T.net_profit),`<span class="pill ${npmC}">NPM ${T.npm==null?'–':T.npm+'%'}</span>${tg.npm?` <span class="muted">tgt ${tg.npm}%</span>`:''}`);
+  const barDS=(lab,key,col)=>({label:lab,data:m.map(x=>x[mode][key]),backgroundColor:col,borderRadius:5,maxBarThickness:48,categoryPercentage:0.8,barPercentage:0.94});
   renderChart('c-fin-trend','bar',{labels:lbl,datasets:[
-    {label:'Revenue',data:m.map(x=>x[mode].revenue),backgroundColor:'#3b6fb0',borderRadius:4,maxBarThickness:15},
-    {label:'COGS',data:m.map(x=>x[mode].cogs),backgroundColor:'#cf4b3a',borderRadius:4,maxBarThickness:15},
-    {label:'Net Profit',data:m.map(x=>x[mode].net_profit),backgroundColor:'#2f9e6f',borderRadius:4,maxBarThickness:15},
+    barDS('Revenue','revenue','#3b6fb0'), barDS('COGS','cogs','#cf4b3a'), barDS('Net Profit','net_profit','#2f9e6f'),
   ]},{plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:12,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${formatRp(c.parsed.y)}`}}},
     scales:{y:{ticks:{callback:v=>formatRpShort(v)},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
-  const ds=[
-    {label:'GPM %',data:m.map(x=>x[mode].gpm),borderColor:'#2f9e6f',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
-    {label:'NPM %',data:m.map(x=>x[mode].npm),borderColor:'#e9852b',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
-  ];
-  if(tg.gpm!=null) ds.push({label:'Target GPM',data:m.map(()=>tg.gpm),borderColor:'#2f9e6f',borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false});
-  if(tg.npm!=null) ds.push({label:'Target NPM',data:m.map(()=>tg.npm),borderColor:'#e9852b',borderDash:[5,4],pointRadius:0,borderWidth:1.5,fill:false});
-  renderChart('c-fin-margin','line',{labels:lbl,datasets:ds},{plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:12,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
-    scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+  if(m.length<=1){
+    renderChart('c-fin-margin','bar',{labels:lbl,datasets:[
+      {label:'GPM %',data:m.map(x=>x[mode].gpm),backgroundColor:'#2f9e6f',borderRadius:7,maxBarThickness:64},
+      {label:'NPM %',data:m.map(x=>x[mode].npm),backgroundColor:'#e9852b',borderRadius:7,maxBarThickness:64},
+    ]},{plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:12,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'–':c.parsed.y+'%'}`,
+          afterbody:()=>`Target GPM ${tg.gpm??'–'}% · NPM ${tg.npm??'–'}%`}}},
+      scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+  } else {
+    const ds=[
+      {label:'GPM %',data:m.map(x=>x[mode].gpm),borderColor:'#2f9e6f',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
+      {label:'NPM %',data:m.map(x=>x[mode].npm),borderColor:'#e9852b',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
+    ];
+    if(tg.gpm!=null) ds.push({label:'Target GPM',data:m.map(()=>tg.gpm),borderColor:'#2f9e6f',borderDash:[6,4],pointRadius:0,borderWidth:1.5,fill:false});
+    if(tg.npm!=null) ds.push({label:'Target NPM',data:m.map(()=>tg.npm),borderColor:'#e9852b',borderDash:[6,4],pointRadius:0,borderWidth:1.5,fill:false});
+    renderChart('c-fin-margin','line',{labels:lbl,datasets:ds},{plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:8,padding:12,font:{size:11}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y==null?'–':c.parsed.y+'%'}`}}},
+      scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
+  }
   const rp=formatRp;
+  const BL='border-left:2px solid #efeae3';
   const body=m.map(x=>`<tr>
       <td style="font-weight:600">${x.bulan}</td>
-      <td class="num">${rp(x.invoice.revenue)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.revenue)}</td>
-      <td class="num">${rp(x.invoice.gross_profit)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.gross_profit)}</td>
-      <td class="num" style="font-weight:600">${rp(x.invoice.net_profit)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.net_profit)}</td>
-      <td class="num">${x.invoice.npm==null?'–':x.invoice.npm+'%'}</td><td class="num" style="color:var(--ink-3)">${x.po.npm==null?'–':x.po.npm+'%'}</td>
+      <td class="num" style="${BL}">${rp(x.invoice.revenue)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.revenue)}</td>
+      <td class="num" style="${BL}">${rp(x.invoice.gross_profit)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.gross_profit)}</td>
+      <td class="num" style="font-weight:600;${BL}">${rp(x.invoice.net_profit)}</td><td class="num" style="color:var(--ink-3)">${rp(x.po.net_profit)}</td>
+      <td class="num" style="${BL}">${x.invoice.npm==null?'–':x.invoice.npm+'%'}</td><td class="num" style="color:var(--ink-3)">${x.po.npm==null?'–':x.po.npm+'%'}</td>
     </tr>`).join('');
   const TI=d.total_invoice, TP=d.total_po;
   document.getElementById('fin-table').innerHTML=`<table style="min-width:960px"><thead>
-      <tr><th rowspan="2">Bulan</th><th colspan="2">Revenue</th><th colspan="2">Gross Profit</th><th colspan="2">Net Profit</th><th colspan="2">NPM %</th></tr>
-      <tr><th class="num">Inv</th><th class="num">PO</th><th class="num">Inv</th><th class="num">PO</th><th class="num">Inv</th><th class="num">PO</th><th class="num">Inv</th><th class="num">PO</th></tr>
+      <tr>
+        <th rowspan="2" style="vertical-align:bottom">Bulan</th>
+        <th colspan="2" style="text-align:center;background:#eaf1fa;color:#2c5a94;border-left:2px solid #cddcf0">Revenue</th>
+        <th colspan="2" style="text-align:center;background:#e9f5ef;color:#227a52;border-left:2px solid #c9e6d6">Gross Profit</th>
+        <th colspan="2" style="text-align:center;background:#fdf1e5;color:#b56a15;border-left:2px solid #f2ddc2">Net Profit</th>
+        <th colspan="2" style="text-align:center;background:#f2efe9;color:#6d6055;border-left:2px solid #e0d7ca">NPM %</th>
+      </tr>
+      <tr>
+        <th class="num" style="background:#eaf1fa;border-left:2px solid #cddcf0">Inv</th><th class="num" style="background:#f4f8fc">PO</th>
+        <th class="num" style="background:#e9f5ef;border-left:2px solid #c9e6d6">Inv</th><th class="num" style="background:#f3faf6">PO</th>
+        <th class="num" style="background:#fdf1e5;border-left:2px solid #f2ddc2">Inv</th><th class="num" style="background:#fef8f0">PO</th>
+        <th class="num" style="background:#f2efe9;border-left:2px solid #e0d7ca">Inv</th><th class="num" style="background:#f7f5f1">PO</th>
+      </tr>
     </thead><tbody>${body}
       <tr style="border-top:2px solid var(--border-strong);font-weight:700">
-        <td>Total</td><td class="num">${rp(TI.revenue)}</td><td class="num">${rp(TP.revenue)}</td>
-        <td class="num">${rp(TI.gross_profit)}</td><td class="num">${rp(TP.gross_profit)}</td>
-        <td class="num">${rp(TI.net_profit)}</td><td class="num">${rp(TP.net_profit)}</td>
-        <td class="num">${TI.npm==null?'–':TI.npm+'%'}</td><td class="num">${TP.npm==null?'–':TP.npm+'%'}</td>
+        <td>Total</td><td class="num" style="${BL}">${rp(TI.revenue)}</td><td class="num">${rp(TP.revenue)}</td>
+        <td class="num" style="${BL}">${rp(TI.gross_profit)}</td><td class="num">${rp(TP.gross_profit)}</td>
+        <td class="num" style="${BL}">${rp(TI.net_profit)}</td><td class="num">${rp(TP.net_profit)}</td>
+        <td class="num" style="${BL}">${TI.npm==null?'–':TI.npm+'%'}</td><td class="num">${TP.npm==null?'–':TP.npm+'%'}</td>
       </tr></tbody></table>`;
 }
 
