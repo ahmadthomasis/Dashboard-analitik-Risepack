@@ -986,6 +986,139 @@ def api_kpi_marketing():
                     'label': label, 'months': nmonths,
                     'adspend': adspend, 'omzet_new': omzet_new})
 
+
+# ─── PRESENTASI: bundle KPI/score per bulan + agregat (endpoint terpisah, cepat) ───
+# Catatan: endpoint BARU, tidak mengubah endpoint lama. Menggabungkan kpi + kpi-score +
+# kpi-marketing (agregat) + score/kpi per bulan dalam SATU response, plus cache in-process.
+_PRESM_CACHE = {}
+
+def _mstart(ym): return ym + '-01'
+def _mend(ym):
+    y, m = int(ym[:4]), int(ym[5:7])
+    return f"{y}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+
+def _pres_kpi(d1s, d2s, divisi):
+    cond, params = build_where(d1s, d2s, None, divisi)
+    cur = kpi_metrics(cond, params)
+    onew = cur['omzet_new']
+    cur.update(new_funnel(d1s, d2s, None, divisi))
+    cur['omzet_new'] = onew
+    return cur
+
+def _pres_score(cfg, d1s, d2s, divisi, bands):
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(d1s), pdate(d2s)
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    cond, params = build_where(d1s, d2s, None, divisi)
+    m = kpi_metrics(cond, params)
+    nf = new_funnel(d1s, d2s, None, divisi)
+    pot = potensi_total(d1s, d2s, None, divisi)
+    default_omzet_t = next((k['target'] for k in cfg.get('kpi', []) if k['id'] == 'omzet'), 2500000000)
+    omzet_target_eff = sum_months(cfg.get('omzet_target', {}), d1, d2, nmonths, default_omzet_t) if (d1 and d2) else default_omzet_t
+    umbrella_val = sum_months(cfg.get('umbrella_manual', {}), d1, d2, nmonths, 0)
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('kpi', []):
+        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
+        target_eff = target
+        if basis == 'omzet_monthly':
+            actual = m['total_omzet']; target_eff = omzet_target_eff
+        elif basis == 'repeat_vs_target':
+            actual = m['repeat_omzet']; target_eff = (target / 100.0) * omzet_target_eff
+        elif basis == 'closing_rate_new':
+            actual = nf['closing_rate_new']
+        elif basis == 'umbrella_manual':
+            actual = umbrella_val; target_eff = target * nmonths
+        elif basis == 'potensi_total':
+            actual = pot; target_eff = target * nmonths
+        else:
+            actual = 0
+        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2); total_w += weighted; total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target_eff,
+                     'unit': k.get('unit', ''), 'actual': round(actual, 1) if isinstance(actual, float) else actual,
+                     'ach': ach, 'score': sc})
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return {'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach, 'label': label}
+
+def _pres_marketing(cfg, d1s, d2s, divisi, bands):
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(d1s), pdate(d2s)
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    cond, params = build_where(d1s, d2s, None, divisi)
+    m = kpi_metrics(cond, params)
+    omzet_new = m['omzet_new']
+    potensi = potensi_total(d1s, d2s, None, divisi)
+    qleads = qualified_leads_count(d1s, d2s, divisi)
+    adspend = sum_months(cfg.get('marketing_adspend', {}), d1, d2, nmonths, 0)
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('marketing_kpi', []):
+        basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
+        target_eff = target
+        if basis == 'potensi_total':
+            actual = potensi; target_eff = target * nmonths
+        elif basis == 'qualified_leads':
+            actual = qleads; target_eff = target * nmonths
+        elif basis == 'roi_ads':
+            actual = round(omzet_new / adspend, 1) if adspend > 0 else 0
+        else:
+            actual = 0
+        ach = min(round(actual / target_eff * 100, 1), 100.0) if target_eff else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2); total_w += weighted; total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target_eff,
+                     'unit': k.get('unit', ''), 'actual': round(actual, 1) if isinstance(actual, float) else actual,
+                     'ach': ach, 'score': sc})
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return {'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach, 'label': label}
+
+@app.route('/api/pres-months')
+@login_required
+def api_pres_months():
+    import time
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _pic, divisi = get_args()
+    bands = cfg.get('scoring_bands', [])
+    months = [x for x in (request.args.get('months', '') or '').split(',') if x]
+    now = time.time()
+    cur_ym = datetime.now().strftime('%Y-%m')
+
+    def cached(key, ttl, fn):
+        e = _PRESM_CACHE.get(key)
+        if e and now - e[0] < ttl:
+            return e[1]
+        v = fn(); _PRESM_CACHE[key] = (now, v); return v
+
+    def month_block(ym):
+        ttl = 86400 if ym < cur_ym else 90   # bulan lampau tak berubah -> cache lama
+        return cached(('m', ym, divisi), ttl, lambda: {
+            'ym': ym,
+            'kpi': _pres_kpi(_mstart(ym), _mend(ym), divisi),
+            'score': _pres_score(cfg, _mstart(ym), _mend(ym), divisi, bands),
+        })
+
+    def agg_block():
+        akpi = _pres_kpi(tgl_dari, tgl_sampai, divisi)
+        p1, p2 = prev_range(tgl_dari, tgl_sampai)
+        if p1 and p2:
+            prev = _pres_kpi(p1, p2, divisi)
+            akpi['delta'] = {kk: pct(akpi.get(kk, 0), prev.get(kk, 0)) for kk in
+                             ['total_omzet', 'total_modal', 'total_margin', 'total_order', 'total_deal',
+                              'total_repeat', 'total_new', 'closing_rate', 'avg_purchase', 'repeat_omzet',
+                              'omzet_new', 'closing_rate_new', 'persen_repeat']}
+        return {'kpi': akpi,
+                'score': _pres_score(cfg, tgl_dari, tgl_sampai, divisi, bands),
+                'marketing': _pres_marketing(cfg, tgl_dari, tgl_sampai, divisi, bands)}
+
+    agg = cached(('agg', tgl_dari, tgl_sampai, divisi), 90, agg_block)
+    return jsonify({'agg': agg, 'months': [month_block(m) for m in months]})
+
 @app.route('/api/delivery')
 @login_required
 def api_delivery():
