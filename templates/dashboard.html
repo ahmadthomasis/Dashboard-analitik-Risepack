@@ -170,6 +170,66 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 
 @media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
+
+/* ── Presentasi ── */
+.nav-present{margin-top:10px;background:#e9852b;color:#fff!important;font-weight:600;}
+.nav-present:hover{background:#d47519;}
+#present{position:fixed;inset:0;z-index:999;background:#12332e;display:none;flex-direction:column;}
+#present.on{display:flex;}
+.pres-bar{display:flex;align-items:center;gap:10px;padding:9px 16px;background:#0d2925;color:#e7ede9;flex-wrap:wrap;}
+.pres-bar select,.pres-bar .pres-btn{background:#1c443d;color:#e7ede9;border:1px solid #2c574f;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;font-family:inherit;}
+.pres-bar .pres-btn:hover{background:#276055;}
+.pres-bar .seg{display:flex;background:#1c443d;border-radius:8px;overflow:hidden;border:1px solid #2c574f;}
+.pres-bar .seg button{background:none;border:none;color:#9fb8b1;padding:7px 13px;font-size:13px;cursor:pointer;font-family:inherit;}
+.pres-bar .seg button.on{background:#e9852b;color:#fff;font-weight:600;}
+.pres-bar .grow{flex:1;}
+.pres-bar .pres-count{font-size:13px;color:#9fb8b1;min-width:74px;text-align:center;}
+.pres-stage-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:18px;overflow:auto;}
+.pres-slide{width:min(94vw,1280px);aspect-ratio:16/9;background:#fff;border-radius:12px;box-shadow:0 18px 60px rgba(0,0,0,.45);overflow:hidden;position:relative;display:flex;flex-direction:column;}
+/* header bar slide */
+.ps-head{background:#2a211b;color:#fff;padding:20px 34px;font-size:34px;font-weight:800;letter-spacing:-.5px;flex:none;}
+.ps-head .yr{color:#e9852b;}
+.ps-body{flex:1;padding:22px 34px;overflow:hidden;display:flex;flex-direction:column;gap:14px;}
+.ps-note{font-size:15px;color:#e9852b;font-style:italic;font-weight:600;}
+/* cover / divider */
+.ps-cover{background:#12332e;color:#fff;justify-content:center;align-items:flex-start;padding:0;}
+.ps-cover .inner{padding:0 8%;}
+.ps-cover .kicker{color:#e9852b;font-weight:700;letter-spacing:3px;font-size:18px;margin-bottom:14px;}
+.ps-cover h1{font-size:58px;font-weight:800;line-height:1.05;margin:0;}
+.ps-cover .sub{margin-top:18px;font-size:22px;color:#bcd3cc;}
+.ps-cover .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
+.ps-cover .logo{position:absolute;top:34px;right:44px;width:80px;height:80px;border-radius:50%;background:#2a211b;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:15px;}
+.ps-cover .logo b{color:#e9852b;}
+.ps-div{background:#12332e;color:#fff;justify-content:center;align-items:center;text-align:center;}
+.ps-div h2{font-size:60px;font-weight:800;letter-spacing:1px;margin:0;text-transform:uppercase;}
+.ps-div .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
+/* KPI mini cards for slides */
+.ps-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.ps-cards.c3{grid-template-columns:repeat(3,1fr);}
+.ps-card{border:2px solid #ece5db;border-radius:10px;padding:12px 14px;}
+.ps-card .l{font-size:12.5px;color:#8a7d70;font-weight:600;}
+.ps-card .v{font-size:26px;font-weight:800;color:#2a211b;margin-top:3px;}
+.ps-card .d{font-size:12px;margin-top:3px;}
+.ps-card .up{color:#2f9e6f;} .ps-card .dn{color:#cf4b3a;}
+/* score/data tables in slides */
+table.ps-tab{width:100%;border-collapse:collapse;font-size:15px;}
+table.ps-tab th{background:#f5a623;color:#2a211b;font-weight:700;padding:11px 12px;text-align:left;border:1px solid #fff;}
+table.ps-tab td{padding:10px 12px;border:1px solid #ece5db;color:#3a3128;}
+table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
+.ps-badge{display:inline-block;padding:3px 12px;border-radius:6px;font-weight:700;font-size:13px;}
+.ps-win{background:#d7f0e2;color:#1c7a4f;} .ps-lose{background:#f9c9c2;color:#a3392a;}
+.ps-chartbox{flex:1;min-height:0;position:relative;}
+.ps-two{display:grid;grid-template-columns:1fr 1fr;gap:18px;flex:1;min-height:0;}
+.ps-ul{margin:0;padding-left:22px;font-size:16.5px;line-height:1.7;color:#3a3128;}
+.ps-ul li{margin-bottom:7px;}
+@media print{
+  body *{visibility:hidden;}
+  #present,#present *{visibility:visible;}
+  #present{position:absolute;background:#fff;}
+  .pres-bar{display:none;}
+  .pres-stage-wrap{display:block;padding:0;}
+  .pres-slide{box-shadow:none;width:100%;border-radius:0;page-break-after:always;}
+}
 </style>
 </head>
 <body>
@@ -189,6 +249,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
     <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
     <button class="nav-item" data-view="reject" onclick="showView('reject')"><span class="i">🧾</span> Reject Finance</button>
     <button class="nav-item" data-view="financial" onclick="showView('financial')"><span class="i">💰</span> Financial Statement</button>
+    <button class="nav-item nav-present" onclick="openPresent()"><span class="i">📽️</span> Presentasi</button>
     <div class="spacer"></div>
     <div class="side-card">
       <div class="h">Risepack Analytics</div>
@@ -491,6 +552,26 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
       </section>
     </main>
   </div>
+</div>
+
+<!-- PRESENTASI overlay -->
+<div id="present">
+  <div class="pres-bar">
+    <button class="pres-btn" onclick="closePresent()">✕ Tutup</button>
+    <select id="pres-month" onchange="presMonthChange(this.value)"></select>
+    <div class="seg">
+      <button id="pm-bulan" class="on" onclick="presSetMode('bulan')">Bulan</button>
+      <button id="pm-quartal" onclick="presSetMode('quartal')">Quartal</button>
+    </div>
+    <div class="grow"></div>
+    <button class="pres-btn" onclick="presNav(-1)">◀</button>
+    <span class="pres-count" id="pres-count">– / –</span>
+    <button class="pres-btn" onclick="presNav(1)">▶</button>
+    <div class="grow"></div>
+    <button class="pres-btn" onclick="presFull()">⛶ Layar penuh</button>
+    <button class="pres-btn" onclick="presPrint()">🖨️ PDF</button>
+  </div>
+  <div class="pres-stage-wrap"><div id="pres-stage"></div></div>
 </div>
 
 <script>
@@ -1526,6 +1607,259 @@ function formatRp(n){ if(!n) return 'Rp 0'; if(n>=1e9) return 'Rp '+(n/1e9).toFi
 function formatRpShort(n){ if(n>=1e9) return (n/1e9).toFixed(1)+'M'; if(n>=1e6) return (n/1e6).toFixed(0)+'jt'; return n; }
 function formatRpFull(n){ return 'Rp '+Number(n||0).toLocaleString('id-ID'); }
 function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
+
+// ═══════════════ PRESENTASI (Phase 1) ═══════════════
+const BULAN_ID=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const PRES={month:'2026-06',mode:'bulan',idx:0,slides:[],charts:[]};
+function pPad(n){return String(n).padStart(2,'0');}
+function mStart(ym){return ym+'-01';}
+function mEnd(ym){const [y,m]=ym.split('-').map(Number);return `${y}-${pPad(m)}-${pPad(new Date(y,m,0).getDate())}`;}
+function presRange(ym){return `tgl_dari=${mStart(ym)}&tgl_sampai=${mEnd(ym)}`;}
+function periodInfo(){
+  const [y,m]=PRES.month.split('-').map(Number);
+  if(PRES.mode==='bulan') return {d1:mStart(PRES.month),d2:mEnd(PRES.month),months:[PRES.month],label:`${BULAN_ID[m-1]} ${y}`};
+  const q=Math.floor((m-1)/3), qs=q*3+1, months=[];
+  for(let mm=qs;mm<=m;mm++) months.push(`${y}-${pPad(mm)}`);
+  return {d1:mStart(months[0]),d2:mEnd(PRES.month),months,label:`Quartal ${q+1} ${y}`};
+}
+function openPresent(){
+  const ov=document.getElementById('present');
+  if(!ov._init){ buildPresBar(); ov._init=true; }
+  ov.classList.add('on');
+  document.getElementById('pres-month').value=PRES.month;
+  loadDeck();
+}
+function closePresent(){ destroyPresCharts(); document.getElementById('present').classList.remove('on'); }
+function destroyPresCharts(){ PRES.charts.forEach(c=>{try{c.destroy();}catch(e){}}); PRES.charts=[]; }
+function buildPresBar(){
+  const sel=document.getElementById('pres-month');
+  const y=2026; for(let m=1;m<=12;m++){const o=document.createElement('option');o.value=`${y}-${pPad(m)}`;o.textContent=`${BULAN_ID[m-1]} ${y}`;sel.appendChild(o);}
+  sel.value=PRES.month;
+}
+function presSetMode(mode){ PRES.mode=mode; document.getElementById('pm-bulan').classList.toggle('on',mode==='bulan'); document.getElementById('pm-quartal').classList.toggle('on',mode==='quartal'); loadDeck(); }
+function presMonthChange(v){ PRES.month=v; loadDeck(); }
+function presNav(d){ let i=PRES.idx+d; if(i<0)i=0; if(i>=PRES.slides.length)i=PRES.slides.length-1; showSlide(i); }
+function presFull(){ const ov=document.getElementById('present'); if(!document.fullscreenElement)ov.requestFullscreen?.(); else document.exitFullscreen?.(); }
+function presPrint(){ printDeck(); }
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('present').classList.contains('on'))return;
+  if(e.key==='ArrowRight'||e.key==='PageDown')presNav(1);
+  else if(e.key==='ArrowLeft'||e.key==='PageUp')presNav(-1);
+  else if(e.key==='Escape'&&!document.fullscreenElement)closePresent();
+});
+
+async function loadDeck(){
+  const stage=document.getElementById('pres-stage');
+  stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#8a7d70;font-size:20px">Memuat data presentasi…</div>';
+  const P=periodInfo();
+  try{
+    const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`;
+    const [kpi,ontime,delivery,reject,kelolosan,complain,financial]=await Promise.all(
+      ['kpi','ontime','delivery','reject','kelolosan','complain','financial'].map(ep=>fetchJSON('/api/'+ep+'?'+per).catch(()=>({}))));
+    const scoreMap={};
+    await Promise.all(P.months.map(async ym=>{ scoreMap[ym]=await fetchJSON('/api/kpi-score?'+presRange(ym)).catch(()=>({rows:[]})); }));
+    const D={P,per,kpi,ontime,delivery,reject,kelolosan,complain,financial,scoreMap};
+    PRES.slides=buildSlides(D);
+    showSlide(0);
+  }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
+}
+function showSlide(i){
+  destroyPresCharts();
+  PRES.idx=i;
+  const stage=document.getElementById('pres-stage'); stage.innerHTML='';
+  const slide=document.createElement('div'); slide.className='pres-slide'+(PRES.slides[i].cls?(' '+PRES.slides[i].cls):'');
+  slide.innerHTML=PRES.slides[i].html; stage.appendChild(slide);
+  PRES.slides[i].init&&PRES.slides[i].init(slide);
+  document.getElementById('pres-count').textContent=`${i+1} / ${PRES.slides.length}`;
+}
+function presChart(el,type,data,options){ if(!el)return; PRES.charts.push(new Chart(el.getContext('2d'),{type,data,options:{responsive:true,maintainAspectRatio:false,...options}})); }
+
+function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
+function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
+function pcard(l,v,d){ return `<div class="ps-card"><div class="l">${l}</div><div class="v">${v}</div>${d?`<div class="d">${d}</div>`:''}</div>`; }
+function dlt(v){ if(v==null)return''; const up=v>=0; return `<span class="${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; }
+
+function buildSlides(D){
+  const S=[], P=D.P, lastYm=P.months[P.months.length-1];
+  const head=(t)=>`<div class="ps-head">${t}</div>`;
+  // 1. COVER
+  S.push({cls:'ps-cover',html:`<div class="logo">Rise<b>pack</b></div><div class="corner"></div>
+    <div class="inner"><div class="kicker">PT BILLAH BERDIKARI INDONESIA</div>
+    <h1>EVALUASI<br>${P.label.toUpperCase()}</h1><div class="sub">Laporan Kinerja · PT BBI</div></div>`});
+  // 2. DIVIDER SALES
+  S.push({cls:'ps-div',html:`<div class="corner"></div><h2>Sales<br>Marsales</h2>`});
+  // 3. SALES OVERVIEW CARDS
+  const k=D.kpi||{}, dd=k.delta||{};
+  S.push({html:head(`Sales Overview <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Total Omzet',formatRp(k.total_omzet),dlt(dd.total_omzet))}
+      ${pcard('Total Repeat',formatRp(k.total_repeat),dlt(dd.total_repeat))}
+      ${pcard('Total Order',fmtInt(k.total_order),dlt(dd.total_order))}
+      ${pcard('Average Purchase',formatRp(k.avg_purchase),dlt(dd.avg_purchase))}
+    </div>
+    <div class="ps-cards">
+      ${pcard('Margin',(k.persen_margin!=null?k.persen_margin+'%':'–'),formatRp(k.total_margin))}
+      ${pcard('New Customer (Deal)',fmtInt(k.total_new),`dari ${fmtInt(k.qualified_new)} leads`)}
+      ${pcard('Omzet New',formatRp(k.omzet_new),dlt(dd.omzet_new))}
+      ${pcard('Closing Rate New',(k.closing_rate_new!=null?k.closing_rate_new+'%':'–'),'')}
+    </div>
+    <div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ presChart(sl.querySelector('canvas'),'doughnut',
+      {labels:['Repeat','New'],datasets:[{data:[k.repeat_omzet||0,k.omzet_new||0],backgroundColor:['#e9852b','#3b6fb0'],borderWidth:2,borderColor:'#fff'}]},
+      {plugins:{legend:{position:'bottom'},title:{display:true,text:'Komposisi Omzet: Repeat vs New'}}}); }});
+  // 4. OMZET TABLE
+  const omzetRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'omzet');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
+  S.push({html:head(`Capaian OMZET <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">% Achievement</th><th class="num">Target</th><th class="num">Realisasi</th></tr></thead><tbody>
+    ${omzetRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td class="num">${formatRp(r.target)}</td><td class="num">${formatRp(r.actual)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="ps-note">Target vs realisasi omzet ${P.label}. Sumber: KPI Divisi (kpi_config.json).</div></div>`});
+  // 5. REPEAT ORDER TABLE
+  const repRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'repeat');return {ym,ach:r.ach,target:r.target,actual:r.actual};});
+  S.push({html:head(`Capaian REPEAT ORDER <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">% Achievement</th><th class="num">Target (70%)</th><th class="num">Realisasi</th></tr></thead><tbody>
+    ${repRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td class="num">${formatRp(r.target)}</td><td class="num">${formatRp(r.actual)}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="ps-note">Repeat order dari pelanggan lama vs target 70% omzet.</div></div>`});
+  // 6. UMBRELLA / CLOSING / POTENSI
+  const sm=D.scoreMap[lastYm]||{};
+  const um=scoreRow(sm,'umbrella'),cn=scoreRow(sm,'closing_new'),po=scoreRow(sm,'potensi');
+  S.push({html:head(`Umbrella · Closing New · Potensi <span class="yr">${BULAN_ID[+lastYm.split('-')[1]-1]}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3" style="margin-top:8px">
+      ${pcard('Umbrella Contract',`${fmtInt(um.actual)} / ${fmtInt(um.target)}`,`achievement ${um.ach!=null?um.ach+'%':'–'}`)}
+      ${pcard('Closing Rate New',`${cn.actual!=null?cn.actual+'%':'–'}`,`target ${fmtInt(cn.target)}% · ach ${cn.ach!=null?cn.ach+'%':'–'}`)}
+      ${pcard('Potensi Marketing',formatRp(po.actual),`target ${formatRp(po.target)} · ach ${po.ach!=null?po.ach+'%':'–'}`)}
+    </div>
+    <div class="ps-note">Kontrak payung, closing rate customer baru, dan total nilai potensi.</div></div>`});
+  // 7. OKR MARSALES SCORE
+  const okrRows=P.months.map(ym=>({ym,sc:D.scoreMap[ym]||{}}));
+  S.push({html:head(`OKR Marsales <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Achievement</th><th class="num">Skor KPI</th><th>Label</th></tr></thead><tbody>
+    ${okrRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.sc.total_ach!=null?r.sc.total_ach+'%':'–'}</td><td class="num">${r.sc.total_kpi!=null?r.sc.total_kpi:'–'}</td><td>${r.sc.label||'–'}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="ps-note">Skor KPI Divisi Sales (bobot omzet 40 · repeat 20 · closing 20 · potensi 15 · umbrella 5).</div></div>`});
+  // 8. DIVIDER SCM
+  S.push({cls:'ps-div',html:`<div class="corner"></div><h2>SCM</h2>`});
+  // 9. ONTIME
+  const ot=D.ontime||{};
+  S.push({html:head(`On Time Delivery <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('% Ontime',(ot.pct!=null?ot.pct+'%':'–'),`${fmtInt(ot.ontime)} tepat / ${fmtInt((ot.ontime||0)+(ot.telat||0))}`)}
+      ${pcard('Total Project',fmtInt(ot.total),'proyek FAW')}
+      ${pcard('Ontime',fmtInt(ot.ontime),'selesai ≤ deadline')}
+      ${pcard('Telat',fmtInt(ot.telat),ot.avg_delay!=null?`rata-rata ${ot.avg_delay} hari`:'')}
+    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ const tr=ot.trend||[]; presChart(sl.querySelector('canvas'),tr.length<=1?'bar':'line',
+      {labels:tr.map(t=>t.bulan),datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),backgroundColor:'#2f9e6f',borderColor:'#2f9e6f',tension:.35,borderRadius:8,maxBarThickness:70}]},
+      {plugins:{legend:{display:false},title:{display:true,text:'Tren % Ontime per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}); }});
+  // 10. INFULL
+  const IF=(D.delivery||{}).in_full||{}, ift=(D.delivery||{}).trend||[];
+  S.push({html:head(`In Full Delivery <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('% In Full',(IF.pct!=null?IF.pct+'%':'–'),`${fmtInt(IF.in_full)} lengkap / ${fmtInt(IF.total)}`)}
+      ${pcard('Total Order',fmtInt(IF.total),'selesai produksi')}
+      ${pcard('Kurang Kirim',fmtInt(IF.kurang),'qty kirim < pesan')}
+      ${pcard('Belum Dikirim',fmtInt(IF.belum),'belum ada surat jalan')}
+    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ presChart(sl.querySelector('canvas'),ift.length<=1?'bar':'line',
+      {labels:ift.map(t=>t.bulan),datasets:[{label:'% In Full',data:ift.map(t=>t.if_pct),backgroundColor:'#e9852b',borderColor:'#e9852b',tension:.35,borderRadius:8,maxBarThickness:70}]},
+      {plugins:{legend:{display:false},title:{display:true,text:'Tren % In Full per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}); }});
+  // 11. REJECT
+  const rj=D.reject||{};
+  S.push({html:head(`Reject Cost <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Total Reject Cost',formatRp(rj.total_cost),`${fmtInt(rj.count)} kejadian`)}
+      ${pcard('Penanggung Terbesar',esc((rj.by_pj&&rj.by_pj[0]||{}).label)||'–',rj.by_pj&&rj.by_pj[0]?formatRp(rj.by_pj[0].cost):'')}
+      ${pcard('Jenis Reject Terbesar',esc((rj.by_jenis&&rj.by_jenis[0]||{}).label)||'–',rj.by_jenis&&rj.by_jenis[0]?formatRp(rj.by_jenis[0].cost):'')}
+    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ const b=(rj.by_pj||[]).slice(0,6); presChart(sl.querySelector('canvas'),'bar',
+      {labels:b.map(x=>x.label),datasets:[{data:b.map(x=>x.cost),backgroundColor:'#cf4b3a',borderRadius:5,maxBarThickness:26}]},
+      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Reject Cost per Penanggung Jawab'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}}); }});
+  // 12. KELOLOSAN
+  const kl=D.kelolosan||{};
+  S.push({html:head(`Kelolosan Reject <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('% Kelolosan',(kl.pct!=null?kl.pct+'%':'–'),`${fmtInt(kl.kendala)} kendala / ${fmtInt(kl.spk)} SPK`)}
+      ${pcard('Jumlah Kendala',fmtInt(kl.kendala),'masalah produksi')}
+      ${pcard('Kategori Terbanyak',esc((kl.by_kategori&&kl.by_kategori[0]||{}).kategori)||'–',kl.by_kategori&&kl.by_kategori[0]?fmtInt(kl.by_kategori[0].n)+' kejadian':'')}
+    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ const b=(kl.by_kategori||[]).slice(0,6); presChart(sl.querySelector('canvas'),'bar',
+      {labels:b.map(x=>x.kategori),datasets:[{data:b.map(x=>x.n),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:26}]},
+      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Kendala per Kategori'}},scales:{x:{ticks:{precision:0}}}}); }});
+  // 13. COMPLAIN
+  const cm=D.complain||{};
+  S.push({html:head(`Complain Handling <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('% Complain Handling',(cm.pct!=null?cm.pct+'%':'–'),`${fmtInt(cm.ontime)} tepat / ${fmtInt(cm.dinilai)}`)}
+      ${pcard('Total Complain',fmtInt(cm.total),cm.belum?`${fmtInt(cm.belum)} belum dinilai`:'')}
+      ${pcard('Tepat Waktu',fmtInt(cm.ontime),'≤ H+3')}
+      ${pcard('Terlambat',fmtInt(cm.overtime),'> H+3')}
+    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
+    init:(sl)=>{ const b=(cm.by_action||[]).slice(0,8); presChart(sl.querySelector('canvas'),'bar',
+      {labels:b.map(x=>x.action),datasets:[{label:'Tepat',data:b.map(x=>x.ontime),backgroundColor:'#2f9e6f'},{label:'Telat',data:b.map(x=>x.overtime),backgroundColor:'#e9852b'}]},
+      {plugins:{legend:{position:'bottom'},title:{display:true,text:'Corrective Action: tepat vs telat'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}); }});
+  // 14. OKR SCM
+  const otp=ot.pct, ifp=IF.pct;
+  S.push({html:head(`OKR SCM <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <table class="ps-tab"><thead><tr><th>Metrik</th><th class="num">Target</th><th class="num">Achievement</th><th>Score</th></tr></thead><tbody>
+      <tr><td>On Time Delivery</td><td class="num">95%</td><td class="num">${otp!=null?otp+'%':'–'}</td><td>${achBadge(otp,95)}</td></tr>
+      <tr><td>In Full Delivery</td><td class="num">95%</td><td class="num">${ifp!=null?ifp+'%':'–'}</td><td>${achBadge(ifp,95)}</td></tr>
+      <tr><td>Complain Handling</td><td class="num">90%</td><td class="num">${cm.pct!=null?cm.pct+'%':'–'}</td><td>${achBadge(cm.pct,90)}</td></tr>
+    </tbody></table>
+    <div class="ps-note">Target OTIF 95% · complain handling 90%. Win bila achievement ≥ target.</div></div>`});
+  // 15. DIVIDER FINANCE
+  S.push({cls:'ps-div',html:`<div class="corner"></div><h2>Analisa<br>Finance</h2>`});
+  // 16. FINANCIAL (P&L — mode Invoice)
+  const fn=D.financial||{}, ti=fn.total_invoice||{}, tp=fn.total_po||{}, ft=fn.targets||{};
+  S.push({html:head(`Capaian Financial <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Revenue (Invoice)',formatRp(ti.revenue),`target ${formatRp(ft.revenue_bulanan)}/bln`)}
+      ${pcard('Gross Profit',formatRp(ti.gross_profit),`GPM ${ti.gpm!=null?ti.gpm+'%':'–'} · target ${ft.gpm||'–'}%`)}
+      ${pcard('Net Profit',formatRp(ti.net_profit),`NPM ${ti.npm!=null?ti.npm+'%':'–'} · target ${ft.npm||'–'}%`)}
+      ${pcard('Revenue (PO)',formatRp(tp.revenue),'basis PO')}
+    </div>
+    ${(fn.months&&fn.months.length)?`<table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Revenue</th><th class="num">Gross Profit</th><th class="num">Net Profit</th><th class="num">NPM</th></tr></thead><tbody>
+      ${fn.months.map(m=>`<tr><td>${esc(m.bulan||'')}</td><td class="num">${formatRp(m.invoice.revenue)}</td><td class="num">${formatRp(m.invoice.gross_profit)}</td><td class="num">${formatRp(m.invoice.net_profit)}</td><td class="num">${m.invoice.npm!=null?m.invoice.npm+'%':'–'}</td></tr>`).join('')}</tbody></table>`:'<div class="ps-note">Detail P&L per bulan tidak tersedia untuk periode ini (cek financial_csv_url).</div>'}
+    <div class="ps-note">P&L PT BBI (basis Invoice). Sumber: Google Sheet P&L.</div></div>`});
+  // 17. TOP 3 PROBLEM (auto-draft)
+  S.push({html:head('Top Problem & Evaluasi')+`<div class="ps-body">
+    <table class="ps-tab"><thead><tr><th style="width:40%">Problem (auto-draft)</th><th>Action</th></tr></thead><tbody>
+    ${autoProblems(D).map(p=>`<tr><td>${p.problem}</td><td>${p.action}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="ps-note">Draf otomatis dari data — silakan sunting sebelum presentasi.</div></div>`});
+  // 18. KESIMPULAN (auto-draft)
+  S.push({html:head('Kesimpulan')+`<div class="ps-body">
+    <ul class="ps-ul">${autoConclusion(D).map(x=>`<li>${x}</li>`).join('')}</ul>
+    <div class="ps-note">Draf otomatis — sesuaikan dengan konteks bisnis.</div></div>`});
+  return S;
+}
+
+function autoProblems(D){
+  const out=[], ot=D.ontime||{}, kl=D.kelolosan||{}, rj=D.reject||{}, cm=D.complain||{};
+  const worstVen=(ot.by_vendor||[]).filter(v=>v.telat>0).sort((a,b)=>b.telat-a.telat)[0];
+  if(worstVen) out.push({problem:`Vendor <b>${esc(worstVen.vendor)}</b> paling banyak telat (${worstVen.telat} dari ${worstVen.total} proyek).`,action:'Split beban vendor / tambah vendor baru agar SPK tidak menumpuk.'});
+  if(ot.pct!=null&&ot.pct<95) out.push({problem:`On Time Delivery baru ${ot.pct}% (target 95%), ${fmtInt(ot.telat)} proyek telat.`,action:'Perketat monitoring deadline produksi & preventif sebelum turun SPK.'});
+  if(kl.by_kategori&&kl.by_kategori[0]) out.push({problem:`Kendala produksi terbanyak: <b>${esc(kl.by_kategori[0].kategori)}</b> (${kl.by_kategori[0].n} kejadian).`,action:'Audit proses pada kategori tersebut + QC lebih ketat.'});
+  if(rj.by_pj&&rj.by_pj[0]) out.push({problem:`Reject cost terbesar ditanggung <b>${esc(rj.by_pj[0].label)}</b> (${formatRp(rj.by_pj[0].cost)}).`,action:'Evaluasi akar penyebab pada penanggung jawab tersebut.'});
+  if(cm.pct!=null&&cm.pct<90) out.push({problem:`Complain handling ${cm.pct}% tepat waktu (target 90%), ${fmtInt(cm.overtime)} terlambat.`,action:'Percepat penyelesaian complain agar ≤ H+3.'});
+  return out.slice(0,5);
+}
+function autoConclusion(D){
+  const out=[], k=D.kpi||{}, sc=D.scoreMap[periodInfo().months.slice(-1)[0]]||{}, ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{};
+  if(sc.total_ach!=null) out.push(`Skor KPI Divisi Sales periode ini <b>${sc.total_ach}%</b> (${sc.label||'-'}).`);
+  if(k.total_omzet!=null) out.push(`Total omzet <b>${formatRp(k.total_omzet)}</b> dengan margin ${k.persen_margin!=null?k.persen_margin+'%':'–'} dan repeat order ${k.persen_repeat!=null?k.persen_repeat+'%':'–'}.`);
+  if(ot.pct!=null||IF.pct!=null) out.push(`OTIF: On Time ${ot.pct!=null?ot.pct+'%':'–'}, In Full ${IF.pct!=null?IF.pct+'%':'–'} — ${(ot.pct>=95&&IF.pct>=95)?'sudah memenuhi target':'masih di bawah target 95%'}.`);
+  out.push('Fokus perbaikan: distribusi beban vendor dan penurunan kelolosan reject ke customer.');
+  return out;
+}
+
+function printDeck(){
+  const stage=document.getElementById('pres-stage'); const keep=PRES.idx; destroyPresCharts();
+  stage.innerHTML='';
+  const els=PRES.slides.map(s=>{ const d=document.createElement('div'); d.className='pres-slide'+(s.cls?(' '+s.cls):''); d.style.marginBottom='16px'; d.innerHTML=s.html; stage.appendChild(d); return d; });
+  PRES.slides.forEach((s,i)=>{ if(s.init){ try{ s.init(els[i]); }catch(e){} } });
+  setTimeout(()=>{ window.print(); setTimeout(()=>{ destroyPresCharts(); showSlide(keep); },400); },500);
+}
 </script>
 </body>
 </html>
