@@ -1519,6 +1519,132 @@ def api_reject():
     })
 
 
+# ─── Complain Handling (sumber: Google Sheet QAQC / CPAR published CSV) ──
+_COMPLAIN_CACHE = {'ts': 0.0, 'rows': None, 'url': None}
+
+def _fetch_complain_rows(url):
+    import time, urllib.request, csv, io
+    now = time.time()
+    if (_COMPLAIN_CACHE['rows'] is not None and _COMPLAIN_CACHE['url'] == url
+            and now - _COMPLAIN_CACHE['ts'] < 120):
+        return _COMPLAIN_CACHE['rows']
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        text = resp.read().decode('utf-8', errors='replace')
+    rows = list(csv.DictReader(io.StringIO(text)))
+    _COMPLAIN_CACHE.update(ts=now, rows=rows, url=url)
+    return rows
+
+def _cell(r, *subs):
+    """Ambil nilai kolom yang nama header-nya MENGANDUNG salah satu potongan (case-insensitive).
+       Tahan terhadap posisi kolom & spasi/typo header."""
+    for key in r.keys():
+        kl = (key or '').strip().lower()
+        for s in subs:
+            if s in kl:
+                v = r.get(key)
+                if v is not None and str(v).strip() != '':
+                    return str(v).strip()
+    return ''
+
+@app.route('/api/complain')
+@login_required
+def api_complain():
+    """Complain Handling (CPAR) — sumber Google Sheet QAQC.
+       Tepat waktu = kolom 'Inspection Time' bernilai 'On time' (Over time = terlambat).
+       % Complain Handling = solved tepat waktu ÷ complain yang sudah dinilai (on/over) per periode.
+       Periode difilter berdasar 'CPAR Date' (format 'DD Mon YYYY')."""
+    cfg = load_kpi_config()
+    url = cfg.get('complain_csv_url')
+    if not url:
+        return jsonify({'_error': 'URL CSV complain belum diisi di kpi_config.json (complain_csv_url).'}), 200
+    try:
+        raw = _fetch_complain_rows(url)
+    except Exception as e:
+        return jsonify({'_error': f'Gagal membaca Google Sheet: {e}'}), 200
+
+    tgl_dari, tgl_sampai, _pic, _div = get_args()
+    d1, d2 = _pdate(tgl_dari), _pdate(tgl_sampai)
+
+    ontime = overtime = belum = 0
+    trend = {}            # bulan -> {'n':dinilai, 'ot':ontime}
+    by_action = {}        # corrective action -> {'ontime','overtime','total'}
+    by_vendor = {}        # vendor -> {'ontime','overtime','total'}
+    rows = []
+    for r in raw:
+        kode = _cell(r, 'kode order', 'kode_order')
+        cpar = _cell(r, 'cpar date', 'cpar', 'tanggal complain', 'tanggal')
+        # baris kosong / bukan data
+        if not kode and not cpar:
+            continue
+        cd = _reject_date(cpar)
+        if cd is not None:
+            if d1 and cd < d1:  continue
+            if d2 and cd > d2:  continue
+
+        insp = _cell(r, 'inspection time', 'inspection', 'ketepatan').lower()
+        if 'on' in insp and 'time' in insp:
+            status = 'On time'
+        elif 'over' in insp:
+            status = 'Over time'
+        else:
+            status = 'Belum'
+
+        action = _cell(r, 'corrective action', 'corrective', 'tindakan') or '(belum diisi)'
+        vendor = _cell(r, 'vendor') or '(tanpa vendor)'
+
+        if status == 'On time':
+            ontime += 1
+        elif status == 'Over time':
+            overtime += 1
+        else:
+            belum += 1
+
+        # trend & breakdown hanya untuk yg sudah dinilai (on/over)
+        if status in ('On time', 'Over time'):
+            if cd is not None:
+                b = cd.strftime('%Y-%m')
+                t = trend.setdefault(b, {'n': 0, 'ot': 0})
+                t['n'] += 1
+                if status == 'On time':
+                    t['ot'] += 1
+            ba = by_action.setdefault(action, {'action': action, 'ontime': 0, 'overtime': 0, 'total': 0})
+            ba['total'] += 1
+            ba['ontime' if status == 'On time' else 'overtime'] += 1
+            bv = by_vendor.setdefault(vendor, {'vendor': vendor, 'ontime': 0, 'overtime': 0, 'total': 0})
+            bv['total'] += 1
+            bv['ontime' if status == 'On time' else 'overtime'] += 1
+
+        rows.append({
+            'cpar': cpar, 'kode_order': kode,
+            'konsumen': _cell(r, 'nama konsumen', 'konsumen', 'customer'),
+            'produk': _cell(r, 'nama produk', 'produk'),
+            'action': action if action != '(belum diisi)' else '',
+            'vendor': vendor if vendor != '(tanpa vendor)' else '',
+            'status_complain': _cell(r, 'status complain', 'status compla', 'status'),
+            'status': status,
+        })
+
+    dinilai = ontime + overtime
+    trend_list = [{'bulan': b, 'pct': round(v['ot'] / v['n'] * 100, 1) if v['n'] else None,
+                   'ontime': v['ot'], 'n': v['n']} for b, v in sorted(trend.items())]
+    # urut: Over time dulu (butuh perhatian), lalu Belum, lalu On time
+    order = {'Over time': 0, 'Belum': 1, 'On time': 2}
+    rows.sort(key=lambda x: (order.get(x['status'], 3), x['cpar'] or ''))
+    return jsonify({
+        'total': ontime + overtime + belum,
+        'dinilai': dinilai,
+        'ontime': ontime,
+        'overtime': overtime,
+        'belum': belum,
+        'pct': round(ontime / dinilai * 100, 1) if dinilai else None,
+        'trend': trend_list,
+        'by_action': sorted(by_action.values(), key=lambda x: -x['total']),
+        'by_vendor': sorted(by_vendor.values(), key=lambda x: -x['total'])[:12],
+        'rows': rows[:3000],
+    })
+
+
 # ─── Financial Statement (P&L PT BBI dari Google Sheet published CSV) ───
 _FIN_CACHE = {'ts': 0.0, 'rows': None, 'url': None}
 
