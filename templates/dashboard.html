@@ -1677,9 +1677,25 @@ async function loadDeck(){
     const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
     const D={P,per,scoreMap:{},monthKpi:{}};
     specs.forEach((s,i)=>D[s[0]]=res[i]);
-    const pm=D.presmonths||{agg:{},months:[]};
-    D.kpi=pm.agg.kpi||{}; D.scoreDivisi=pm.agg.score||{rows:[]}; D.marketing=pm.agg.marketing||{rows:[]};
-    (pm.months||[]).forEach(mo=>{ D.scoreMap[mo.ym]=mo.score; D.monthKpi[mo.ym]=mo.kpi; });
+    const pm=D.presmonths;
+    if(pm && pm.agg && pm.agg.kpi){
+      // endpoint cepat tersedia
+      D.kpi=pm.agg.kpi; D.scoreDivisi=pm.agg.score||{rows:[]}; D.marketing=pm.agg.marketing||{rows:[]};
+      (pm.months||[]).forEach(mo=>{ D.scoreMap[mo.ym]=mo.score; D.monthKpi[mo.ym]=mo.kpi; });
+    } else {
+      // FALLBACK aman ke endpoint lama bila /api/pres-months belum ter-deploy / gagal
+      const mrange=ym=>`tgl_dari=${mStart(ym)}&tgl_sampai=${mEnd(ym)}`+dv;
+      const nm=P.months.length;
+      const lg=await Promise.all([
+        fetchJSON('/api/kpi?'+per).catch(()=>({})),
+        fetchJSON('/api/kpi-score?'+per).catch(()=>({rows:[]})),
+        fetchJSON('/api/kpi-marketing?'+per).catch(()=>({rows:[]})),
+        ...P.months.map(ym=>fetchJSON('/api/kpi-score?'+mrange(ym)).catch(()=>({rows:[]}))),
+        ...P.months.map(ym=>fetchJSON('/api/kpi?'+mrange(ym)).catch(()=>({}))),
+      ]);
+      D.kpi=lg[0]||{}; D.scoreDivisi=lg[1]||{rows:[]}; D.marketing=lg[2]||{rows:[]};
+      P.months.forEach((ym,i)=>{ D.scoreMap[ym]=lg[3+i]; D.monthKpi[ym]=lg[3+nm+i]; });
+    }
     PRES.slides=buildSlides(D);
     showSlide(0);
   }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
