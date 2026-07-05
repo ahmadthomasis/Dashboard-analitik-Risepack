@@ -7,6 +7,7 @@
   "financial_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtHRz2UZuCFWKX0Z8F4hSEIfZW2AwbuLJEk7GHvGdt3wNPNXjoL7mBWvew5LtTrqYj5K5Gl9mwEEKV/pub?gid=125449772&single=true&output=csv",
   "complain_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9PyErN1C52doIeuWNPzX3i7Pc8Qr_P_9Ss13ps_EMEUYDuS32ZfVJaE6T8YDPdYb032qG5B5jFXKt/pub?gid=905613565&single=true&output=csv",
   "financial_targets": {"revenue_bulanan": 2500000000, "net_profit_bulanan": 326770000, "gpm": 22, "npm": 13.07},
+  "sales_targets": {"omzet_new_bulanan": 500000000},
 
   "produksi_kpi": [
     {"id": "ontime",     "name": "On Time Delivery",              "weight": 30, "objective": 95,      "unit": "%",   "src": "ontime",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
