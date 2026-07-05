@@ -1433,24 +1433,21 @@ async function loadKpiFungsi(q){
 async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-marketing?'+q), 'marketing-summary', 'marketing-table'); }
 
 // ── KPI Divisi Produksi (skor otomatis dari data produksi) ──
-async function loadKpiProduksi(q){
-  const [cfg,ot,dl,rj,kl,cm]=await Promise.all([
-    fetchJSON('/api/kpi-config').catch(()=>({})),
-    fetchJSON('/api/ontime?'+q).catch(()=>({})),
-    fetchJSON('/api/delivery?'+q).catch(()=>({})),
-    fetchJSON('/api/reject?'+q).catch(()=>({})),
-    fetchJSON('/api/kelolosan?'+q).catch(()=>({})),
-    fetchJSON('/api/complain?'+q).catch(()=>({})),
-  ]);
-  const defs=cfg.produksi_kpi||[];
-  const IF=dl.in_full||{};
-  const rejScm=(rj.by_pj||[]).filter(x=>String(x.label||'').toLowerCase().includes('scm')).reduce((s,x)=>s+(x.cost||0),0);
-  const val={ontime:ot.pct, infull:IF.pct, reject_scm:rejScm, kelolosan_case:kl.kendala, complain:cm.pct};
+// subset reject khusus penanggung jawab SCM (dari baris reject)
+function rejectScmSubset(rj){
+  const rows=(rj&&rj.rows||[]).filter(r=>String(r.pj||'').toLowerCase().includes('scm'));
+  const total=rows.reduce((s,r)=>s+(r.debit||0),0);
+  const agg=key=>{const m={};rows.forEach(r=>{const k=r[key]||'(kosong)';m[k]=(m[k]||0)+(r.debit||0);});return Object.entries(m).map(([label,cost])=>({label,cost})).sort((a,b)=>b.cost-a.cost);};
+  return {total_cost:total,count:rows.length,by_jenis:agg('jenis'),by_pic:agg('pic'),rows};
+}
+// hitung scorecard KPI produksi (dipakai tab KPI & slide presentasi)
+function prodKpiCompute(cfg,vals){
+  const defs=(cfg&&cfg.produksi_kpi)||[];
   const scorePct=(a,bands)=>{ if(a==null)return 0; for(const [thr,sc] of bands){ if(a>=thr)return sc; } return 0; };
   const scoreLte=(v,bands)=>{ if(v==null)return 0; for(const [thr,sc] of bands){ if(v<=thr)return sc; } return 1; };
   let totW=0, totAchW=0;
   const rows=defs.map(k=>{
-    const w=k.weight/100, a=val[k.src];
+    const w=k.weight/100, a=vals[k.src];
     let score,ach,actualDisp,targetDisp,note='';
     if(k.unit==='%'){ score=scorePct(a,k.bands||[]); ach=(a!=null&&k.objective)?Math.round(a/k.objective*1000)/10:0; actualDisp=(a!=null?a+'%':'–'); targetDisp=k.objective+'%'; }
     else if(k.unit==='Rp'){ score=scoreLte(a,k.bands_lte||[]); ach=(a>0)?Math.min(Math.round(k.objective/a*1000)/10,100):100; actualDisp=formatRp(a); targetDisp='≤ '+formatRp(k.objective); note='penanggung jawab SCM'; }
@@ -1460,8 +1457,21 @@ async function loadKpiProduksi(q){
     return {name:k.name,note,weight:k.weight,target:targetDisp,actual:actualDisp,ach,score,weighted};
   });
   const totAch=Math.round(totAchW*10)/10;
-  const lbl=(cfg.produksi_labels||[[0,'-']]).find(x=>totAch>=x[0]);
-  renderKpiProd({rows,total_kpi:Math.round(totW*100)/100,total_ach:totAch,label:lbl?lbl[1]:'-'});
+  const lbl=((cfg&&cfg.produksi_labels)||[[0,'-']]).find(x=>totAch>=x[0]);
+  return {rows,total_kpi:Math.round(totW*100)/100,total_ach:totAch,label:lbl?lbl[1]:'-'};
+}
+async function loadKpiProduksi(q){
+  const [cfg,ot,dl,rj,kl,cm]=await Promise.all([
+    fetchJSON('/api/kpi-config').catch(()=>({})),
+    fetchJSON('/api/ontime?'+q).catch(()=>({})),
+    fetchJSON('/api/delivery?'+q).catch(()=>({})),
+    fetchJSON('/api/reject?'+q).catch(()=>({})),
+    fetchJSON('/api/kelolosan?'+q).catch(()=>({})),
+    fetchJSON('/api/complain?'+q).catch(()=>({})),
+  ]);
+  const IF=dl.in_full||{};
+  const vals={ontime:ot.pct, infull:IF.pct, reject_scm:rejectScmSubset(rj).total_cost, kelolosan_case:kl.kendala, complain:cm.pct};
+  renderKpiProd(prodKpiCompute(cfg,vals));
 }
 function renderKpiProd(d){
   const lblClass=d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
@@ -1820,6 +1830,7 @@ async function loadDeck(){
       ['byMargin','/api/sales-by-margin?'+per,[]],['katOmzet','/api/kategori-omzet?'+per,[]],
       ['dealNR','/api/deal-new-repeat?'+per,[]],['journey','/api/journey?'+per,[]],
       ['trendBahan','/api/trend-bahan?'+yq,[]],['trendOmzet','/api/trend-omzet?'+yq,[]],['marginBulan','/api/margin-bulanan?'+yq,[]],
+      ['monitoring','/api/monitoring-potensi?'+per,[]],['kpiConfig','/api/kpi-config',{}],
     ];
     const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
     const D={P,per,scoreMap:{},monthKpi:{}};
@@ -2059,7 +2070,7 @@ function buildSlides(D){
     </tbody></table>
     <div class="ps-note">Customer dalam pipeline (status Follow Up) pada ${P.label} — prioritas nilai potensi terbesar.</div></div>`});
   // 8. UMBRELLA CONTRACT (editable) — agregat periode
-  const um=scoreRow(D.scoreDivisi,'umbrella'), umKey=PRES.mode+'_'+P.d1;
+  const um=scoreRow(D.scoreDivisi,'umbrella'), umKey=PRES.mode==='bulan'?PRES.month:(PRES.mode+'_'+P.d1);
   S.push({html:head(`Umbrella Contract <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
       ${pcard('Target',`${fmtInt(um.target)} kontrak`,PRES.mode==='bulan'?'per bulan':'per periode')}
@@ -2084,6 +2095,24 @@ function buildSlides(D){
       <tr style="font-weight:700"><td>TOTAL</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${mk.total_ach!=null?mk.total_ach+'%':'–'}</td><td>${mk.label||''}</td></tr>
       </tbody></table>`:'<div class="ps-note">Data KPI marketing kosong untuk periode ini.</div>'}
     <div class="ps-note">Scorecard marketing: potensi omzet, qualified leads, ROI iklan.</div></div>`});
+  // 9b. DETAIL POTENSI 3M (per sales, dari monitoring potensi)
+  const mpRows=D.monitoring||[];
+  const mpLead=mpRows.length, mpPot=mpRows.reduce((s,r)=>s+(r.potensi||0),0);
+  const mpTerisi=mpRows.filter(r=>r.terisi).length, mpBelum=mpLead-mpTerisi, mpKel=mpLead?Math.round(mpTerisi/mpLead*100):0;
+  const mpMap={};
+  mpRows.forEach(r=>{const p=r.pic||'(tanpa PIC)'; const o=mpMap[p]||(mpMap[p]={pic:p,total:0,belum:0,potensi:0}); o.total++; if(!r.terisi)o.belum++; o.potensi+=(r.potensi||0);});
+  const mpList=Object.values(mpMap).sort((a,b)=>b.potensi-a.potensi);
+  S.push({html:head(`Detail Potensi 3M <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Total Potensi',formatRp(mpPot),`${fmtInt(mpLead)} lead online`)}
+      ${pcard('Sudah Diisi',fmtInt(mpTerisi),`kelengkapan ${mpKel}%`)}
+      ${pcard('Belum Diisi',fmtInt(mpBelum),mpLead?`${Math.round(mpBelum/mpLead*100)}% kosong`:'–')}
+      ${pcard('Potensi Tertinggi',esc((mpList[0]||{}).pic)||'–',mpList[0]?formatRp(mpList[0].potensi):'')}
+    </div>
+    <table class="ps-tab"><thead><tr><th>PIC / Sales</th><th class="num">Total Lead</th><th class="num">Nilai Potensi</th><th class="num">Belum Diisi</th><th class="num">% Belum</th></tr></thead><tbody>
+    ${mpList.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num">${fmtInt(r.total)}</td><td class="num" style="font-weight:600">${formatRp(r.potensi)}</td><td class="num" style="color:${r.belum?'#a3392a':'inherit'}">${fmtInt(r.belum)}</td><td class="num">${r.total?Math.round(r.belum/r.total*100):0}%</td></tr>`).join('')||'<tr><td colspan="5">Tidak ada lead online periode ini</td></tr>'}
+    </tbody></table>
+    <div class="ps-note">Potensi customer baru (lead Online) per sales · diurut nilai potensi tertinggi · "Belum Diisi" = potensi belum dihargai.</div></div>`});
   // 10. OKR MARSALES SCORE
   const okrRows=P.months.map(ym=>({ym,sc:D.scoreMap[ym]||{}}));
   S.push({html:head(`OKR Marsales <span class="yr">${P.label}</span>`)+`<div class="ps-body">
@@ -2093,64 +2122,95 @@ function buildSlides(D){
     <div class="ps-note">Skor KPI Divisi Sales (bobot omzet 40 · repeat 20 · closing 20 · potensi 15 · umbrella 5).</div></div>`});
   // 8. DIVIDER SCM
   S.push({cls:'ps-div',html:`<div class="corner"></div><h2>SCM</h2>`});
-  // 9. ONTIME
-  const ot=D.ontime||{};
+  // sumber data SCM (dipakai bareng)
+  const ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{}, rjS=rejectScmSubset(D.reject||{}), kl=D.kelolosan||{}, cm=D.complain||{};
+  // 8b. KPI DIVISI PRODUKSI (scorecard, dinamis per periode)
+  const prodKpi=prodKpiCompute(D.kpiConfig||{},{ontime:ot.pct,infull:IF.pct,reject_scm:rjS.total_cost,kelolosan_case:kl.kendala,complain:cm.pct});
+  const prodLbl=prodKpi.total_ach>=80?'ps-win':(prodKpi.total_ach<60?'ps-lose':'');
+  S.push({html:head(`KPI Divisi Produksi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Total KPI',`${prodKpi.total_kpi} / 6`,'skor tertimbang')}
+      ${pcard('Total Achievement',prodKpi.total_ach+'%',`<span class="ps-badge ${prodLbl}">${esc(prodKpi.label)}</span>`)}
+      ${pcard('Periode',P.label,'divisi produksi')}
+    </div>
+    ${prodKpi.rows.length?`<table class="ps-tab"><thead><tr><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th>Skor</th></tr></thead><tbody>
+      ${prodKpi.rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${r.target}</td><td class="num">${r.actual}</td><td class="num">${r.ach}%</td><td>${scBadge(r.score)}</td></tr>`).join('')}
+      </tbody></table>`:'<div class="ps-note">Config produksi_kpi kosong.</div>'}
+    <div class="ps-note">Ontime · Infull · Reject Cost (SCM) · Kelolosan · Complaint Handling — skor otomatis dari data.</div></div>`});
+  // 9. ONTIME (cards + tren + per jenis)
   S.push({html:head(`On Time Delivery <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('% Ontime',(ot.pct!=null?ot.pct+'%':'–'),`${fmtInt(ot.ontime)} tepat / ${fmtInt((ot.ontime||0)+(ot.telat||0))}`)}
       ${pcard('Total Project',fmtInt(ot.total),'proyek FAW')}
       ${pcard('Ontime',fmtInt(ot.ontime),'selesai ≤ deadline')}
       ${pcard('Telat',fmtInt(ot.telat),ot.avg_delay!=null?`rata-rata ${ot.avg_delay} hari`:'')}
-    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ const tr=ot.trend||[]; presChart(sl.querySelector('canvas'),tr.length<=1?'bar':'line',
-      {labels:tr.map(t=>t.bulan),datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),backgroundColor:'#2f9e6f',borderColor:'#2f9e6f',tension:.35,borderRadius:8,maxBarThickness:70}]},
-      {plugins:{legend:{display:false},title:{display:true,text:'Tren % Ontime per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}); }});
-  // 10. INFULL
-  const IF=(D.delivery||{}).in_full||{}, ift=(D.delivery||{}).trend||[];
+    </div>
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Tren % ontime & sebaran ontime vs telat per jenis produk.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=ot.trend||[], bt=(ot.by_type||[]).slice(0,8);
+      presChart(cv[0],tr.length<=1?'bar':'line',{labels:tr.map(t=>t.bulan),datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),backgroundColor:'#2f9e6f',borderColor:'#2f9e6f',tension:.35,borderRadius:8,maxBarThickness:60}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Tren % Ontime per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+      presChart(cv[1],'bar',{labels:bt.map(t=>t.jenis),datasets:[{label:'Ontime',data:bt.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'s'},{label:'Telat',data:bt.map(t=>t.telat),backgroundColor:'#e9852b',stack:'s'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Ontime vs Telat per Jenis Produk'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}); }});
+  // 10. INFULL (cards + tren + per jenis)
   S.push({html:head(`In Full Delivery <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('% In Full',(IF.pct!=null?IF.pct+'%':'–'),`${fmtInt(IF.in_full)} lengkap / ${fmtInt(IF.total)}`)}
       ${pcard('Total Order',fmtInt(IF.total),'selesai produksi')}
       ${pcard('Kurang Kirim',fmtInt(IF.kurang),'qty kirim < pesan')}
       ${pcard('Belum Dikirim',fmtInt(IF.belum),'belum ada surat jalan')}
-    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ presChart(sl.querySelector('canvas'),ift.length<=1?'bar':'line',
-      {labels:ift.map(t=>t.bulan),datasets:[{label:'% In Full',data:ift.map(t=>t.if_pct),backgroundColor:'#e9852b',borderColor:'#e9852b',tension:.35,borderRadius:8,maxBarThickness:70}]},
-      {plugins:{legend:{display:false},title:{display:true,text:'Tren % In Full per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}}); }});
-  // 11. REJECT
-  const rj=D.reject||{};
-  S.push({html:head(`Reject Cost <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    </div>
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Tren % in full & sebaran in full vs kurang per jenis produk.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=(D.delivery||{}).trend||[], bt=((D.delivery||{}).by_type||[]).slice(0,8);
+      presChart(cv[0],tr.length<=1?'bar':'line',{labels:tr.map(t=>t.bulan),datasets:[{label:'% In Full',data:tr.map(t=>t.if_pct),backgroundColor:'#e9852b',borderColor:'#e9852b',tension:.35,borderRadius:8,maxBarThickness:60}]},
+        {plugins:{legend:{display:false},title:{display:true,text:'Tren % In Full per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+      presChart(cv[1],'bar',{labels:bt.map(t=>t.jenis),datasets:[{label:'In Full',data:bt.map(t=>t.in_full),backgroundColor:'#2f9e6f',stack:'s'},{label:'Kurang',data:bt.map(t=>t.kurang),backgroundColor:'#e9852b',stack:'s'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'In Full vs Kurang per Jenis Produk'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}); }});
+  // 11. REJECT COST — SELALU FILTER SCM
+  S.push({html:head(`Reject Cost (SCM) <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
-      ${pcard('Total Reject Cost',formatRp(rj.total_cost),`${fmtInt(rj.count)} kejadian`)}
-      ${pcard('Penanggung Terbesar',esc((rj.by_pj&&rj.by_pj[0]||{}).label)||'–',rj.by_pj&&rj.by_pj[0]?formatRp(rj.by_pj[0].cost):'')}
-      ${pcard('Jenis Reject Terbesar',esc((rj.by_jenis&&rj.by_jenis[0]||{}).label)||'–',rj.by_jenis&&rj.by_jenis[0]?formatRp(rj.by_jenis[0].cost):'')}
-    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ const b=(rj.by_pj||[]).slice(0,6); presChart(sl.querySelector('canvas'),'bar',
-      {labels:b.map(x=>x.label),datasets:[{data:b.map(x=>x.cost),backgroundColor:'#cf4b3a',borderRadius:5,maxBarThickness:26}]},
-      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Reject Cost per Penanggung Jawab'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}}); }});
-  // 12. KELOLOSAN
-  const kl=D.kelolosan||{};
+      ${pcard('Total Reject Cost',formatRp(rjS.total_cost),`${fmtInt(rjS.count)} kejadian · SCM`)}
+      ${pcard('Jenis Terbesar',esc((rjS.by_jenis[0]||{}).label)||'–',rjS.by_jenis[0]?formatRp(rjS.by_jenis[0].cost):'')}
+      ${pcard('PIC Terbesar',esc((rjS.by_pic[0]||{}).label)||'–',rjS.by_pic[0]?formatRp(rjS.by_pic[0].cost):'')}
+    </div>
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Khusus penanggung jawab SCM · target ≤ Rp3jt/bulan.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), bj=rjS.by_jenis.slice(0,6), bp=rjS.by_pic.slice(0,6);
+      presChart(cv[0],'bar',{labels:bj.map(x=>x.label),datasets:[{data:bj.map(x=>x.cost),backgroundColor:'#cf4b3a',borderRadius:5,maxBarThickness:24}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Reject Cost per Jenis'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}});
+      presChart(cv[1],'bar',{labels:bp.map(x=>x.label),datasets:[{data:bp.map(x=>x.cost),backgroundColor:'#7a5230',borderRadius:5,maxBarThickness:24}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Reject Cost per PIC'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}}); }});
+  // 12. KELOLOSAN (cards + per kategori + top customer)
   S.push({html:head(`Kelolosan Reject <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <div class="ps-cards c3">
+    <div class="ps-cards">
       ${pcard('% Kelolosan',(kl.pct!=null?kl.pct+'%':'–'),`${fmtInt(kl.kendala)} kendala / ${fmtInt(kl.spk)} SPK`)}
       ${pcard('Jumlah Kendala',fmtInt(kl.kendala),'masalah produksi')}
+      ${pcard('Total SPK',fmtInt(kl.spk),'pembagi')}
       ${pcard('Kategori Terbanyak',esc((kl.by_kategori&&kl.by_kategori[0]||{}).kategori)||'–',kl.by_kategori&&kl.by_kategori[0]?fmtInt(kl.by_kategori[0].n)+' kejadian':'')}
-    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ const b=(kl.by_kategori||[]).slice(0,6); presChart(sl.querySelector('canvas'),'bar',
-      {labels:b.map(x=>x.kategori),datasets:[{data:b.map(x=>x.n),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:26}]},
-      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Kendala per Kategori'}},scales:{x:{ticks:{precision:0}}}}); }});
-  // 13. COMPLAIN
-  const cm=D.complain||{};
+    </div>
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Kendala per kategori & customer paling sering terkena kendala.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), bk=(kl.by_kategori||[]).slice(0,6), bc=(kl.by_customer||[]).slice(0,6);
+      presChart(cv[0],'bar',{labels:bk.map(x=>x.kategori),datasets:[{data:bk.map(x=>x.n),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:24}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Kendala per Kategori'}},scales:{x:{ticks:{precision:0}}}});
+      presChart(cv[1],'bar',{labels:bc.map(x=>x.customer),datasets:[{data:bc.map(x=>x.n),backgroundColor:'#3b6fb0',borderRadius:5,maxBarThickness:24}]},
+        {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Top Customer Terkena Kendala'}},scales:{x:{ticks:{precision:0}}}}); }});
+  // 13. COMPLAIN (cards + corrective action + per vendor)
   S.push({html:head(`Complain Handling <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('% Complain Handling',(cm.pct!=null?cm.pct+'%':'–'),`${fmtInt(cm.ontime)} tepat / ${fmtInt(cm.dinilai)}`)}
       ${pcard('Total Complain',fmtInt(cm.total),cm.belum?`${fmtInt(cm.belum)} belum dinilai`:'')}
       ${pcard('Tepat Waktu',fmtInt(cm.ontime),'≤ H+3')}
       ${pcard('Terlambat',fmtInt(cm.overtime),'> H+3')}
-    </div><div class="ps-chartbox"><canvas></canvas></div></div>`,
-    init:(sl)=>{ const b=(cm.by_action||[]).slice(0,8); presChart(sl.querySelector('canvas'),'bar',
-      {labels:b.map(x=>x.action),datasets:[{label:'Tepat',data:b.map(x=>x.ontime),backgroundColor:'#2f9e6f'},{label:'Telat',data:b.map(x=>x.overtime),backgroundColor:'#e9852b'}]},
-      {plugins:{legend:{position:'bottom'},title:{display:true,text:'Corrective Action: tepat vs telat'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}); }});
+    </div>
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Corrective action & complain per vendor (tepat vs terlambat).</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), ba=(cm.by_action||[]).slice(0,8), bv=(cm.by_vendor||[]).slice(0,8);
+      presChart(cv[0],'bar',{labels:ba.map(x=>x.action),datasets:[{label:'Tepat',data:ba.map(x=>x.ontime),backgroundColor:'#2f9e6f',stack:'s'},{label:'Telat',data:ba.map(x=>x.overtime),backgroundColor:'#e9852b',stack:'s'}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Corrective Action'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}});
+      presChart(cv[1],'bar',{labels:bv.map(x=>x.vendor),datasets:[{label:'Tepat',data:bv.map(x=>x.ontime),backgroundColor:'#2f9e6f',stack:'v'},{label:'Telat',data:bv.map(x=>x.overtime),backgroundColor:'#e9852b',stack:'v'}]},
+        {indexAxis:'y',plugins:{legend:{position:'bottom'},title:{display:true,text:'Complain per Vendor'}},scales:{x:{stacked:true,ticks:{precision:0}},y:{stacked:true}}}); }});
   // 14. OKR SCM
   const otp=ot.pct, ifp=IF.pct;
   S.push({html:head(`OKR SCM <span class="yr">${P.label}</span>`)+`<div class="ps-body">
