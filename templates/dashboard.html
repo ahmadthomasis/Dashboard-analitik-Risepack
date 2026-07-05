@@ -203,6 +203,16 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .ps-div{background:#12332e;color:#fff;justify-content:center;align-items:center;text-align:center;}
 .ps-div h2{font-family:'Poppins','Inter',sans-serif;font-size:56px;font-weight:800;letter-spacing:.5px;line-height:1.06;margin:0;text-transform:uppercase;}
 .ps-div .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
+/* closing / motivasi */
+.ps-close{background:linear-gradient(135deg,#12332e 0%,#1c443d 100%);color:#fff;justify-content:center;align-items:center;text-align:center;position:relative;}
+.ps-close .close-inner{padding:0 9%;max-width:1040px;z-index:2;}
+.ps-close .close-kicker{color:#e9852b;font-weight:700;letter-spacing:5px;font-size:15px;margin-bottom:20px;font-family:'Poppins','Inter',sans-serif;}
+.ps-close .close-quote{font-family:'Poppins','Inter',sans-serif;font-size:36px;font-weight:700;line-height:1.28;margin:0;letter-spacing:-.3px;}
+.ps-close .close-sub{margin-top:24px;font-size:17px;color:#bcd3cc;}
+.ps-close .close-logo{position:absolute;top:34px;left:44px;width:68px;height:68px;border-radius:50%;background:#2a211b;display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:12.5px;z-index:2;}
+.ps-close .close-logo b{color:#e9852b;}
+.ps-close .corner{position:absolute;left:0;bottom:0;width:230px;height:96px;background:#f5a623;clip-path:polygon(0 0,78% 0,100% 100%,0 100%);}
+.ps-close .close-art{position:absolute;right:5%;bottom:8%;width:210px;opacity:.85;z-index:1;}
 /* KPI mini cards for slides */
 .ps-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
 .ps-cards.c3{grid-template-columns:repeat(3,1fr);}
@@ -1532,7 +1542,8 @@ function renderSetupForms(){
       ${setupNumRow('financial_targets','revenue_bulanan','Revenue/bln')}
       ${setupNumRow('financial_targets','net_profit_bulanan','Net Profit/bln')}
       ${setupNumRow('financial_targets','gpm','GPM %')}
-      ${setupNumRow('financial_targets','npm','NPM %')}</div>
+      ${setupNumRow('financial_targets','npm','NPM %')}
+      ${setupNumRow('sales_targets','omzet_new_bulanan','Omzet New/bln')}</div>
       <h3 style="margin-top:16px">Target Omzet per Sales</h3><div class="ch-sub">KPI Fungsi Sales (per bulan)</div><div style="margin-top:10px">
       ${Object.keys(c.fungsi_omzet_target||{}).map(nm=>setupNumRow('fungsi_omzet_target',nm,nm)).join('')||'<span class="muted">—</span>'}</div></div>`;
   h+='</div>';
@@ -1832,8 +1843,8 @@ async function loadDeck(){
       ['byMargin','/api/sales-by-margin?'+per,[]],['katOmzet','/api/kategori-omzet?'+per,[]],
       ['dealNR','/api/deal-new-repeat?'+per,[]],['journey','/api/journey?'+per,[]],
       ['trendBahan','/api/trend-bahan?'+yq,[]],['trendOmzet','/api/trend-omzet?'+yq,[]],['marginBulan','/api/margin-bulanan?'+yq,[]],
-      ['monitoring','/api/monitoring-potensi?'+per,[]],['kpiConfig','/api/kpi-config',{}],
-      ['marketingAll','/api/kpi-marketing?'+perAll,{rows:[]}],
+      ['monitoring','/api/monitoring-potensi?'+perAll,[]],['kpiConfig','/api/kpi-config',{}],
+      ['marketingAll','/api/kpi-marketing?'+perAll,{rows:[]}],['sko','/api/sko-achievement?'+per,[]],
     ];
     const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
     const D={P,per,scoreMap:{},monthKpi:{}};
@@ -1887,6 +1898,7 @@ function pcard(l,v,d){ return `<div class="ps-card"><div class="l">${l}</div><di
 function dlt(v){ if(v==null)return''; const up=v>=0; return `<span class="${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(v)}%</span>`; }
 function kval(u,v){ if(v==null)return'–'; if(u==='Rp')return formatRp(v); if(u==='%')return v+'%'; if(u==='kontrak')return fmtInt(v)+' kontrak'; if(u==='x')return v+'x'; if(u==='leads')return fmtInt(v)+' leads'; return fmtInt(v); }
 function scBadge(s){ const c=s>=5?'ps-win':(s<=2?'ps-lose':''); return `<span class="ps-badge ${c}">${s}</span>`; }
+function scoreFromBands(ach,bands){ for(const [thr,sc] of (bands||[])){ if(ach>=thr) return sc; } return 0; }
 function noteKey(kind,ym){ return `pres_note_${kind}_${ym}`; }
 function getNote(kind,ym){ try{return localStorage.getItem(noteKey(kind,ym))||'';}catch(e){return'';} }
 function saveNote(kind,ym,v){ try{localStorage.setItem(noteKey(kind,ym),v);}catch(e){} }
@@ -2117,13 +2129,41 @@ function buildSlides(D){
     ${mpList.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num">${fmtInt(r.total)}</td><td class="num" style="font-weight:600">${formatRp(r.potensi)}</td><td class="num" style="color:${r.belum?'#a3392a':'inherit'}">${fmtInt(r.belum)}</td><td class="num">${r.total?Math.round(r.belum/r.total*100):0}%</td></tr>`).join('')||'<tr><td colspan="5">Tidak ada lead online periode ini</td></tr>'}
     </tbody></table>
     <div class="ps-note">Potensi customer baru (lead Online) per sales · diurut nilai potensi tertinggi · "Belum Diisi" = potensi belum dihargai.</div></div>`});
-  // 10. OKR MARSALES SCORE
-  const okrRows=P.months.map(ym=>({ym,sc:D.scoreMap[ym]||{}}));
-  S.push({html:head(`OKR Marsales <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Achievement</th><th class="num">Skor KPI</th><th>Label</th></tr></thead><tbody>
-    ${okrRows.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${r.sc.total_ach!=null?r.sc.total_ach+'%':'–'}</td><td class="num">${r.sc.total_kpi!=null?r.sc.total_kpi:'–'}</td><td>${r.sc.label||'–'}</td></tr>`).join('')}
+  // 10. SKO 10x ACHIEVEMENT (repeat order — customer capai 10 SKO)
+  const skoRaw=(D.sko||[]).map(r=>({nama:r.nama,jml:r.jml||0,pct:Math.min(Math.round((r.jml||0)/10*100),100)}));
+  const skoN=skoRaw.length, skoDone=skoRaw.filter(r=>r.jml>=10).length;
+  const skoAvg=skoN?Math.round(skoRaw.reduce((s,r)=>s+r.pct,0)/skoN):0;
+  const skoTop=skoRaw.slice().sort((a,b)=>b.jml-a.jml);
+  const skoDonePct=skoN?Math.round(skoDone/skoN*100):0;
+  S.push({html:head(`Achievement SKO 10x <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Rata-rata Achievement',skoAvg+'%',`${fmtInt(skoN)} customer deal`)}
+      ${pcard('Sudah 10x SKO',fmtInt(skoDone),`<span class="ps-badge ${skoDonePct>=50?'ps-win':'ps-lose'}">${skoDonePct}% customer</span>`)}
+      ${pcard('Total Customer',fmtInt(skoN),'punya order periode ini')}
+      ${pcard('Customer Teratas',esc((skoTop[0]||{}).nama)||'–',skoTop[0]?fmtInt(skoTop[0].jml)+' SKO':'')}
+    </div>
+    <table class="ps-tab"><thead><tr><th>Customer</th><th class="num">Jumlah SKO</th><th class="num">Achievement (target 10x)</th></tr></thead><tbody>
+    ${skoTop.slice(0,9).map(r=>`<tr><td>${esc(r.nama)}</td><td class="num">${fmtInt(r.jml)}</td><td class="num" style="font-weight:600;color:${r.pct>=100?'#1c7a4f':(r.pct>=70?'#9c7a4a':'#a3392a')}">${r.pct}%</td></tr>`).join('')||'<tr><td colspan="3">Tidak ada data</td></tr>'}
     </tbody></table>
-    <div class="ps-note">Skor KPI Divisi Sales (bobot omzet 40 · repeat 20 · closing 20 · potensi 15 · umbrella 5).</div></div>`});
+    <div class="ps-note">${skoN?`<b>Kritis:</b> hanya ${skoDone} dari ${skoN} customer (${skoDonePct}%) mencapai 10 SKO; rata-rata baru ${skoAvg}%. ${skoDonePct<50?'Mayoritas customer belum loyal — perlu program repeat order & follow-up terjadwal untuk menaikkan frekuensi order.':'Loyalitas customer cukup baik, pertahankan & dorong yang mendekati 10x.'}`:'Belum ada data SKO pada periode ini.'}</div></div>`});
+  // 10b. OKR OMZET NEW (target 500 juta / bulan)
+  const onTgtBln=((D.kpiConfig||{}).sales_targets||{}).omzet_new_bulanan||500000000;
+  const onTgt=onTgtBln*P.months.length, onAct=(D.kpi||{}).omzet_new||0;
+  const onAch=onTgt?Math.round(onAct/onTgt*1000)/10:0;
+  const onScore=scoreFromBands(onAch,((D.kpiConfig||{}).scoring_bands)||[[95,6],[80,5],[60,4],[40,3],[20,2],[10,1]]);
+  const onLbl=onAch>=80?'ps-win':(onAch<60?'ps-lose':'');
+  const onM=P.months.map(ym=>({ym,v:((D.monthKpi[ym]||{}).omzet_new)||0}));
+  S.push({html:head(`OKR Omzet New <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-cards">
+      ${pcard('Omzet New',formatRp(onAct),'customer baru (non-repeat)')}
+      ${pcard('Target',formatRp(onTgt),`${formatRp(onTgtBln)}/bulan`)}
+      ${pcard('% Achievement',onAch+'%',`<span class="ps-badge ${onLbl}">skor ${onScore}/6</span>`)}
+      ${pcard('Rata-rata / bulan',formatRp(Math.round(onAct/Math.max(P.months.length,1))),'realisasi omzet new')}
+    </div>
+    <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Omzet New</th><th class="num">Target</th><th class="num">% Achievement</th></tr></thead><tbody>
+    ${onM.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num" style="font-weight:600">${formatRp(r.v)}</td><td class="num">${formatRp(onTgtBln)}</td><td class="num" style="color:${(r.v/onTgtBln*100)>=100?'#1c7a4f':((r.v/onTgtBln*100)>=60?'#9c7a4a':'#a3392a')}">${onTgtBln?Math.round(r.v/onTgtBln*100):0}%</td></tr>`).join('')}
+    </tbody></table>
+    <div class="ps-note"><b>Kritis:</b> omzet new ${formatRp(onAct)} = ${onAch}% dari target ${formatRp(onTgt)}. ${onAch>=100?'Target tercapai — akuisisi customer baru sehat.':`Kurang ${formatRp(onTgt-onAct)}. ${onAch<60?'Akuisisi customer baru lemah — perlu genjot lead online, closing rate, & channel marketing baru.':'Mendekati target — tingkatkan konversi lead menjadi deal.'}`}</div></div>`});
   // 8. DIVIDER SCM
   S.push({cls:'ps-div',html:`<div class="corner"></div><h2>SCM</h2>`});
   // sumber data SCM (dipakai bareng)
@@ -2265,25 +2305,49 @@ function buildSlides(D){
   S.push({html:head('Kesimpulan')+`<div class="ps-body">
     <ul class="ps-ul">${autoConclusion(D).map(x=>`<li>${x}</li>`).join('')}</ul>
     <div class="ps-note">Draf otomatis — sesuaikan dengan konteks bisnis.</div></div>`});
+  // 19. PENUTUP (motivasi)
+  const vibe=(D.scoreDivisi||{}).total_ach;
+  const otG=((D.ontime||{}).pct>=95)&&(((D.delivery||{}).in_full||{}).pct>=95);
+  const quote=(vibe>=85&&otG)?'Momentum sudah terbangun — konsistensi hari ini adalah kemenangan besar esok hari.'
+             :(vibe>=75)?'Kita di jalur yang benar. Satu langkah perbaikan setiap hari akan membawa lompatan besar.'
+             :'Angka hanyalah titik awal. Perbaikan kecil yang konsisten mengalahkan kesempurnaan yang ditunda.';
+  S.push({cls:'ps-close',html:`<div class="corner"></div>
+    <div class="close-logo">Rise<b>pack</b></div>
+    <svg class="close-art" viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+      <g fill="#2f9e6f" opacity=".5"><rect x="10" y="58" width="13" height="16" rx="2"/><rect x="35" y="48" width="13" height="26" rx="2"/><rect x="60" y="40" width="13" height="34" rx="2"/><rect x="85" y="26" width="13" height="48" rx="2"/></g>
+      <g fill="none" stroke="#e9852b" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 66 L42 44 L66 54 L110 16"/><path d="M92 16 L110 16 L110 34"/></g></svg>
+    <div class="close-inner">
+      <div class="close-kicker">TERIMA KASIH</div>
+      <h1 class="close-quote">“${quote}”</h1>
+      <div class="close-sub">PT Billah Berdikari Indonesia · Bersama menuju target berikutnya 🚀</div>
+    </div>`});
   return S;
 }
 
 function autoProblems(D){
-  const out=[], ot=D.ontime||{}, kl=D.kelolosan||{}, rj=D.reject||{}, cm=D.complain||{};
+  const out=[], ot=D.ontime||{}, kl=D.kelolosan||{}, cm=D.complain||{};
+  const sd=D.scoreDivisi||{}, k=D.kpi||{}, fn=D.financial||{}, ti=fn.total_invoice||{}, ft=fn.targets||{}, rjS=rejectScmSubset(D.reject||{});
+  const omz=scoreRow(sd,'omzet'), cln=scoreRow(sd,'closing_new');
+  if(omz.ach!=null&&omz.ach<100) out.push({problem:`<b>Omzet ${omz.ach}%</b> dari target (${formatRp(omz.actual)} vs ${formatRp(omz.target)}) — kurang ${formatRp(Math.max(omz.target-omz.actual,0))}.`,action:'Quartal depan: fokus big customer + repeat order, kunci pipeline potensi bernilai tinggi.'});
+  if(cln.actual!=null&&cln.ach!=null&&cln.ach<100) out.push({problem:`Closing rate new <b>${cln.actual}%</b> (target ${cln.target}%) — konversi lead baru rendah.`,action:'Bulan depan: kualifikasi lead lebih ketat + follow-up ≤24 jam; latih closing skill tim.'});
+  const belum=(D.monitoring||[]).filter(r=>!r.terisi).length;
+  if(belum>0) out.push({problem:`<b>${belum} lead online</b> potensinya belum diisi — pipeline tidak lengkap, sulit forecast.`,action:'Bulan depan: wajib input nilai potensi ≤ H+1; tagih PIC yang menunggak.'});
   const worstVen=(ot.by_vendor||[]).filter(v=>v.telat>0).sort((a,b)=>b.telat-a.telat)[0];
-  if(worstVen) out.push({problem:`Vendor <b>${esc(worstVen.vendor)}</b> paling banyak telat (${worstVen.telat} dari ${worstVen.total} proyek).`,action:'Split beban vendor / tambah vendor baru agar SPK tidak menumpuk.'});
-  if(ot.pct!=null&&ot.pct<95) out.push({problem:`On Time Delivery baru ${ot.pct}% (target 95%), ${fmtInt(ot.telat)} proyek telat.`,action:'Perketat monitoring deadline produksi & preventif sebelum turun SPK.'});
-  if(kl.by_kategori&&kl.by_kategori[0]) out.push({problem:`Kendala produksi terbanyak: <b>${esc(kl.by_kategori[0].kategori)}</b> (${kl.by_kategori[0].n} kejadian).`,action:'Audit proses pada kategori tersebut + QC lebih ketat.'});
-  if(rj.by_pj&&rj.by_pj[0]) out.push({problem:`Reject cost terbesar ditanggung <b>${esc(rj.by_pj[0].label)}</b> (${formatRp(rj.by_pj[0].cost)}).`,action:'Evaluasi akar penyebab pada penanggung jawab tersebut.'});
-  if(cm.pct!=null&&cm.pct<90) out.push({problem:`Complain handling ${cm.pct}% tepat waktu (target 90%), ${fmtInt(cm.overtime)} terlambat.`,action:'Percepat penyelesaian complain agar ≤ H+3.'});
-  return out.slice(0,5);
+  if(worstVen) out.push({problem:`Vendor <b>${esc(worstVen.vendor)}</b> penyumbang telat terbesar (${worstVen.telat}/${worstVen.total} proyek).`,action:'Quartal depan: split beban ke vendor cadangan + akuisisi 2 vendor baru/kategori.'});
+  if(ot.pct!=null&&ot.pct<95) out.push({problem:`On Time Delivery <b>${ot.pct}%</b> (target 95%) — ${fmtInt(ot.telat)} proyek telat.`,action:'Perketat kontrol deadline + buffer produksi; review SPK berisiko lebih awal.'});
+  if(kl.by_kategori&&kl.by_kategori[0]) out.push({problem:`Kendala terbanyak: <b>${esc(kl.by_kategori[0].kategori)}</b> (${kl.by_kategori[0].n}x, kelolosan ${kl.pct!=null?kl.pct+'%':'–'}).`,action:'Bulan depan: SOP & QC khusus kategori ini + evaluasi vendor terkait.'});
+  if(rjS.total_cost>3000000) out.push({problem:`Reject cost SCM <b>${formatRp(rjS.total_cost)}</b> melampaui batas Rp3jt/bulan.`,action:'Quartal depan: root-cause analysis penyumbang terbesar + klausul ganti rugi vendor.'});
+  if(cm.pct!=null&&cm.pct<90) out.push({problem:`Complaint handling <b>${cm.pct}%</b> tepat waktu (target 90%), ${fmtInt(cm.overtime)} terlambat.`,action:'Bulan depan: SLA ≤ H+3 + eskalasi otomatis bila lewat.'});
+  if(ti.npm!=null&&ft.npm!=null&&ti.npm<ft.npm) out.push({problem:`Net Profit Margin <b>${ti.npm}%</b> di bawah target ${ft.npm}%.`,action:'Quartal depan: efisiensi COGS & opex; prioritaskan order margin tinggi.'});
+  return out.slice(0,6);
 }
 function autoConclusion(D){
-  const out=[], k=D.kpi||{}, sc=D.scoreMap[periodInfo().months.slice(-1)[0]]||{}, ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{};
-  if(sc.total_ach!=null) out.push(`Skor KPI Divisi Sales periode ini <b>${sc.total_ach}%</b> (${sc.label||'-'}).`);
-  if(k.total_omzet!=null) out.push(`Total omzet <b>${formatRp(k.total_omzet)}</b> dengan margin ${k.persen_margin!=null?k.persen_margin+'%':'–'} dan repeat order ${k.persen_repeat!=null?k.persen_repeat+'%':'–'}.`);
-  if(ot.pct!=null||IF.pct!=null) out.push(`OTIF: On Time ${ot.pct!=null?ot.pct+'%':'–'}, In Full ${IF.pct!=null?IF.pct+'%':'–'} — ${(ot.pct>=95&&IF.pct>=95)?'sudah memenuhi target':'masih di bawah target 95%'}.`);
-  out.push('Fokus perbaikan: distribusi beban vendor dan penurunan kelolosan reject ke customer.');
+  const out=[], k=D.kpi||{}, sd=D.scoreDivisi||{}, ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{}, cm=D.complain||{}, kl=D.kelolosan||{}, fn=D.financial||{}, ti=fn.total_invoice||{}, ft=fn.targets||{};
+  const omz=scoreRow(sd,'omzet');
+  if(sd.total_ach!=null) out.push(`<b>Sales:</b> skor KPI Divisi ${sd.total_ach}% (${sd.label||'-'}). Omzet ${formatRp(k.total_omzet)}${omz.ach!=null?` (${omz.ach}% target)`:''}, margin ${k.persen_margin!=null?k.persen_margin+'%':'–'}, repeat ${k.persen_repeat_omzet!=null?k.persen_repeat_omzet+'%':'–'} omzet — ${(k.persen_repeat_omzet>70)?'ketergantungan repeat order tinggi, akuisisi customer baru perlu digenjot':'komposisi new/repeat cukup sehat'}.`);
+  out.push(`<b>SCM/Produksi:</b> OTIF — On Time ${ot.pct!=null?ot.pct+'%':'–'} & In Full ${IF.pct!=null?IF.pct+'%':'–'} ${(ot.pct>=95&&IF.pct>=95)?'memenuhi target 95%':'MASIH DI BAWAH target 95%'}; kelolosan reject ${kl.pct!=null?kl.pct+'%':'–'}, complaint handling ${cm.pct!=null?cm.pct+'%':'–'}.`);
+  if(ti.revenue!=null) out.push(`<b>Finance:</b> revenue ${formatRp(ti.revenue)}, net profit ${formatRp(ti.net_profit)} (NPM ${ti.npm!=null?ti.npm+'%':'–'} vs target ${ft.npm||'–'}%) — ${(ti.npm!=null&&ft.npm!=null&&ti.npm>=ft.npm)?'profitabilitas on-track':'profitabilitas di bawah target, perlu efisiensi biaya'}.`);
+  out.push(`<b>Prioritas periode depan:</b> (1) genjot akuisisi customer baru & closing rate, (2) perbaiki OTIF lewat manajemen vendor, (3) tekan reject & jaga margin.`);
   return out;
 }
 function finAnalysis(D,nMonths){
