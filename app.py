@@ -997,24 +997,22 @@ def _mend(ym):
     y, m = int(ym[:4]), int(ym[5:7])
     return f"{y}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
 
-def _pres_kpi(d1s, d2s, divisi):
+def _pres_raw(d1s, d2s, divisi):
+    """Metrik mentah 1 rentang — dihitung SEKALI, dipakai kpi/score/marketing (hemat query)."""
     cond, params = build_where(d1s, d2s, None, divisi)
-    cur = kpi_metrics(cond, params)
-    onew = cur['omzet_new']
-    cur.update(new_funnel(d1s, d2s, None, divisi))
-    cur['omzet_new'] = onew
+    return kpi_metrics(cond, params), new_funnel(d1s, d2s, None, divisi), potensi_total(d1s, d2s, None, divisi)
+
+def _kpi_of(m, nf):
+    cur = dict(m); onew = cur['omzet_new']; cur.update(nf); cur['omzet_new'] = onew
     return cur
 
-def _pres_score(cfg, d1s, d2s, divisi, bands):
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(d1s), pdate(d2s)
+def _pdate_(s):
+    try: return datetime.strptime(s, '%Y-%m-%d').date()
+    except Exception: return None
+
+def _score_of(cfg, d1s, d2s, bands, m, nf, pot):
+    d1, d2 = _pdate_(d1s), _pdate_(d2s)
     nmonths = months_between(d1, d2) if (d1 and d2) else 1
-    cond, params = build_where(d1s, d2s, None, divisi)
-    m = kpi_metrics(cond, params)
-    nf = new_funnel(d1s, d2s, None, divisi)
-    pot = potensi_total(d1s, d2s, None, divisi)
     default_omzet_t = next((k['target'] for k in cfg.get('kpi', []) if k['id'] == 'omzet'), 2500000000)
     omzet_target_eff = sum_months(cfg.get('omzet_target', {}), d1, d2, nmonths, default_omzet_t) if (d1 and d2) else default_omzet_t
     umbrella_val = sum_months(cfg.get('umbrella_manual', {}), d1, d2, nmonths, 0)
@@ -1044,16 +1042,11 @@ def _pres_score(cfg, d1s, d2s, divisi, bands):
     label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
     return {'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach, 'label': label}
 
-def _pres_marketing(cfg, d1s, d2s, divisi, bands):
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(d1s), pdate(d2s)
+def _marketing_of(cfg, d1s, d2s, divisi, bands, m, pot):
+    d1, d2 = _pdate_(d1s), _pdate_(d2s)
     nmonths = months_between(d1, d2) if (d1 and d2) else 1
-    cond, params = build_where(d1s, d2s, None, divisi)
-    m = kpi_metrics(cond, params)
     omzet_new = m['omzet_new']
-    potensi = potensi_total(d1s, d2s, None, divisi)
+    potensi = pot
     qleads = qualified_leads_count(d1s, d2s, divisi)
     adspend = sum_months(cfg.get('marketing_adspend', {}), d1, d2, nmonths, 0)
     rows, total_w, total_ach_w = [], 0.0, 0.0
@@ -1087,7 +1080,6 @@ def api_pres_months():
     bands = cfg.get('scoring_bands', [])
     months = [x for x in (request.args.get('months', '') or '').split(',') if x]
     now = time.time()
-    cur_ym = datetime.now().strftime('%Y-%m')
 
     def cached(key, ttl, fn):
         e = _PRESM_CACHE.get(key)
@@ -1096,25 +1088,27 @@ def api_pres_months():
         v = fn(); _PRESM_CACHE[key] = (now, v); return v
 
     def month_block(ym):
-        ttl = 86400 if ym < cur_ym else 90   # bulan lampau tak berubah -> cache lama
-        return cached(('m', ym, divisi), ttl, lambda: {
-            'ym': ym,
-            'kpi': _pres_kpi(_mstart(ym), _mend(ym), divisi),
-            'score': _pres_score(cfg, _mstart(ym), _mend(ym), divisi, bands),
-        })
+        def build():
+            m, nf, pot = _pres_raw(_mstart(ym), _mend(ym), divisi)   # 1x hitung, dipakai kpi+score
+            return {'ym': ym, 'kpi': _kpi_of(m, nf),
+                    'score': _score_of(cfg, _mstart(ym), _mend(ym), bands, m, nf, pot)}
+        # TTL pendek (90s) supaya bulan berjalan yg datanya masih berubah tetap fresh
+        return cached(('m', ym, divisi), 90, build)
 
     def agg_block():
-        akpi = _pres_kpi(tgl_dari, tgl_sampai, divisi)
+        m, nf, pot = _pres_raw(tgl_dari, tgl_sampai, divisi)
+        akpi = _kpi_of(m, nf)
         p1, p2 = prev_range(tgl_dari, tgl_sampai)
         if p1 and p2:
-            prev = _pres_kpi(p1, p2, divisi)
+            pcond, pparams = build_where(p1, p2, None, divisi)
+            prev = _kpi_of(kpi_metrics(pcond, pparams), new_funnel(p1, p2, None, divisi))
             akpi['delta'] = {kk: pct(akpi.get(kk, 0), prev.get(kk, 0)) for kk in
                              ['total_omzet', 'total_modal', 'total_margin', 'total_order', 'total_deal',
                               'total_repeat', 'total_new', 'closing_rate', 'avg_purchase', 'repeat_omzet',
                               'omzet_new', 'closing_rate_new', 'persen_repeat']}
         return {'kpi': akpi,
-                'score': _pres_score(cfg, tgl_dari, tgl_sampai, divisi, bands),
-                'marketing': _pres_marketing(cfg, tgl_dari, tgl_sampai, divisi, bands)}
+                'score': _score_of(cfg, tgl_dari, tgl_sampai, bands, m, nf, pot),
+                'marketing': _marketing_of(cfg, tgl_dari, tgl_sampai, divisi, bands, m, pot)}
 
     try:
         agg = cached(('agg', tgl_dari, tgl_sampai, divisi), 90, agg_block)
