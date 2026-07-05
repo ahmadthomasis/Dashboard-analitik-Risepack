@@ -243,12 +243,13 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <div class="nav-label">Menu</div>
     <button class="nav-item active" data-view="ringkasan" onclick="showView('ringkasan')"><span class="i">📊</span> Ringkasan</button>
     <button class="nav-item" data-view="sales" onclick="showView('sales')"><span class="i">💼</span> Sales</button>
+    <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
     <button class="nav-item" data-view="kpi" onclick="showView('kpi')"><span class="i">🏆</span> KPI</button>
     <button class="nav-item" data-view="detail" onclick="showView('detail')"><span class="i">🔎</span> Detail Order</button>
     <button class="nav-item" data-view="monitoring" onclick="showView('monitoring')"><span class="i">🎯</span> Monitoring Potensi</button>
-    <button class="nav-item" data-view="produksi" onclick="showView('produksi')"><span class="i">🏭</span> Produksi</button>
     <button class="nav-item" data-view="reject" onclick="showView('reject')"><span class="i">🧾</span> Reject Finance</button>
     <button class="nav-item" data-view="financial" onclick="showView('financial')"><span class="i">💰</span> Financial Statement</button>
+    <button class="nav-item" data-view="setup" onclick="showView('setup')"><span class="i">⚙️</span> Setup</button>
     <button class="nav-item nav-present" onclick="openPresent()"><span class="i">📽️</span> Presentasi</button>
     <div class="spacer"></div>
     <div class="side-card">
@@ -360,16 +361,25 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
       <!-- KPI -->
       <section id="view-kpi" class="view">
         <div class="subtabs">
-          <button class="subtab active" id="kt-divisi" onclick="kpiTab('divisi')">🏛️ Divisi</button>
+          <button class="subtab active" id="kt-divisi" onclick="kpiTab('divisi')">🏛️ Divisi Sales</button>
+          <button class="subtab" id="kt-produksi" onclick="kpiTab('produksi')">🏭 Divisi Produksi</button>
           <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
           <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
         </div>
         <div id="kpiview-divisi">
           <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
           <div class="card">
-            <h3>KPI Scorecard — Divisi</h3>
+            <h3>KPI Scorecard — Divisi Sales</h3>
             <div class="ch-sub">Seluruh tim (abaikan filter PIC) · untuk KPI per orang buka tab Fungsi Sales · Ach = min(aktual ÷ target, 100%) · weighted = skor × bobot</div>
             <div class="table-wrap" id="kpi-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-produksi" style="display:none">
+          <div class="kpi-grid" id="kpi-prod-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
+          <div class="card">
+            <h3>KPI Scorecard — Divisi Produksi</h3>
+            <div class="ch-sub">On Time · In Full · Reject Cost (SCM) · Kelolosan Reject · Complaint Handling · skor otomatis dari data produksi · weighted = skor × bobot</div>
+            <div class="table-wrap" id="kpi-prod-table"><div class="loading">Memuat…</div></div>
           </div>
         </div>
         <div id="kpiview-fungsi" style="display:none">
@@ -550,6 +560,23 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <div class="table-wrap" id="fin-table" style="max-height:520px;overflow:auto"><div class="loading">Memuat…</div></div>
         </div>
       </section>
+
+      <!-- SETUP -->
+      <section id="view-setup" class="view">
+        <div class="card" style="margin-bottom:14px">
+          <h3>⚙️ Setup Angka Manual</h3>
+          <div class="ch-sub">Edit angka di bawah → klik <b>Salin JSON</b> → buka file <code>kpi_config.json</code> di GitHub → replace isinya → Commit. Perubahan berlaku setelah Railway re-deploy. (Cara ini paling aman & permanen — tidak hilang.)</div>
+        </div>
+        <div id="setup-forms"><div class="loading">Memuat…</div></div>
+        <div class="card" style="margin-top:14px">
+          <div class="toolbar" style="margin-bottom:10px;gap:10px">
+            <button class="btn-filter" onclick="setupCopy()">📋 Salin JSON</button>
+            <button class="btn-reset" onclick="setupDownload()">⬇ Unduh kpi_config.json</button>
+            <span class="muted" id="setup-status"></span>
+          </div>
+          <textarea id="setup-json" readonly spellcheck="false" style="width:100%;height:280px;font-family:ui-monospace,Menlo,monospace;font-size:12px;border:1px solid var(--border-strong);border-radius:9px;padding:12px;color:var(--ink);background:var(--surface)"></textarea>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -589,6 +616,7 @@ const PAGE = {
   produksi:['Produksi','Status order produksi'],
   reject:['Reject Finance','Biaya reject — sumber Google Sheet'],
   financial:['Financial Statement','Laba Rugi PT BBI — sumber Google Sheet'],
+  setup:['Setup','Edit angka manual → salin JSON → commit ke GitHub'],
 };
 const SUBLABEL = {produk:'Produk',margin:'Margin',customer:'Customer',penjualan:'Penjualan',bonus:'Bonus'};
 Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
@@ -691,7 +719,7 @@ async function loadAll(){
 const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]], reject:[['rej-cards',loadReject]], financial:[['fin-cards',loadFinancial]] };
 function kpiTab(t){
   state.kpitab=t;
-  ['divisi','fungsi','marketing'].forEach(x=>{
+  ['divisi','produksi','fungsi','marketing'].forEach(x=>{
     document.getElementById('kt-'+x).classList.toggle('active',x===t);
     document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
   });
@@ -716,11 +744,15 @@ async function renderView(){
   const q = getParams();
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
-  else if (state.view==='kpi') tasks = state.kpitab==='fungsi' ? [['fungsi-table',loadKpiFungsi]] : (state.kpitab==='marketing' ? [['marketing-table',loadKpiMarketing]] : [['kpi-table',loadKpiScore]]);
+  else if (state.view==='kpi'){
+    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],marketing:['marketing-table',loadKpiMarketing]};
+    tasks=[kmap[state.kpitab]||kmap.divisi];
+  }
   else if (state.view==='produksi'){
     const map={status:['ov-cards',loadProduksi],otd:['deliv-otd-cards',loadOntime],infull:['deliv-if-cards',loadInfull],kelolosan:['kel-cards',loadKelolosan],complain:['cmp-cards',loadComplain]};
     tasks=[map[state.prodtab]||map.status];
   }
+  else if (state.view==='setup') tasks = [['setup-forms',loadSetup]];
   else tasks = TOP_TASKS[state.view]||[];
   await Promise.allSettled(tasks.map(async ([target, fn]) => {
     const el = document.getElementById(target);
@@ -1399,6 +1431,121 @@ async function loadKpiFungsi(q){
   renderScorecard(d, 'fungsi-summary', 'fungsi-table');
 }
 async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-marketing?'+q), 'marketing-summary', 'marketing-table'); }
+
+// ── KPI Divisi Produksi (skor otomatis dari data produksi) ──
+async function loadKpiProduksi(q){
+  const [cfg,ot,dl,rj,kl,cm]=await Promise.all([
+    fetchJSON('/api/kpi-config').catch(()=>({})),
+    fetchJSON('/api/ontime?'+q).catch(()=>({})),
+    fetchJSON('/api/delivery?'+q).catch(()=>({})),
+    fetchJSON('/api/reject?'+q).catch(()=>({})),
+    fetchJSON('/api/kelolosan?'+q).catch(()=>({})),
+    fetchJSON('/api/complain?'+q).catch(()=>({})),
+  ]);
+  const defs=cfg.produksi_kpi||[];
+  const IF=dl.in_full||{};
+  const rejScm=(rj.by_pj||[]).filter(x=>String(x.label||'').toLowerCase().includes('scm')).reduce((s,x)=>s+(x.cost||0),0);
+  const val={ontime:ot.pct, infull:IF.pct, reject_scm:rejScm, kelolosan_case:kl.kendala, complain:cm.pct};
+  const scorePct=(a,bands)=>{ if(a==null)return 0; for(const [thr,sc] of bands){ if(a>=thr)return sc; } return 0; };
+  const scoreLte=(v,bands)=>{ if(v==null)return 0; for(const [thr,sc] of bands){ if(v<=thr)return sc; } return 1; };
+  let totW=0, totAchW=0;
+  const rows=defs.map(k=>{
+    const w=k.weight/100, a=val[k.src];
+    let score,ach,actualDisp,targetDisp,note='';
+    if(k.unit==='%'){ score=scorePct(a,k.bands||[]); ach=(a!=null&&k.objective)?Math.round(a/k.objective*1000)/10:0; actualDisp=(a!=null?a+'%':'–'); targetDisp=k.objective+'%'; }
+    else if(k.unit==='Rp'){ score=scoreLte(a,k.bands_lte||[]); ach=(a>0)?Math.min(Math.round(k.objective/a*1000)/10,100):100; actualDisp=formatRp(a); targetDisp='≤ '+formatRp(k.objective); note='penanggung jawab SCM'; }
+    else { score=scoreLte(a,k.bands_lte||[]); ach=Math.round(score/6*1000)/10; actualDisp=fmtInt(a||0)+' case'; targetDisp=k.objective+' case'; }
+    const weighted=Math.round(score*w*100)/100;
+    totW+=weighted; totAchW+=ach*w;
+    return {name:k.name,note,weight:k.weight,target:targetDisp,actual:actualDisp,ach,score,weighted};
+  });
+  const totAch=Math.round(totAchW*10)/10;
+  const lbl=(cfg.produksi_labels||[[0,'-']]).find(x=>totAch>=x[0]);
+  renderKpiProd({rows,total_kpi:Math.round(totW*100)/100,total_ach:totAch,label:lbl?lbl[1]:'-'});
+}
+function renderKpiProd(d){
+  const lblClass=d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
+  document.getElementById('kpi-prod-summary').innerHTML=`
+    ${kpiCard('a-orange','🏆','Total KPI',d.total_kpi+' / 6',`<span class="muted">skor tertimbang</span>`)}
+    ${kpiCard('a-green','📊','Total Achievement',d.total_ach+'%',`<span class="pill ${lblClass}">${esc(d.label)}</span>`)}
+    ${kpiCard('a-blue','🏭','Divisi','Produksi',`<span class="muted">OTIF · Reject · Complaint</span>`)}`;
+  const body=d.rows.map((r,i)=>{
+    const col=r.score>=5?'var(--green)':(r.score>=3?'var(--amber)':'var(--red)');
+    return `<tr>
+      <td>${i+1}</td>
+      <td style="font-weight:500">${esc(r.name)}${r.note?`<div class="muted">${esc(r.note)}</div>`:''}</td>
+      <td class="num">${r.weight}%</td>
+      <td class="num">${r.target}</td>
+      <td class="num" style="font-weight:600">${r.actual}</td>
+      <td class="num" style="color:${col};font-weight:600">${r.ach}%</td>
+      <td class="num"><span style="display:inline-grid;place-items:center;width:24px;height:24px;border-radius:6px;background:${col};color:#fff;font-weight:700">${r.score}</span></td>
+      <td class="num" style="font-weight:600">${r.weighted.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('kpi-prod-table').innerHTML=`<table>
+    <thead><tr><th>#</th><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th class="num">Skor</th><th class="num">Weighted</th></tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr style="border-top:2px solid var(--border-strong)">
+      <td colspan="5" style="text-align:right;font-weight:700;padding:12px 11px">TOTAL</td>
+      <td class="num" style="font-weight:700">${d.total_ach}%</td><td></td>
+      <td class="num" style="font-weight:700">${d.total_kpi}</td>
+    </tr></tfoot></table>`;
+}
+
+// ── Setup: edit angka manual → generate JSON untuk commit ke GitHub ──
+const SETUP={cfg:null};
+const MONTHS_NUM=['01','02','03','04','05','06','07','08','09','10','11','12'];
+async function loadSetup(){
+  SETUP.cfg=await fetchJSON('/api/kpi-config');
+  renderSetupForms();
+  setupRebuild();
+}
+function setupNumRow(section,key,label){
+  const s=SETUP.cfg[section]||{}; const v=(s[key]!=null)?s[key]:'';
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+    <label style="flex:0 0 120px;font-size:12.5px;color:var(--ink-3)">${esc(label)}</label>
+    <input type="number" value="${v}" oninput="setupSet('${section}','${key}',this.value)" style="flex:1;min-width:0;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:13px;font-family:inherit"></div>`;
+}
+function setupMonthCard(title,section,hint){
+  const rows=MONTHS_NUM.map((m,i)=>setupNumRow(section,'2026-'+m,BULAN_ID[i])).join('');
+  return `<div class="card"><h3>${title}</h3><div class="ch-sub">${hint}</div><div style="margin-top:10px">${rows}</div></div>`;
+}
+function renderSetupForms(){
+  const c=SETUP.cfg||{};
+  let h='<div class="grid-2">';
+  h+=setupMonthCard('Target Omzet / bulan','omzet_target','Rp per bulan (KPI Divisi Sales)');
+  h+=setupMonthCard('Umbrella Contract / bulan','umbrella_manual','Realisasi kontrak payung per bulan');
+  h+='</div><div class="grid-2" style="margin-top:14px">';
+  h+=setupMonthCard('Belanja Iklan / bulan','marketing_adspend','Rp untuk hitung ROI marketing');
+  h+=`<div class="card"><h3>Target Financial (P&L)</h3><div class="ch-sub">Dipakai di Financial Statement & Presentasi</div><div style="margin-top:10px">
+      ${setupNumRow('financial_targets','revenue_bulanan','Revenue/bln')}
+      ${setupNumRow('financial_targets','net_profit_bulanan','Net Profit/bln')}
+      ${setupNumRow('financial_targets','gpm','GPM %')}
+      ${setupNumRow('financial_targets','npm','NPM %')}</div>
+      <h3 style="margin-top:16px">Target Omzet per Sales</h3><div class="ch-sub">KPI Fungsi Sales (per bulan)</div><div style="margin-top:10px">
+      ${Object.keys(c.fungsi_omzet_target||{}).map(nm=>setupNumRow('fungsi_omzet_target',nm,nm)).join('')||'<span class="muted">—</span>'}</div></div>`;
+  h+='</div>';
+  document.getElementById('setup-forms').innerHTML=h;
+}
+function setupSet(section,key,val){
+  if(!SETUP.cfg[section]) SETUP.cfg[section]={};
+  const n=Number(val);
+  SETUP.cfg[section][key]=(val===''||isNaN(n))?0:n;
+  setupRebuild();
+}
+function setupRebuild(){ const el=document.getElementById('setup-json'); if(el) el.value=JSON.stringify(SETUP.cfg,null,2); }
+function setupCopy(){
+  const t=document.getElementById('setup-json'), st=document.getElementById('setup-status');
+  const ok=()=>{ st.textContent='✅ Tersalin — buka kpi_config.json di GitHub, replace semua, Commit.'; };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(t.value).then(ok).catch(()=>{t.select();document.execCommand('copy');ok();}); }
+  else { t.select(); document.execCommand('copy'); ok(); }
+}
+function setupDownload(){
+  const blob=new Blob([document.getElementById('setup-json').value],{type:'application/json'});
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download='kpi_config.json'; a.click(); URL.revokeObjectURL(u);
+  document.getElementById('setup-status').textContent='⬇ Terunduh — ganti file kpi_config.json di GitHub dengan file ini.';
+}
 
 // ── Bonus Achievement Sales ──
 const BON={rows:[],term:'',key:'tgl_pelunasan',dir:'desc'};
