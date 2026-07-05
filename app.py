@@ -1123,6 +1123,12 @@ def api_pres_months():
         # jangan 500 — biar front-end fallback ke endpoint lama
         return jsonify({'agg': {}, 'months': [], '_error': str(e)}), 200
 
+@app.route('/api/kpi-config')
+@login_required
+def api_kpi_config():
+    """Baca config KPI (read-only) untuk dipakai front-end (KPI Divisi Produksi & Setup)."""
+    return jsonify(load_kpi_config())
+
 @app.route('/api/delivery')
 @login_required
 def api_delivery():
