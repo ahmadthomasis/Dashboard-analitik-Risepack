@@ -1435,7 +1435,8 @@ async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-ma
 // ── KPI Divisi Produksi (skor otomatis dari data produksi) ──
 // subset reject khusus penanggung jawab SCM (dari baris reject)
 function rejectScmSubset(rj){
-  const rows=(rj&&rj.rows||[]).filter(r=>String(r.pj||'').toLowerCase().includes('scm'));
+  // "SCM" bisa muncul di kolom Penanggung Jawab ATAU PIC (di sheet, SCM = PIC)
+  const rows=(rj&&rj.rows||[]).filter(r=>String(r.pj||'').toLowerCase().includes('scm')||String(r.pic||'').toLowerCase().includes('scm'));
   const total=rows.reduce((s,r)=>s+(r.debit||0),0);
   const agg=key=>{const m={};rows.forEach(r=>{const k=r[key]||'(kosong)';m[k]=(m[k]||0)+(r.debit||0);});return Object.entries(m).map(([label,cost])=>({label,cost})).sort((a,b)=>b.cost-a.cost);};
   return {total_cost:total,count:rows.length,by_jenis:agg('jenis'),by_pic:agg('pic'),rows};
@@ -1816,21 +1817,23 @@ async function loadDeck(){
   stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#8a7d70;font-size:20px">Memuat data presentasi…</div>';
   const P=periodInfo();
   try{
-    const dv='&divisi='+encodeURIComponent(PRES.divisi);           // SEMUA slide difilter PT BBI
+    const dv='&divisi='+encodeURIComponent(PRES.divisi);           // SALES difilter PT BBI
     const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`+dv;
+    const perAll=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`;             // TANPA divisi (produksi/SCM & marketing = company-wide)
     const yq='tahun='+PRES.month.slice(0,4)+dv;
     // KPI/score agregat + per bulan digabung di 1 endpoint (/api/pres-months, ada cache) → cepat.
-    // Sisanya (grafik view + SCM + finance) ditembak paralel bersamaan.
+    // Produksi (ontime/infull/reject/kelolosan/complain) = company-wide (perAll), Sales = PT BBI (per).
     const specs=[
       ['presmonths','/api/pres-months?'+per+'&months='+P.months.join(','),{agg:{},months:[]}],
-      ['ontime','/api/ontime?'+per,{}],['delivery','/api/delivery?'+per,{}],
-      ['reject','/api/reject?'+per,{}],['kelolosan','/api/kelolosan?'+per,{}],['complain','/api/complain?'+per,{}],
-      ['financial','/api/financial?'+per,{}],['kategori','/api/kategori?'+per,[]],['sumber','/api/sales-by-sumber?'+per,[]],
+      ['ontime','/api/ontime?'+perAll,{}],['delivery','/api/delivery?'+perAll,{}],
+      ['reject','/api/reject?'+perAll,{}],['kelolosan','/api/kelolosan?'+perAll,{}],['complain','/api/complain?'+perAll,{}],
+      ['financial','/api/financial?'+perAll,{}],['kategori','/api/kategori?'+per,[]],['sumber','/api/sales-by-sumber?'+per,[]],
       ['topsales','/api/top-sales?'+per,[]],['bahan','/api/sales-by-bahan?'+per,[]],
       ['byMargin','/api/sales-by-margin?'+per,[]],['katOmzet','/api/kategori-omzet?'+per,[]],
       ['dealNR','/api/deal-new-repeat?'+per,[]],['journey','/api/journey?'+per,[]],
       ['trendBahan','/api/trend-bahan?'+yq,[]],['trendOmzet','/api/trend-omzet?'+yq,[]],['marginBulan','/api/margin-bulanan?'+yq,[]],
       ['monitoring','/api/monitoring-potensi?'+per,[]],['kpiConfig','/api/kpi-config',{}],
+      ['marketingAll','/api/kpi-marketing?'+perAll,{rows:[]}],
     ];
     const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
     const D={P,per,scoreMap:{},monthKpi:{}};
@@ -1838,7 +1841,7 @@ async function loadDeck(){
     const pm=D.presmonths;
     if(pm && pm.agg && pm.agg.kpi){
       // endpoint cepat tersedia
-      D.kpi=pm.agg.kpi; D.scoreDivisi=pm.agg.score||{rows:[]}; D.marketing=pm.agg.marketing||{rows:[]};
+      D.kpi=pm.agg.kpi; D.scoreDivisi=pm.agg.score||{rows:[]};
       (pm.months||[]).forEach(mo=>{ D.scoreMap[mo.ym]=mo.score; D.monthKpi[mo.ym]=mo.kpi; });
     } else {
       // FALLBACK aman ke endpoint lama bila /api/pres-months belum ter-deploy / gagal
@@ -1851,9 +1854,10 @@ async function loadDeck(){
         ...P.months.map(ym=>fetchJSON('/api/kpi-score?'+mrange(ym)).catch(()=>({rows:[]}))),
         ...P.months.map(ym=>fetchJSON('/api/kpi?'+mrange(ym)).catch(()=>({}))),
       ]);
-      D.kpi=lg[0]||{}; D.scoreDivisi=lg[1]||{rows:[]}; D.marketing=lg[2]||{rows:[]};
+      D.kpi=lg[0]||{}; D.scoreDivisi=lg[1]||{rows:[]};
       P.months.forEach((ym,i)=>{ D.scoreMap[ym]=lg[3+i]; D.monthKpi[ym]=lg[3+nm+i]; });
     }
+    D.marketing=D.marketingAll||{rows:[]};   // KPI Marketing = company-wide (tanpa filter PT BBI)
     PRES.slides=buildSlides(D);
     showSlide(0);
   }catch(e){ console.error(e); stage.innerHTML='<div class="pres-slide" style="align-items:center;justify-content:center;color:#cf4b3a;font-size:18px">⚠️ Gagal memuat data. Coba lagi.</div>'; }
@@ -2081,8 +2085,8 @@ function buildSlides(D){
       <div style="font-size:13px;color:#8a7d70;font-weight:600;margin-bottom:6px">Catatan / poin evaluasi (bisa diedit — tersimpan otomatis di browser):</div>
       <textarea oninput="saveNote('umbrella','${umKey}',this.value)" placeholder="• Kenapa target belum tercapai?&#10;• Kontrak yang sedang di-follow up&#10;• Rencana bulan depan" style="flex:1;width:100%;border:2px solid #ece5db;border-radius:10px;padding:12px 14px;font-family:inherit;font-size:15.5px;line-height:1.6;color:#3a3128;resize:none">${esc(getNote('umbrella',umKey))}</textarea>
     </div></div>`});
-  // 9. POTENSI 3M (scorecard) — agregat periode
-  const po=scoreRow(D.scoreDivisi,'potensi'), mk=D.marketing||{}, mkr=mk.rows||[];
+  // 9. POTENSI 3M (scorecard marketing — company-wide, tidak difilter PT BBI)
+  const mk=D.marketing||{}, mkr=mk.rows||[], po=scoreRow(mk,'potensi');
   S.push({html:head(`Potensi 3M <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('Total Potensi',formatRp(po.actual),'nilai potensi baru')}
@@ -2147,7 +2151,7 @@ function buildSlides(D){
     </div>
     <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
     <div class="ps-note">Tren % ontime & sebaran ontime vs telat per jenis produk.</div></div>`,
-    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=ot.trend||[], bt=(ot.by_type||[]).slice(0,8);
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=(ot.trend||[]).filter(t=>P.months.includes(t.bulan)), bt=(ot.by_type||[]).slice(0,8);
       presChart(cv[0],tr.length<=1?'bar':'line',{labels:tr.map(t=>t.bulan),datasets:[{label:'% Ontime',data:tr.map(t=>t.ot_pct),backgroundColor:'#2f9e6f',borderColor:'#2f9e6f',tension:.35,borderRadius:8,maxBarThickness:60}]},
         {plugins:{legend:{display:false},title:{display:true,text:'Tren % Ontime per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
       presChart(cv[1],'bar',{labels:bt.map(t=>t.jenis),datasets:[{label:'Ontime',data:bt.map(t=>t.ontime),backgroundColor:'#2f9e6f',stack:'s'},{label:'Telat',data:bt.map(t=>t.telat),backgroundColor:'#e9852b',stack:'s'}]},
@@ -2162,7 +2166,7 @@ function buildSlides(D){
     </div>
     <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
     <div class="ps-note">Tren % in full & sebaran in full vs kurang per jenis produk.</div></div>`,
-    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=(D.delivery||{}).trend||[], bt=((D.delivery||{}).by_type||[]).slice(0,8);
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), tr=((D.delivery||{}).trend||[]).filter(t=>P.months.includes(t.bulan)), bt=((D.delivery||{}).by_type||[]).slice(0,8);
       presChart(cv[0],tr.length<=1?'bar':'line',{labels:tr.map(t=>t.bulan),datasets:[{label:'% In Full',data:tr.map(t=>t.if_pct),backgroundColor:'#e9852b',borderColor:'#e9852b',tension:.35,borderRadius:8,maxBarThickness:60}]},
         {plugins:{legend:{display:false},title:{display:true,text:'Tren % In Full per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
       presChart(cv[1],'bar',{labels:bt.map(t=>t.jenis),datasets:[{label:'In Full',data:bt.map(t=>t.in_full),backgroundColor:'#2f9e6f',stack:'s'},{label:'Kurang',data:bt.map(t=>t.kurang),backgroundColor:'#e9852b',stack:'s'}]},
@@ -2222,18 +2226,35 @@ function buildSlides(D){
     <div class="ps-note">Target OTIF 95% · complain handling 90%. Win bila achievement ≥ target.</div></div>`});
   // 15. DIVIDER FINANCE
   S.push({cls:'ps-div',html:`<div class="corner"></div><h2>Analisa<br>Finance</h2>`});
-  // 16. FINANCIAL (P&L — mode Invoice)
-  const fn=D.financial||{}, ti=fn.total_invoice||{}, tp=fn.total_po||{}, ft=fn.targets||{};
+  // 16. FINANCIAL — Capaian (Invoice & PO)
+  const fn=D.financial||{}, ti=fn.total_invoice||{}, tp=fn.total_po||{}, ft=fn.targets||{}, ms=fn.months||[];
+  const nMo=P.months.length, revTt=(ft.revenue_bulanan||0)*nMo;
+  const revAch=(ti.revenue!=null&&revTt)?Math.round(ti.revenue/revTt*1000)/10:null, poVsInv=(tp.revenue||0)-(ti.revenue||0);
+  const gpmC=(ti.gpm!=null&&ft.gpm!=null)?(ti.gpm>=ft.gpm?'ps-win':'ps-lose'):'', npmC=(ti.npm!=null&&ft.npm!=null)?(ti.npm>=ft.npm?'ps-win':'ps-lose'):'';
   S.push({html:head(`Capaian Financial <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
-      ${pcard('Revenue (Invoice)',formatRp(ti.revenue),`target ${formatRp(ft.revenue_bulanan)}/bln`)}
-      ${pcard('Gross Profit',formatRp(ti.gross_profit),`GPM ${ti.gpm!=null?ti.gpm+'%':'–'} · target ${ft.gpm||'–'}%`)}
-      ${pcard('Net Profit',formatRp(ti.net_profit),`NPM ${ti.npm!=null?ti.npm+'%':'–'} · target ${ft.npm||'–'}%`)}
-      ${pcard('Revenue (PO)',formatRp(tp.revenue),'basis PO')}
+      ${pcard('Revenue (Invoice)',formatRp(ti.revenue),revAch!=null?`<span class="ps-badge ${revAch>=100?'ps-win':'ps-lose'}">${revAch}% target</span>`:`target ${formatRp(ft.revenue_bulanan)}/bln`)}
+      ${pcard('Revenue (PO)',formatRp(tp.revenue),poVsInv?`selisih ${formatRp(Math.abs(poVsInv))} vs invoice`:'')}
+      ${pcard('Gross Profit',formatRp(ti.gross_profit),`<span class="ps-badge ${gpmC}">GPM ${ti.gpm!=null?ti.gpm+'%':'–'}</span> tgt ${ft.gpm||'–'}%`)}
+      ${pcard('Net Profit',formatRp(ti.net_profit),`<span class="ps-badge ${npmC}">NPM ${ti.npm!=null?ti.npm+'%':'–'}</span> tgt ${ft.npm||'–'}%`)}
     </div>
-    ${(fn.months&&fn.months.length)?`<table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Revenue</th><th class="num">Gross Profit</th><th class="num">Net Profit</th><th class="num">NPM</th></tr></thead><tbody>
-      ${fn.months.map(m=>`<tr><td>${esc(m.bulan||'')}</td><td class="num">${formatRp(m.invoice.revenue)}</td><td class="num">${formatRp(m.invoice.gross_profit)}</td><td class="num">${formatRp(m.invoice.net_profit)}</td><td class="num">${m.invoice.npm!=null?m.invoice.npm+'%':'–'}</td></tr>`).join('')}</tbody></table>`:'<div class="ps-note">Detail P&L per bulan tidak tersedia untuk periode ini (cek financial_csv_url).</div>'}
-    <div class="ps-note">P&L PT BBI (basis Invoice). Sumber: Google Sheet P&L.</div></div>`});
+    ${ms.length?`<table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Rev Invoice</th><th class="num">Rev PO</th><th class="num">Gross Profit</th><th class="num">Net Profit</th><th class="num">NPM</th></tr></thead><tbody>
+      ${ms.map(m=>`<tr><td>${esc(m.bulan||'')}</td><td class="num">${formatRp(m.invoice.revenue)}</td><td class="num">${formatRp(m.po.revenue)}</td><td class="num">${formatRp(m.invoice.gross_profit)}</td><td class="num">${formatRp(m.invoice.net_profit)}</td><td class="num">${m.invoice.npm!=null?m.invoice.npm+'%':'–'}</td></tr>`).join('')}</tbody></table>`:'<div class="ps-note">Detail P&L per bulan tidak tersedia (cek financial_csv_url).</div>'}
+    <div class="ps-note">P&L PT BBI · Invoice = nilai tertagih, PO = nilai order. Sumber: Google Sheet P&L.</div></div>`});
+  // 16b. FINANCIAL — Analisa (kritis, PO vs Invoice + margin)
+  S.push({html:head(`Analisa Financial <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <ul class="ps-ul" style="font-size:14px;line-height:1.55">${finAnalysis(D,P.months.length).map(x=>`<li>${x}</li>`).join('')||'<li>Data financial belum tersedia.</li>'}</ul>
+    </div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), lab=ms.map(m=>m.bulan);
+      presChart(cv[0],'bar',{labels:lab,datasets:[{label:'Invoice',data:ms.map(m=>m.invoice.revenue),backgroundColor:'#3b6fb0',maxBarThickness:40},{label:'PO',data:ms.map(m=>m.po.revenue),backgroundColor:'#e9852b',maxBarThickness:40}]},
+        {plugins:{legend:{position:'bottom'},title:{display:true,text:'Revenue per Bulan: Invoice vs PO'}},scales:{y:{ticks:{callback:v=>formatRpShort(v)}}}});
+      presChart(cv[1],'line',{labels:lab,datasets:[
+        {label:'GPM %',data:ms.map(m=>m.invoice.gpm),borderColor:'#2f9e6f',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
+        {label:'NPM %',data:ms.map(m=>m.invoice.npm),borderColor:'#e9852b',tension:.3,fill:false,pointRadius:3,borderWidth:2,spanGaps:true},
+        {label:'Tgt GPM',data:ms.map(()=>ft.gpm),borderColor:'#2f9e6f',borderDash:[5,4],pointRadius:0,borderWidth:1},
+        {label:'Tgt NPM',data:ms.map(()=>ft.npm),borderColor:'#e9852b',borderDash:[5,4],pointRadius:0,borderWidth:1},
+      ]},{plugins:{legend:{position:'bottom',labels:{boxWidth:8,font:{size:10}}},title:{display:true,text:'Tren Margin (GPM & NPM) vs Target'}},scales:{y:{ticks:{callback:v=>v+'%'}}}}); }});
   // 17. TOP 3 PROBLEM (auto-draft)
   S.push({html:head('Top Problem & Evaluasi')+`<div class="ps-body">
     <table class="ps-tab"><thead><tr><th style="width:40%">Problem (auto-draft)</th><th>Action</th></tr></thead><tbody>
@@ -2263,6 +2284,16 @@ function autoConclusion(D){
   if(k.total_omzet!=null) out.push(`Total omzet <b>${formatRp(k.total_omzet)}</b> dengan margin ${k.persen_margin!=null?k.persen_margin+'%':'–'} dan repeat order ${k.persen_repeat!=null?k.persen_repeat+'%':'–'}.`);
   if(ot.pct!=null||IF.pct!=null) out.push(`OTIF: On Time ${ot.pct!=null?ot.pct+'%':'–'}, In Full ${IF.pct!=null?IF.pct+'%':'–'} — ${(ot.pct>=95&&IF.pct>=95)?'sudah memenuhi target':'masih di bawah target 95%'}.`);
   out.push('Fokus perbaikan: distribusi beban vendor dan penurunan kelolosan reject ke customer.');
+  return out;
+}
+function finAnalysis(D,nMonths){
+  const fn=D.financial||{}, ti=fn.total_invoice||{}, tp=fn.total_po||{}, ft=fn.targets||{}, out=[];
+  const revT=(ft.revenue_bulanan||0)*nMonths;
+  if(ti.revenue!=null&&revT){ const a=Math.round(ti.revenue/revT*1000)/10; out.push(`Revenue (Invoice) <b>${formatRp(ti.revenue)}</b> = ${a}% dari target ${formatRp(revT)} — ${a>=100?'tercapai (surplus '+formatRp(ti.revenue-revT)+')':'kurang '+formatRp(revT-ti.revenue)}.`); }
+  if(ti.gpm!=null&&ft.gpm!=null){ const g=Math.round((ti.gpm-ft.gpm)*10)/10; out.push(`Gross Profit Margin <b>${ti.gpm}%</b> vs target ${ft.gpm}% → ${g>=0?'di atas target +'+g:'di bawah target '+g} poin.`); }
+  if(ti.npm!=null&&ft.npm!=null){ const g=Math.round((ti.npm-ft.npm)*10)/10; out.push(`Net Profit Margin <b>${ti.npm}%</b> vs target ${ft.npm}% → ${g>=0?'di atas target +'+g:'di bawah target '+g} poin (net profit ${formatRp(ti.net_profit)}).`); }
+  if(tp.revenue!=null&&ti.revenue!=null){ const d=(tp.revenue||0)-(ti.revenue||0); out.push(`Revenue PO ${formatRp(tp.revenue)} vs Invoice ${formatRp(ti.revenue)} — selisih <b>${formatRp(Math.abs(d))}</b> ${d>0?'(nilai PO lebih besar: ada order belum ter-invoice/tertagih)':(d<0?'(Invoice lebih besar dari PO)':'(sama)')}.`); }
+  if(ti.cogs&&ti.revenue){ out.push(`COGS ${formatRp(ti.cogs)} = ${Math.round(ti.cogs/ti.revenue*1000)/10}% dari revenue.`); }
   return out;
 }
 
