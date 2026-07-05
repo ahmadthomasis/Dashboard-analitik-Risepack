@@ -1116,8 +1116,12 @@ def api_pres_months():
                 'score': _pres_score(cfg, tgl_dari, tgl_sampai, divisi, bands),
                 'marketing': _pres_marketing(cfg, tgl_dari, tgl_sampai, divisi, bands)}
 
-    agg = cached(('agg', tgl_dari, tgl_sampai, divisi), 90, agg_block)
-    return jsonify({'agg': agg, 'months': [month_block(m) for m in months]})
+    try:
+        agg = cached(('agg', tgl_dari, tgl_sampai, divisi), 90, agg_block)
+        return jsonify({'agg': agg, 'months': [month_block(m) for m in months]})
+    except Exception as e:
+        # jangan 500 — biar front-end fallback ke endpoint lama
+        return jsonify({'agg': {}, 'months': [], '_error': str(e)}), 200
 
 @app.route('/api/delivery')
 @login_required
