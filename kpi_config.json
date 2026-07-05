@@ -8,6 +8,15 @@
   "complain_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9PyErN1C52doIeuWNPzX3i7Pc8Qr_P_9Ss13ps_EMEUYDuS32ZfVJaE6T8YDPdYb032qG5B5jFXKt/pub?gid=905613565&single=true&output=csv",
   "financial_targets": {"revenue_bulanan": 2500000000, "net_profit_bulanan": 326770000, "gpm": 22, "npm": 13.07},
 
+  "produksi_kpi": [
+    {"id": "ontime",     "name": "On Time Delivery",              "weight": 30, "objective": 95,      "unit": "%",   "src": "ontime",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
+    {"id": "infull",     "name": "In Full Delivery",              "weight": 15, "objective": 95,      "unit": "%",   "src": "infull",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
+    {"id": "reject_cost","name": "Reject Cost (SCM)",             "weight": 20, "objective": 3000000, "unit": "Rp",  "src": "reject_scm",    "bands_lte": [[3000000,6],[5000000,5],[7000000,4],[10000000,3],[15000000,2]]},
+    {"id": "kelolosan",  "name": "Kelolosan Reject ke Customer",  "weight": 15, "objective": 0,       "unit": "case","src": "kelolosan_case","bands_lte": [[0,6],[1,5],[2,4],[3,3],[4,2]]},
+    {"id": "complain",   "name": "Complaint Handling",            "weight": 20, "objective": 90,      "unit": "%",   "src": "complain",      "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]}
+  ],
+  "produksi_labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
+
   "kpi": [
     {"id": "omzet",       "name": "Omzet",                "weight": 40, "target": 2500000000, "basis": "omzet_monthly",     "unit": "Rp", "note": "Target per bulan (atur di omzet_target)"},
     {"id": "repeat",      "name": "Repeat Order 70%",     "weight": 20, "target": 70,         "basis": "repeat_vs_target",  "unit": "Rp", "note": "Target = 70% dari target omzet bulan"},
