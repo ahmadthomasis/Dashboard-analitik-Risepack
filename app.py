@@ -1,6 +1,8 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from functools import wraps
 import mysql.connector
+import psycopg2
+import psycopg2.extras
 import os
 import calendar
 import json
@@ -30,6 +32,38 @@ def query(sql, params=None):
         rows = cursor.fetchall()
         cursor.close()
         return rows
+    finally:
+        try: conn.close()
+        except: pass
+
+# ─── Supabase (Postgres) — sumber data modul Prodev ──────────────
+# Koneksi Postgres LANGSUNG: melewati RLS (baca semua baris untuk dashboard manager).
+# Pakai Connection Pooler Supabase (IPv4-friendly untuk Railway). SSL wajib.
+# Env vars di Railway:
+#   SUPABASE_DB_HOST      cth. aws-0-<region>.pooler.supabase.com
+#   SUPABASE_DB_PORT      6543 (transaction) atau 5432 (session)
+#   SUPABASE_DB_NAME      postgres
+#   SUPABASE_DB_USER      postgres.<project-ref>   (WAJIB format ini untuk pooler)
+#   SUPABASE_DB_PASSWORD  password database Supabase
+SUPABASE_DB_CONFIG = {
+    'host':    os.getenv('SUPABASE_DB_HOST'),
+    'port':    int(os.getenv('SUPABASE_DB_PORT', 6543)),
+    'dbname':  os.getenv('SUPABASE_DB_NAME', 'postgres'),
+    'user':    os.getenv('SUPABASE_DB_USER'),
+    'password': os.getenv('SUPABASE_DB_PASSWORD'),
+    'sslmode': 'require',
+    'connect_timeout': 30,
+}
+
+def query_pg(sql, params=None):
+    """Query ke Supabase Postgres. Mengembalikan list of dict (mirip query() MySQL)."""
+    conn = psycopg2.connect(**SUPABASE_DB_CONFIG)
+    try:
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, params or ())
+        rows = cur.fetchall()
+        cur.close()
+        return [dict(r) for r in rows]
     finally:
         try: conn.close()
         except: pass
@@ -67,6 +101,21 @@ def logout():
 @login_required
 def index():
     return render_template('dashboard.html')
+
+@app.route('/api/prodev-ping')
+@login_required
+def api_prodev_ping():
+    """Uji koneksi Supabase. Buka /api/prodev-ping setelah login.
+    Sukses -> {"ok": true, "prodev_orders": <jumlah baris>}."""
+    try:
+        r = query_pg("SELECT COUNT(*) AS n FROM prodev_orders")
+        u = query_pg("SELECT COUNT(*) AS n FROM prodev_templates")
+        return jsonify({'ok': True,
+                        'prodev_orders': r[0]['n'],
+                        'prodev_templates': u[0]['n'],
+                        'host': (SUPABASE_DB_CONFIG.get('host') or '')[:20] + '…'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
