@@ -336,7 +336,7 @@ def _inner_ontime_prod(sales_list, d1s, d2s):
                 WHERE (flag_dummy <> 'dummy' OR flag_dummy IS NULL) GROUP BY sko_key) o ON o.sko_key = fd.sko_key
           LEFT JOIN (SELECT sko_key, MAX(tgl_selesai_all) tgl_selesai FROM tb_spks GROUP BY sko_key) sp
                 ON sp.sko_key = fd.sko_key
-          WHERE o.name IN ({ph})
+          WHERE o.pic IN ({ph})
         ) t
     """, [d1s, d2s] + list(sales_list))[0]
     total = int(r['total'] or 0); ot = int(r['ontime'] or 0)
@@ -414,7 +414,8 @@ def api_kpi_inner():
     try:
         metric, extra = _inner_compute(cfg, inner, d1, d2)
     except Exception as e:
-        return jsonify({'valid': True, 'error': str(e), 'inners': inner_list, 'inner': inner['name']}), 500
+        return jsonify({'valid': True, 'error': str(e), 'inners': inner_list,
+                        'inner': inner['name'], 'inner_id': inner['id']})
     rows, total_w, total_ach_w = [], 0.0, 0.0
     for k in cfg.get('inner_kpi', []):
         actual, target, w = metric.get(k['id'], 0), k['target'], k['weight']/100.0
@@ -446,6 +447,8 @@ def api_kpi_inner_debug():
         out['admin_header'] = a[ha] if a else []
         out['admin_assign_values'] = sorted({(r[_hdr_idx(a[ha], 'assign to admin', 'admin', default=7)] or '').strip()
                                              for r in a[ha+1:ha+400] if len(r) > 7})[:40]
+        out['sample_q_raw'] = [(r[16] if len(r) > 16 else '') for r in s[hs+1:hs+9]]
+        out['sample_v_raw'] = [(r[21] if len(r) > 21 else '') for r in s[hs+1:hs+9]]
         out['sample_rows'] = len(s); out['admin_rows'] = len(a)
     except Exception as e:
         out['error'] = str(e)
