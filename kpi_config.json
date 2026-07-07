@@ -71,5 +71,20 @@
   "estimator_kpi": [
     {"id": "kecepatan", "name": "Kecepatan Perhitungan Harga 1 Hari", "weight": 60, "target": 100, "unit": "%", "note": "% perhitungan selesai ≤1 hari (submit ≥16:30 WIB → deadline besok)"},
     {"id": "closing",   "name": "Closing Rate Deal 15%",             "weight": 40, "target": 15,  "unit": "%", "note": "deal ÷ total perhitungan pada bulan diminta"}
+  ],
+
+  "inner_app_cutover": "2026-07-01",
+  "inner_csv_sample_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdHjdHk_kfixV1Jqe227vuNadlmQ8yRXtIuNP2LCNUuz9M0rSpUEh0en76R3scBhef0FclxdPcVhu-/pub?gid=0&single=true&output=csv",
+  "inner_csv_admin_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvRVoHANeZK-0_3fR5eFKxbyabzArMxlnnw5NPW2jp1yOd4i8jv-Fr_J0w_B_c_MQTis5tkRHzayfY/pub?gid=696121217&single=true&output=csv",
+  "inner_sales": [
+    {"id": "anis",  "name": "Annisa", "admin": "Anis",  "email": "anisinner@risepack.id",  "sales": ["Ma'ruf"]},
+    {"id": "wulan", "name": "Wulan",  "admin": "Wulan", "email": "wulaninner@risepack.id", "sales": ["Management", "Amel"]},
+    {"id": "fira",  "name": "Fira",   "admin": "Fira",  "email": "firainner@risepack.id",  "sales": ["Faisal", "Kiki"]}
+  ],
+  "inner_kpi": [
+    {"id": "ontime_prod",   "name": "On-Time Pengiriman Produksi",      "weight": 50, "target": 90,  "unit": "%", "note": "SPK selesai ≤ deadline produksi (MySQL), per sales inner"},
+    {"id": "ontime_sample", "name": "Ketepatan Waktu Pembuatan Sampel", "weight": 20, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom Q · Jul+: rakit ≤ deadline (calculator)"},
+    {"id": "faw_fsa",       "name": "FAW/FSA/FPS Tepat Waktu",          "weight": 20, "target": 100, "unit": "%", "note": "request date = finish date (sheet admin), per Assign to Admin"},
+    {"id": "kepuasan",      "name": "Kepuasan Sampel",                  "weight": 10, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom V · Jul+: tingkat kepuasan (calculator)"}
   ]
 }
