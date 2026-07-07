@@ -78,7 +78,7 @@
   "inner_csv_admin_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvRVoHANeZK-0_3fR5eFKxbyabzArMxlnnw5NPW2jp1yOd4i8jv-Fr_J0w_B_c_MQTis5tkRHzayfY/pub?gid=696121217&single=true&output=csv",
   "inner_sales": [
     {"id": "anis",  "name": "Annisa", "admin": "Anis",  "email": "anisinner@risepack.id",  "sales": ["Ma'ruf"]},
-    {"id": "wulan", "name": "Wulan",  "admin": "Wulan", "email": "wulaninner@risepack.id", "sales": ["Management", "Amel"]},
+    {"id": "wulan", "name": "Wulan",  "admin": "Wulan", "email": "wulaninner@risepack.id", "sales": ["Management", "Manajemen", "Amel"]},
     {"id": "fira",  "name": "Fira",   "admin": "Fira",  "email": "firainner@risepack.id",  "sales": ["Faisal", "Kiki"]}
   ],
   "inner_kpi": [
