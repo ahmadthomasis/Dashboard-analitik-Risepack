@@ -272,33 +272,47 @@ def _find_header(rows, marker):
         if any(marker in (c or '').strip().lower() for c in r): return i
     return 0
 
-def _inner_csv_metric(url, sales_list, d1, d2, col_idx):
-    """CSV Database Dummy: rata-rata kolom col_idx (Q=16 / V=21) per PIC Sales
-       yang cocok sales inner, difilter Deadline dalam [d1,d2]; lalu rata-rata antar-sales."""
+def _inner_csv_rows(url, sales_list, d1, d2):
+    """Baris CSV Database Dummy yang cocok sales inner (POOL semua sales) & Deadline dalam [d1,d2]."""
     rows = _inner_csv(url)
-    if not rows: return None, 0
+    if not rows: return [], 5, 7, 8
     h = _find_header(rows, 'pic sales')
     header = rows[h]
     pic_i = _hdr_idx(header, 'pic sales', default=5)
     dl_i  = _hdr_idx(header, 'deadline', default=7)
     sl = [s.strip().lower() for s in sales_list]
-    per = {}
+    out = []
     for r in rows[h+1:]:
-        if len(r) <= max(pic_i, dl_i, col_idx): continue
-        pic = (r[pic_i] or '').strip()
-        if pic.lower() not in sl: continue
+        if len(r) <= max(pic_i, dl_i): continue
+        if (r[pic_i] or '').strip().lower() not in sl: continue
         dl = _iddate(r[dl_i])
         if not dl or not (d1 <= dl <= d2): continue
-        v = (r[col_idx] or '').strip()
-        if v == '': continue
-        per.setdefault(pic, []).append(_num(v.replace('%', '')))
-    avgs, n = [], 0
-    for pic, vals in per.items():
-        if vals: avgs.append(sum(vals)/len(vals)); n += len(vals)
-    if not avgs: return None, 0
-    a = sum(avgs)/len(avgs)
-    if a <= 1.5: a *= 100
-    return round(a, 1), n
+        out.append(r)
+    return out, pic_i, dl_i, h
+
+def _inner_csv_ontime(url, sales_list, d1, d2):
+    """Kolom Q (idx16) 'keterangan waktu' = TEKS. On-time = bukan 'Terlambat'. Return (ontime, total)."""
+    rows, _pi, _di, _h = _inner_csv_rows(url, sales_list, d1, d2)
+    q_i = 16
+    ont = tot = 0
+    for r in rows:
+        if len(r) <= q_i: continue
+        q = (r[q_i] or '').strip().lower()
+        if q == '': continue
+        tot += 1
+        if 'terlambat' not in q: ont += 1
+    return ont, tot
+
+def _inner_csv_kepuasan(url, sales_list, d1, d2):
+    """Kolom V (idx21) 'Tingkat Kepuasan' = TEKS 'Puas'. null/kosong = tidak puas. Return (puas, total)."""
+    rows, _pi, _di, _h = _inner_csv_rows(url, sales_list, d1, d2)
+    v_i = 21
+    puas = tot = 0
+    for r in rows:
+        tot += 1
+        v = (r[v_i] if len(r) > v_i else '').strip().lower()
+        if v == 'puas': puas += 1
+    return puas, tot
 
 def _inner_faw_fsa(url, admin, d1, d2):
     """CSV Form Admin: per Assign to Admin, % baris Request Date == Finish Date (kolom J=idx9)."""
@@ -343,6 +357,7 @@ def _inner_ontime_prod(sales_list, d1s, d2s):
     return (round(ot/total*100, 1) if total else None), total
 
 def _inner_app_sample(email, d1s, d2s):
+    """Return (ontime, total) — rakit selesai <= deadline (Supabase, Jul+)."""
     r = query_pg("""
         SELECT COUNT(*) total,
           COUNT(*) FILTER (WHERE tanggal_selesai_rakit <= deadline) ontime
@@ -351,20 +366,19 @@ def _inner_app_sample(email, d1s, d2s):
           AND created_by = (SELECT id FROM auth.users WHERE email = %s)
           AND deadline BETWEEN %s AND %s
     """, [email, d1s, d2s])[0]
-    total = int(r['total'] or 0); ot = int(r['ontime'] or 0)
-    return (round(ot/total*100, 1) if total else None), total
+    return int(r['ontime'] or 0), int(r['total'] or 0)
 
 def _inner_app_kepuasan(email, d1s, d2s):
+    """Return (puas, total) — total = semua order (null tingkat_kepuasan dianggap tidak puas)."""
     r = query_pg("""
-        SELECT COUNT(*) FILTER (WHERE tingkat_kepuasan IS NOT NULL) total,
+        SELECT COUNT(*) total,
                COUNT(*) FILTER (WHERE tingkat_kepuasan = 'puas') puas
         FROM public.prodev_orders
         WHERE is_cancelled = false AND deadline IS NOT NULL
           AND created_by = (SELECT id FROM auth.users WHERE email = %s)
           AND deadline BETWEEN %s AND %s
     """, [email, d1s, d2s])[0]
-    total = int(r['total'] or 0); puas = int(r['puas'] or 0)
-    return (round(puas/total*100, 1) if total else None), total
+    return int(r['puas'] or 0), int(r['total'] or 0)
 
 def _inner_compute(cfg, inner, d1, d2):
     cutover = _iddate(cfg.get('inner_app_cutover', '2026-07-01')) or datetime(2026, 7, 1).date()
@@ -377,20 +391,19 @@ def _inner_compute(cfg, inner, d1, d2):
     v, n = _inner_ontime_prod(inner['sales'], d1.isoformat(), d2.isoformat())
     metric['ontime_prod'] = v or 0; extra['ontime_prod'] = f'{n} SPK'
 
-    def blend(col_idx, app_fn):
-        parts, cnt = [], 0
+    # KPI2 & KPI4: POOL semua baris (semua sales inner + kedua era), lalu sukses ÷ total.
+    def blend(csv_fn, app_fn):
+        num = tot = 0
         if csv_ok:
-            cv, cc = _inner_csv_metric(cfg['inner_csv_sample_url'], inner['sales'], csv_d1, csv_d2, col_idx)
-            if cv is not None: parts.append(cv); cnt += cc
+            a, b = csv_fn(cfg['inner_csv_sample_url'], inner['sales'], csv_d1, csv_d2); num += a; tot += b
         if app_ok:
-            av, ac = app_fn(inner['email'], app_d1.isoformat(), app_d2.isoformat())
-            if av is not None: parts.append(av); cnt += ac
-        return (round(sum(parts)/len(parts), 1) if parts else 0), cnt
+            a, b = app_fn(inner['email'], app_d1.isoformat(), app_d2.isoformat()); num += a; tot += b
+        return (round(num/tot*100, 1) if tot else 0), tot
 
-    metric['ontime_sample'], c2 = blend(16, _inner_app_sample);  extra['ontime_sample'] = f'{c2} sampel'
+    metric['ontime_sample'], c2 = blend(_inner_csv_ontime, _inner_app_sample);   extra['ontime_sample'] = f'{c2} sampel'
     v, n = _inner_faw_fsa(cfg['inner_csv_admin_url'], inner['admin'], d1, d2)
     metric['faw_fsa'] = v or 0; extra['faw_fsa'] = f'{n} form'
-    metric['kepuasan'], c4 = blend(21, _inner_app_kepuasan);     extra['kepuasan'] = f'{c4} nilai'
+    metric['kepuasan'], c4 = blend(_inner_csv_kepuasan, _inner_app_kepuasan);     extra['kepuasan'] = f'{c4} nilai'
     return metric, extra
 
 @app.route('/api/kpi-inner')
