@@ -117,6 +117,81 @@ def api_prodev_ping():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+# ─── KPI Fungsi Estimator (data dari Supabase requests/quotations) ──────────
+@app.route('/api/kpi-estimator')
+@login_required
+def api_kpi_estimator():
+    """KPI Fungsi Estimator (Hani):
+    1. Kecepatan perhitungan 1 hari: completed_at <= deadline
+       (deadline = tgl submit; kalau submit >= 16:30 WIB -> deadline besok).
+    2. Closing rate: request 'done' yang jadi deal / total request 'done' (target 15%).
+    Atribusi ke estimator via quotations.estimator_id (email di config)."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _pic, _div = get_args()
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    if not (d1 and d2):
+        today = datetime.now().date()
+        d1, d2 = today.replace(day=1), today
+    nmonths = months_between(d1, d2)
+    bands = cfg.get('scoring_bands', [])
+    email = cfg.get('estimator_email', 'haniestimator@risepack.id')
+    params = {'em': email, 'd1': d1.isoformat(), 'd2': d2.isoformat()}
+
+    est_exists = ("EXISTS (SELECT 1 FROM public.quotations q WHERE q.request_id = r.id "
+                  "AND q.estimator_id = (SELECT id FROM auth.users WHERE email = %(em)s))")
+    try:
+        r1 = query_pg(f"""
+            SELECT COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE
+                (r.completed_at AT TIME ZONE 'Asia/Jakarta')::date <=
+                CASE WHEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::time >= TIME '16:30'
+                     THEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date + 1
+                     ELSE (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date END
+              ) AS same_day
+            FROM public.requests r
+            WHERE r.status = 'done' AND r.completed_at IS NOT NULL AND r.submitted_at IS NOT NULL
+              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %(d1)s AND %(d2)s
+              AND {est_exists}
+        """, params)[0]
+        r2 = query_pg(f"""
+            SELECT COUNT(DISTINCT r.id) AS total,
+              COUNT(DISTINCT r.id) FILTER (WHERE dq.deal_status = 'deal') AS deal
+            FROM public.requests r
+            LEFT JOIN public.quotations dq ON dq.request_id = r.id AND dq.is_active = true
+            WHERE r.status = 'done'
+              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %(d1)s AND %(d2)s
+              AND {est_exists}
+        """, params)[0]
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+    total1, same_day = int(r1['total'] or 0), int(r1['same_day'] or 0)
+    total2, deal      = int(r2['total'] or 0), int(r2['deal'] or 0)
+    metric = {
+        'kecepatan': round(same_day / total1 * 100, 1) if total1 else 0,
+        'closing':   round(deal / total2 * 100, 1) if total2 else 0,
+    }
+    extra = {'kecepatan': f'{same_day}/{total1} req', 'closing': f'{deal}/{total2} deal'}
+
+    rows, total_w, total_ach_w = [], 0.0, 0.0
+    for k in cfg.get('estimator_kpi', []):
+        actual, target, w = metric.get(k['id'], 0), k['target'], k['weight'] / 100.0
+        ach = min(round(actual / target * 100, 1), 100.0) if target else 0
+        sc = score_from_ach(ach, bands)
+        weighted = round(sc * w, 2)
+        total_w += weighted
+        total_ach_w += ach * w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target,
+                     'unit': k.get('unit', '%'), 'note': f"{k.get('note','')} · {extra.get(k['id'],'')}",
+                     'actual': actual, 'ach': ach, 'score': sc, 'weighted': weighted})
+    total_ach = round(total_ach_w, 1)
+    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
+    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
+                    'total_ach': total_ach, 'label': label, 'months': nmonths, 'sales': None})
+
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
     """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""

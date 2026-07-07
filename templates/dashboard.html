@@ -375,6 +375,7 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <button class="subtab" id="kt-produksi" onclick="kpiTab('produksi')">🏭 Divisi Produksi</button>
           <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
           <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
+          <button class="subtab" id="kt-estimator" onclick="kpiTab('estimator')">🧮 Fungsi Estimator</button>
         </div>
         <div id="kpiview-divisi">
           <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
@@ -406,6 +407,14 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <h3>KPI Scorecard — Marketing</h3>
             <div class="ch-sub">Potensi · Qualified Leads · ROI (omzet new ÷ belanja iklan) · belanja iklan diisi manual di config</div>
             <div class="table-wrap" id="marketing-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-estimator" style="display:none">
+          <div class="kpi-grid" id="estimator-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Fungsi Estimator (Hani)</h3>
+            <div class="ch-sub">Kecepatan Perhitungan 1 Hari (submit ≥16:30 WIB → deadline besok) · Closing Rate Deal (target 15%) · data dari aplikasi calculator (Supabase)</div>
+            <div class="table-wrap" id="estimator-table"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -729,7 +738,7 @@ async function loadAll(){
 const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]], reject:[['rej-cards',loadReject]], financial:[['fin-cards',loadFinancial]] };
 function kpiTab(t){
   state.kpitab=t;
-  ['divisi','produksi','fungsi','marketing'].forEach(x=>{
+  ['divisi','produksi','fungsi','marketing','estimator'].forEach(x=>{
     document.getElementById('kt-'+x).classList.toggle('active',x===t);
     document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
   });
@@ -755,7 +764,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi'){
-    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],marketing:['marketing-table',loadKpiMarketing]};
+    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],estimator:['estimator-table',loadKpiEstimator],marketing:['marketing-table',loadKpiMarketing]};
     tasks=[kmap[state.kpitab]||kmap.divisi];
   }
   else if (state.view==='produksi'){
@@ -1441,6 +1450,11 @@ async function loadKpiFungsi(q){
   renderScorecard(d, 'fungsi-summary', 'fungsi-table');
 }
 async function loadKpiMarketing(q){ renderScorecard(await fetchJSON('/api/kpi-marketing?'+q), 'marketing-summary', 'marketing-table'); }
+async function loadKpiEstimator(q){
+  const d = await fetchJSON('/api/kpi-estimator?'+q);
+  if(d && d.error){ document.getElementById('estimator-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
+  renderScorecard(d, 'estimator-summary', 'estimator-table');
+}
 
 // ── KPI Divisi Produksi (skor otomatis dari data produksi) ──
 // subset reject khusus penanggung jawab SCM (dari baris reject)
