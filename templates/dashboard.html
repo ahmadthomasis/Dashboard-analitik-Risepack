@@ -376,6 +376,7 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <button class="subtab" id="kt-fungsi" onclick="kpiTab('fungsi')">🧑‍💼 Fungsi Sales</button>
           <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
           <button class="subtab" id="kt-estimator" onclick="kpiTab('estimator')">🧮 Fungsi Estimator</button>
+          <button class="subtab" id="kt-inner" onclick="kpiTab('inner')">🧑‍💻 Inner Sales</button>
         </div>
         <div id="kpiview-divisi">
           <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
@@ -415,6 +416,15 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <h3>KPI Scorecard — Fungsi Estimator (Hani)</h3>
             <div class="ch-sub">Kecepatan Perhitungan 1 Hari (submit ≥16:30 WIB → deadline besok) · Closing Rate Deal (target 15%) · data dari aplikasi calculator (Supabase)</div>
             <div class="table-wrap" id="estimator-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-inner" style="display:none">
+          <div id="inner-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+          <div class="kpi-grid" id="inner-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Fungsi Inner Sales</h3>
+            <div class="ch-sub">On-Time Produksi (per sales inner) · Ketepatan &amp; Kepuasan Sampel (Jan–Jun sheet, Jul+ calculator) · FAW/FSA Tepat Waktu (sheet) · pilih inner di atas</div>
+            <div class="table-wrap" id="inner-table"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -738,7 +748,7 @@ async function loadAll(){
 const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]], reject:[['rej-cards',loadReject]], financial:[['fin-cards',loadFinancial]] };
 function kpiTab(t){
   state.kpitab=t;
-  ['divisi','produksi','fungsi','marketing','estimator'].forEach(x=>{
+  ['divisi','produksi','fungsi','marketing','estimator','inner'].forEach(x=>{
     document.getElementById('kt-'+x).classList.toggle('active',x===t);
     document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
   });
@@ -764,7 +774,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi'){
-    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],estimator:['estimator-table',loadKpiEstimator],marketing:['marketing-table',loadKpiMarketing]};
+    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],estimator:['estimator-table',loadKpiEstimator],inner:['inner-table',loadKpiInner],marketing:['marketing-table',loadKpiMarketing]};
     tasks=[kmap[state.kpitab]||kmap.divisi];
   }
   else if (state.view==='produksi'){
@@ -1454,6 +1464,21 @@ async function loadKpiEstimator(q){
   const d = await fetchJSON('/api/kpi-estimator?'+q);
   if(d && d.error){ document.getElementById('estimator-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
   renderScorecard(d, 'estimator-summary', 'estimator-table');
+}
+let INNER_SEL = null;
+function innerPick(id){ INNER_SEL = id; renderView(); }
+async function loadKpiInner(q){
+  let url = '/api/kpi-inner?'+q + (INNER_SEL ? '&inner='+encodeURIComponent(INNER_SEL) : '');
+  const d = await fetchJSON(url);
+  // tombol pemilih inner
+  const inners = d.inners || [];
+  if(!INNER_SEL && d.inner_id) INNER_SEL = d.inner_id;
+  document.getElementById('inner-picker').innerHTML = inners.map(x=>
+    `<button class="subtab ${x.id===(d.inner_id||INNER_SEL)?'active':''}" onclick="innerPick('${x.id}')">${esc(x.name)}</button>`
+  ).join('');
+  if(d && d.error){ document.getElementById('inner-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
+  if(!d.valid){ document.getElementById('inner-summary').innerHTML=''; document.getElementById('inner-table').innerHTML='<div class="loading">Pilih inner sales di atas…</div>'; return; }
+  renderScorecard(d, 'inner-summary', 'inner-table');
 }
 
 // ── KPI Divisi Produksi (skor otomatis dari data produksi) ──
