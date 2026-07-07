@@ -468,6 +468,209 @@ def api_kpi_inner_debug():
         return jsonify(out), 500
     return jsonify(out)
 
+# ═══ KPI Fungsi Prodev (Adit/Fau) & Sample Maker (Kiki) ══════════════════════
+def _pdmy_rows(url, layouter_list, d1, d2):
+    """CSV Database Dummy: baris yang PIC Layouter cocok (contains) & Deadline dlm [d1,d2]."""
+    rows = _inner_csv(url)
+    if not rows: return []
+    h = _find_header(rows, 'pic sales'); header = rows[h]
+    lay_i = _hdr_idx(header, 'pic layouter', default=8)
+    dl_i  = _hdr_idx(header, 'deadline', default=7)
+    ll = [s.strip().lower() for s in layouter_list]
+    out = []
+    for r in rows[h+1:]:
+        if len(r) <= max(lay_i, dl_i): continue
+        lay = (r[lay_i] or '').strip().lower()
+        if not lay or not any(x in lay for x in ll): continue
+        dl = _iddate(r[dl_i])
+        if not dl or not (d1 <= dl <= d2): continue
+        out.append(r)
+    return out
+
+def _final_rows(url, d1, d2):
+    """CSV Database SA File Final: baris dgn Deadline (idx6) dlm [d1,d2]."""
+    rows = _inner_csv(url)
+    if not rows: return []
+    h = _find_header(rows, 'status pengerjaan'); header = rows[h]
+    dl_i = _hdr_idx(header, 'deadline', default=6)
+    out = []
+    for r in rows[h+1:]:
+        if len(r) <= dl_i: continue
+        dl = _iddate(r[dl_i])
+        if not dl or not (d1 <= dl <= d2): continue
+        out.append(r)
+    return out
+
+def _cix(r, i):
+    return (r[i] if len(r) > i else '').strip()
+
+def _pdmy_metric(rows):
+    """(ok,tot) per KPI dari baris Database Dummy: deal(Y=24), ontime(Q=16), revisi(RevProdev=20), kepuasan(V=21)."""
+    m = {}
+    tot = len(rows)
+    m['deal'] = (sum(1 for r in rows if _cix(r, 24).lower() == 'deal'), tot)
+    o_ok = o_tot = 0
+    for r in rows:
+        q = _cix(r, 16).lower()
+        if q == '': continue
+        o_tot += 1
+        if 'terlambat' not in q: o_ok += 1
+    m['ontime'] = (o_ok, o_tot)
+    m['revisi'] = (sum(1 for r in rows if _cix(r, 20) == ''), tot)        # tanpa revisi prodev = berhasil
+    m['kepuasan'] = (sum(1 for r in rows if _cix(r, 21).lower() == 'puas'), tot)
+    return m
+
+def _final_metric(rows):
+    """(ok,tot): final(N=13, 'tersedia' & non-kosong), revisi_rakit(P=15, kosong=berhasil)."""
+    f_ok = f_tot = 0
+    for r in rows:
+        v = _cix(r, 13).lower()
+        if v == '': continue
+        f_tot += 1
+        if v == 'tersedia': f_ok += 1
+    rr = sum(1 for r in rows if _cix(r, 15) == '')
+    return {'final': (f_ok, f_tot), 'revisi_rakit': (rr, len(rows))}
+
+def _merge_counts(a, b):
+    out = dict(a)
+    for k, (o, t) in b.items():
+        x, y = out.get(k, (0, 0))
+        out[k] = (x + o, y + t)
+    return out
+
+def _score_from_counts(kpi_cfg, metric, bands, labels):
+    rows, tw, taw = [], 0.0, 0.0
+    for k in kpi_cfg:
+        ok, tot = metric.get(k['id'], (0, 0))
+        actual = round(ok/tot*100, 1) if tot else 0
+        target, w = k['target'], k['weight']/100.0
+        ach = min(round(actual/target*100, 1), 100.0) if target else 0
+        sc = score_from_ach(ach, bands); wt = round(sc*w, 2)
+        tw += wt; taw += ach*w
+        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target,
+                     'unit': k.get('unit', '%'), 'note': f"{k.get('note','')} · {ok}/{tot}",
+                     'actual': actual, 'ach': ach, 'score': sc, 'weighted': wt})
+    ta = round(taw, 1)
+    lbl = next((l for t, l in labels if ta >= t), '-')
+    return rows, round(tw, 2), ta, lbl
+
+def _era(cfg, d1, d2):
+    cutover = _iddate(cfg.get('inner_app_cutover', '2026-07-01')) or datetime(2026, 7, 1).date()
+    return (d1 <= (cutover - timedelta(days=1)), d2 >= cutover,
+            d1, min(d2, cutover - timedelta(days=1)), max(d1, cutover), d2)
+
+def _pd_range():
+    tgl_dari, tgl_sampai, _p, _d = get_args()
+    def pd(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    return d1, d2
+
+@app.route('/api/kpi-prodev')
+@login_required
+def api_kpi_prodev():
+    cfg = load_kpi_config()
+    d1, d2 = _pd_range()
+    lays = cfg.get('prodev_layouters', [])
+    wid = request.args.get('who') or (lays[0]['id'] if lays else None)
+    L = next((x for x in lays if x['id'] == wid), None)
+    llist = [{'id': x['id'], 'name': x['name']} for x in lays]
+    if not L:
+        return jsonify({'valid': False, 'inners': llist})
+    bands = cfg.get('scoring_bands', [])
+    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
+    try:
+        m = {}
+        if csv_ok:
+            m = _merge_counts(m, _pdmy_metric(_pdmy_rows(cfg['inner_csv_sample_url'], [L['layouter']], cd1, cd2)))
+        if app_ok:
+            r = query_pg("""
+                SELECT COUNT(*) tot,
+                  COUNT(*) FILTER (WHERE status_deal='deal') deal,
+                  COUNT(*) FILTER (WHERE tanggal_selesai_layout <= deadline) ot,
+                  COUNT(*) FILTER (WHERE tanggal_selesai_layout IS NOT NULL) ot_tot,
+                  COUNT(*) FILTER (WHERE COALESCE(revisi_prodev,0)=0) norev,
+                  COUNT(*) FILTER (WHERE tingkat_kepuasan='puas') puas
+                FROM public.prodev_orders
+                WHERE is_cancelled=false AND deadline IS NOT NULL
+                  AND layouter_id=(SELECT id FROM public.profiles WHERE full_name=%s LIMIT 1)
+                  AND deadline BETWEEN %s AND %s
+            """, [L['layouter'], ad1.isoformat(), ad2.isoformat()])[0]
+            t = int(r['tot'] or 0)
+            m = _merge_counts(m, {'deal': (int(r['deal'] or 0), t),
+                                  'ontime': (int(r['ot'] or 0), int(r['ot_tot'] or 0)),
+                                  'revisi': (int(r['norev'] or 0), t),
+                                  'kepuasan': (int(r['puas'] or 0), t)})
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'inners': llist, 'inner': L['name'], 'inner_id': L['id']})
+    rows, tk, ta, lbl = _score_from_counts(cfg['prodev_kpi'], m, bands, cfg.get('labels', []))
+    return jsonify({'valid': True, 'inner': L['name'], 'inner_id': L['id'], 'inners': llist,
+                    'rows': rows, 'total_kpi': tk, 'total_ach': ta, 'label': lbl,
+                    'months': months_between(d1, d2), 'sales': 'Prodev: ' + L['name']})
+
+@app.route('/api/kpi-sample-maker')
+@login_required
+def api_kpi_sample_maker():
+    cfg = load_kpi_config()
+    d1, d2 = _pd_range()
+    bands = cfg.get('scoring_bands', [])
+    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
+    lays = [x['layouter'] for x in cfg.get('prodev_layouters', [])]  # Adit + Fau digabung
+    try:
+        m = {}
+        if csv_ok:
+            drows = _pdmy_rows(cfg['inner_csv_sample_url'], lays, cd1, cd2)
+            pm = _pdmy_metric(drows)
+            m = _merge_counts(m, {'kepuasan': pm['kepuasan'], 'ontime': pm['ontime']})
+            m = _merge_counts(m, _final_metric(_final_rows(cfg['prodev_csv_final_url'], cd1, cd2)))
+        if app_ok:
+            r = query_pg("""
+                SELECT COUNT(*) tot,
+                  COUNT(*) FILTER (WHERE tingkat_kepuasan='puas') puas,
+                  COUNT(*) FILTER (WHERE tanggal_selesai_rakit <= deadline) ot,
+                  COUNT(*) FILTER (WHERE tanggal_selesai_rakit IS NOT NULL) ot_tot,
+                  COUNT(*) FILTER (WHERE status_dummy_final='tersedia') fin,
+                  COUNT(*) FILTER (WHERE status_dummy_final IS NOT NULL) fin_tot
+                FROM public.prodev_orders
+                WHERE is_cancelled=false AND deadline IS NOT NULL
+                  AND sample_maker_id=(SELECT id FROM auth.users WHERE email=%s)
+                  AND deadline BETWEEN %s AND %s
+            """, [cfg.get('sample_maker_email', ''), ad1.isoformat(), ad2.isoformat()])[0]
+            t = int(r['tot'] or 0)
+            m = _merge_counts(m, {'kepuasan': (int(r['puas'] or 0), t),
+                                  'ontime': (int(r['ot'] or 0), int(r['ot_tot'] or 0)),
+                                  'final': (int(r['fin'] or 0), int(r['fin_tot'] or 0))})
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'inners': []})
+    rows, tk, ta, lbl = _score_from_counts(cfg['sample_maker_kpi'], m, bands, cfg.get('labels', []))
+    return jsonify({'valid': True, 'inners': [], 'rows': rows, 'total_kpi': tk, 'total_ach': ta,
+                    'label': lbl, 'months': months_between(d1, d2), 'sales': 'Sample Maker: Kiki'})
+
+@app.route('/api/kpi-prodev-debug')
+@login_required
+def api_kpi_prodev_debug():
+    cfg = load_kpi_config()
+    out = {}
+    try:
+        s = _inner_csv(cfg.get('inner_csv_sample_url', ''))
+        f = _inner_csv(cfg.get('prodev_csv_final_url', ''))
+        hs = _find_header(s, 'pic sales'); hf = _find_header(f, 'status pengerjaan')
+        out['dummy_header'] = s[hs] if s else []
+        out['dummy_layouter_values'] = sorted({(_cix(r, 8)) for r in s[hs+1:hs+500] if len(r) > 8})[:30]
+        out['dummy_Y_deal_raw'] = [_cix(r, 24) for r in s[hs+1:hs+9]]
+        out['dummy_revprodev_raw'] = [_cix(r, 20) for r in s[hs+1:hs+9]]
+        out['final_header'] = f[hf] if f else []
+        out['final_N_raw'] = [_cix(r, 13) for r in f[hf+1:hf+12]]
+        out['final_P_raw'] = [_cix(r, 15) for r in f[hf+1:hf+12]]
+        out['final_rows'] = len(f)
+    except Exception as e:
+        out['error'] = str(e)
+        return jsonify(out), 500
+    return jsonify(out)
+
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
     """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""

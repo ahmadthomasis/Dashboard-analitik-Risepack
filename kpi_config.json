@@ -86,5 +86,24 @@
     {"id": "ontime_sample", "name": "Ketepatan Waktu Pembuatan Sampel", "weight": 20, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom Q · Jul+: rakit ≤ deadline (calculator)"},
     {"id": "faw_fsa",       "name": "FAW/FSA/FPS Tepat Waktu",          "weight": 20, "target": 100, "unit": "%", "note": "request date = finish date (sheet admin), per Assign to Admin"},
     {"id": "kepuasan",      "name": "Kepuasan Sampel",                  "weight": 10, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom V · Jul+: tingkat kepuasan (calculator)"}
+  ],
+
+  "prodev_csv_final_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdHjdHk_kfixV1Jqe227vuNadlmQ8yRXtIuNP2LCNUuz9M0rSpUEh0en76R3scBhef0FclxdPcVhu-/pub?gid=1061319745&single=true&output=csv",
+  "sample_maker_email": "kikidumy@risepack.id",
+  "prodev_layouters": [
+    {"id": "adit", "name": "Adit",      "layouter": "Adit"},
+    {"id": "fau",  "name": "Fauziyyah", "layouter": "Fauziyyah"}
+  ],
+  "prodev_kpi": [
+    {"id": "deal",     "name": "50% Sampel jadi Deal",                 "weight": 50, "target": 50,  "unit": "%", "note": "Jan–Jun: sheet kolom Y (status deal); kosong=tidak deal · per PIC Layouter"},
+    {"id": "ontime",   "name": "Ketepatan Waktu Pembuatan File Sampel","weight": 30, "target": 90,  "unit": "%", "note": "sheet kolom Q (bukan 'Terlambat') · per PIC Layouter"},
+    {"id": "revisi",   "name": "Tingkat Revisi (kesalahan file/desain)","weight": 10, "target": 100, "unit": "%", "note": "sheet kolom Revisi Prodev; tanpa revisi=berhasil (ASUMSI-cek)"},
+    {"id": "kepuasan", "name": "Kepuasan Konsumen thd Sampel",          "weight": 10, "target": 100, "unit": "%", "note": "sheet kolom V; null=tidak puas · per PIC Layouter"}
+  ],
+  "sample_maker_kpi": [
+    {"id": "kepuasan",     "name": "Kepuasan Kualitas Hasil Sampel",      "weight": 50, "target": 90,  "unit": "%", "note": "kolom V (Adit+Fau digabung)"},
+    {"id": "ontime",       "name": "Ketepatan Waktu Pembuatan Sampel",    "weight": 20, "target": 90,  "unit": "%", "note": "kolom Q (Adit+Fau digabung)"},
+    {"id": "final",        "name": "100% Pembuatan Sampel Final",         "weight": 20, "target": 100, "unit": "%", "note": "File Final kolom N; 'tersedia'=berhasil, kosong=tidak dihitung"},
+    {"id": "revisi_rakit", "name": "Tingkat Revisi (kesalahan rakit)",    "weight": 10, "target": 100, "unit": "%", "note": "File Final kolom P; kosong=berhasil, ada revisi=gagal"}
   ]
 }

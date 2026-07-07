@@ -377,6 +377,8 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <button class="subtab" id="kt-marketing" onclick="kpiTab('marketing')">📣 Marketing</button>
           <button class="subtab" id="kt-estimator" onclick="kpiTab('estimator')">🧮 Fungsi Estimator</button>
           <button class="subtab" id="kt-inner" onclick="kpiTab('inner')">🧑‍💻 Inner Sales</button>
+          <button class="subtab" id="kt-prodev" onclick="kpiTab('prodev')">✏️ Prodev</button>
+          <button class="subtab" id="kt-sm" onclick="kpiTab('sm')">🔧 Sample Maker</button>
         </div>
         <div id="kpiview-divisi">
           <div class="kpi-grid" id="kpi-score-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"><div class="loading">Memuat…</div></div>
@@ -425,6 +427,23 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <h3>KPI Scorecard — Fungsi Inner Sales</h3>
             <div class="ch-sub">On-Time Produksi (per sales inner) · Ketepatan &amp; Kepuasan Sampel (Jan–Jun sheet, Jul+ calculator) · FAW/FSA Tepat Waktu (sheet) · pilih inner di atas</div>
             <div class="table-wrap" id="inner-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-prodev" style="display:none">
+          <div id="prodev-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+          <div class="kpi-grid" id="prodev-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Fungsi Prodev (Layouter)</h3>
+            <div class="ch-sub">50% Sampel jadi Deal (kolom Y) · Ketepatan Waktu (kolom Q) · Revisi file/desain · Kepuasan (kolom V) · Jan–Jun sheet, Jul+ calculator · pilih layouter di atas</div>
+            <div class="table-wrap" id="prodev-table"><div class="loading">Memuat…</div></div>
+          </div>
+        </div>
+        <div id="kpiview-sm" style="display:none">
+          <div class="kpi-grid" id="sm-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
+          <div class="card">
+            <h3>KPI Scorecard — Sample Maker (Kiki)</h3>
+            <div class="ch-sub">Kepuasan &amp; Ketepatan Sampel (Adit+Fau digabung) · 100% Sampel Final (kolom N) · Revisi rakit (kolom P) · Jan–Jun sheet, Jul+ calculator</div>
+            <div class="table-wrap" id="sm-table"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -748,7 +767,7 @@ async function loadAll(){
 const TOP_TASKS = { ringkasan:[['kpi-fin',loadKpi]], detail:[['detail-table',loadDetail]], monitoring:[['mon-table',loadMonitoring]], produksi:[['c-produksi',loadProduksi]], reject:[['rej-cards',loadReject]], financial:[['fin-cards',loadFinancial]] };
 function kpiTab(t){
   state.kpitab=t;
-  ['divisi','produksi','fungsi','marketing','estimator','inner'].forEach(x=>{
+  ['divisi','produksi','fungsi','marketing','estimator','inner','prodev','sm'].forEach(x=>{
     document.getElementById('kt-'+x).classList.toggle('active',x===t);
     document.getElementById('kpiview-'+x).style.display = x===t?'':'none';
   });
@@ -774,7 +793,7 @@ async function renderView(){
   let tasks;
   if (state.view==='sales') tasks = SUB_TASKS[state.subtab]||[];
   else if (state.view==='kpi'){
-    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],estimator:['estimator-table',loadKpiEstimator],inner:['inner-table',loadKpiInner],marketing:['marketing-table',loadKpiMarketing]};
+    const kmap={divisi:['kpi-table',loadKpiScore],produksi:['kpi-prod-table',loadKpiProduksi],fungsi:['fungsi-table',loadKpiFungsi],estimator:['estimator-table',loadKpiEstimator],inner:['inner-table',loadKpiInner],prodev:['prodev-table',loadKpiProdev],sm:['sm-table',loadKpiSampleMaker],marketing:['marketing-table',loadKpiMarketing]};
     tasks=[kmap[state.kpitab]||kmap.divisi];
   }
   else if (state.view==='produksi'){
@@ -1464,6 +1483,25 @@ async function loadKpiEstimator(q){
   const d = await fetchJSON('/api/kpi-estimator?'+q);
   if(d && d.error){ document.getElementById('estimator-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
   renderScorecard(d, 'estimator-summary', 'estimator-table');
+}
+let PRODEV_SEL = null;
+function prodevPick(id){ PRODEV_SEL = id; renderView(); }
+async function loadKpiProdev(q){
+  let url = '/api/kpi-prodev?'+q + (PRODEV_SEL ? '&who='+encodeURIComponent(PRODEV_SEL) : '');
+  const d = await fetchJSON(url);
+  const who = d.inners || [];
+  if(!PRODEV_SEL && d.inner_id) PRODEV_SEL = d.inner_id;
+  document.getElementById('prodev-picker').innerHTML = who.map(x=>
+    `<button class="subtab ${x.id===(d.inner_id||PRODEV_SEL)?'active':''}" onclick="prodevPick('${x.id}')">${esc(x.name)}</button>`
+  ).join('');
+  if(d && d.error){ document.getElementById('prodev-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
+  if(!d.valid){ document.getElementById('prodev-table').innerHTML='<div class="loading">Pilih layouter…</div>'; return; }
+  renderScorecard(d, 'prodev-summary', 'prodev-table');
+}
+async function loadKpiSampleMaker(q){
+  const d = await fetchJSON('/api/kpi-sample-maker?'+q);
+  if(d && d.error){ document.getElementById('sm-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
+  renderScorecard(d, 'sm-summary', 'sm-table');
 }
 let INNER_SEL = null;
 function innerPick(id){ INNER_SEL = id; renderView(); }
