@@ -192,6 +192,45 @@ def api_kpi_estimator():
     return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
                     'total_ach': total_ach, 'label': label, 'months': nmonths, 'sales': None})
 
+@app.route('/api/kpi-estimator-debug')
+@login_required
+def api_kpi_estimator_debug():
+    """Diagnostik: kenapa KPI estimator 0. Buka /api/kpi-estimator-debug (pakai filter tanggal dashboard)."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _p, _d = get_args()
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    email = cfg.get('estimator_email')
+    out = {'email_config': email, 'range': [d1.isoformat(), d2.isoformat()]}
+    dd = [d1.isoformat(), d2.isoformat()]
+    try:
+        uid = query_pg("SELECT id FROM auth.users WHERE email = %s", [email])
+        out['email_found_in_db'] = bool(uid)
+        out['done_requests_in_range'] = query_pg(
+            "SELECT COUNT(*) n FROM public.requests WHERE status='done' "
+            "AND (submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %s AND %s", dd)[0]['n']
+        out['done_requests_all_time'] = query_pg(
+            "SELECT COUNT(*) n FROM public.requests WHERE status='done'")[0]['n']
+        out['who_estimated_in_range'] = query_pg("""
+            SELECT COALESCE(u.email,'(estimator_id null / tak ada di auth)') AS estimator_email,
+                   COUNT(DISTINCT q.request_id) AS requests
+            FROM public.quotations q
+            JOIN public.requests r ON r.id = q.request_id
+            LEFT JOIN auth.users u ON u.id = q.estimator_id
+            WHERE r.status='done'
+              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %s AND %s
+            GROUP BY u.email ORDER BY requests DESC""", dd)
+        out['users_hint'] = [r['email'] for r in query_pg(
+            "SELECT email FROM auth.users WHERE email ILIKE '%%esti%%' OR email ILIKE '%%hani%%' ORDER BY email")]
+    except Exception as e:
+        out['error'] = str(e)
+        return jsonify(out), 500
+    return jsonify(out)
+
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
     """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""
