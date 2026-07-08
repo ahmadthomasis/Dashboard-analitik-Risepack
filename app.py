@@ -1,8 +1,6 @@
 from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from functools import wraps
 import mysql.connector
-import psycopg2
-import psycopg2.extras
 import os
 import calendar
 import json
@@ -32,38 +30,6 @@ def query(sql, params=None):
         rows = cursor.fetchall()
         cursor.close()
         return rows
-    finally:
-        try: conn.close()
-        except: pass
-
-# ─── Supabase (Postgres) — sumber data modul Prodev ──────────────
-# Koneksi Postgres LANGSUNG: melewati RLS (baca semua baris untuk dashboard manager).
-# Pakai Connection Pooler Supabase (IPv4-friendly untuk Railway). SSL wajib.
-# Env vars di Railway:
-#   SUPABASE_DB_HOST      cth. aws-0-<region>.pooler.supabase.com
-#   SUPABASE_DB_PORT      6543 (transaction) atau 5432 (session)
-#   SUPABASE_DB_NAME      postgres
-#   SUPABASE_DB_USER      postgres.<project-ref>   (WAJIB format ini untuk pooler)
-#   SUPABASE_DB_PASSWORD  password database Supabase
-SUPABASE_DB_CONFIG = {
-    'host':    os.getenv('SUPABASE_DB_HOST'),
-    'port':    int(os.getenv('SUPABASE_DB_PORT', 6543)),
-    'dbname':  os.getenv('SUPABASE_DB_NAME', 'postgres'),
-    'user':    os.getenv('SUPABASE_DB_USER'),
-    'password': os.getenv('SUPABASE_DB_PASSWORD'),
-    'sslmode': 'require',
-    'connect_timeout': 30,
-}
-
-def query_pg(sql, params=None):
-    """Query ke Supabase Postgres. Mengembalikan list of dict (mirip query() MySQL)."""
-    conn = psycopg2.connect(**SUPABASE_DB_CONFIG)
-    try:
-        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(sql, params or ())
-        rows = cur.fetchall()
-        cur.close()
-        return [dict(r) for r in rows]
     finally:
         try: conn.close()
         except: pass
@@ -101,575 +67,6 @@ def logout():
 @login_required
 def index():
     return render_template('dashboard.html')
-
-@app.route('/api/prodev-ping')
-@login_required
-def api_prodev_ping():
-    """Uji koneksi Supabase. Buka /api/prodev-ping setelah login.
-    Sukses -> {"ok": true, "prodev_orders": <jumlah baris>}."""
-    try:
-        r = query_pg("SELECT COUNT(*) AS n FROM prodev_orders")
-        u = query_pg("SELECT COUNT(*) AS n FROM prodev_templates")
-        return jsonify({'ok': True,
-                        'prodev_orders': r[0]['n'],
-                        'prodev_templates': u[0]['n'],
-                        'host': (SUPABASE_DB_CONFIG.get('host') or '')[:20] + '…'})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
-
-# ─── KPI Fungsi Estimator (data dari Supabase requests/quotations) ──────────
-@app.route('/api/kpi-estimator')
-@login_required
-def api_kpi_estimator():
-    """KPI Fungsi Estimator (Hani):
-    1. Kecepatan perhitungan 1 hari: completed_at <= deadline
-       (deadline = tgl submit; kalau submit >= 16:30 WIB -> deadline besok).
-    2. Closing rate: request 'done' yang jadi deal / total request 'done' (target 15%).
-    Atribusi ke estimator via quotations.estimator_id (email di config)."""
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, _pic, _div = get_args()
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
-    if not (d1 and d2):
-        today = datetime.now().date()
-        d1, d2 = today.replace(day=1), today
-    nmonths = months_between(d1, d2)
-    bands = cfg.get('scoring_bands', [])
-    email = cfg.get('estimator_email', 'haniestimator@risepack.id')
-    params = {'em': email, 'd1': d1.isoformat(), 'd2': d2.isoformat()}
-
-    est_exists = ("EXISTS (SELECT 1 FROM public.quotations q WHERE q.request_id = r.id "
-                  "AND q.estimator_id = (SELECT id FROM auth.users WHERE email = %(em)s))")
-    try:
-        r1 = query_pg(f"""
-            SELECT COUNT(*) AS total,
-              COUNT(*) FILTER (WHERE
-                (r.completed_at AT TIME ZONE 'Asia/Jakarta')::date <=
-                CASE WHEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::time >= TIME '16:30'
-                     THEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date + 1
-                     ELSE (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date END
-              ) AS same_day
-            FROM public.requests r
-            WHERE r.status = 'done' AND r.completed_at IS NOT NULL AND r.submitted_at IS NOT NULL
-              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %(d1)s AND %(d2)s
-              AND {est_exists}
-        """, params)[0]
-        r2 = query_pg(f"""
-            SELECT COUNT(DISTINCT r.id) AS total,
-              COUNT(DISTINCT r.id) FILTER (WHERE dq.deal_status = 'deal') AS deal
-            FROM public.requests r
-            LEFT JOIN public.quotations dq ON dq.request_id = r.id AND dq.is_active = true
-            WHERE r.status = 'done'
-              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %(d1)s AND %(d2)s
-              AND {est_exists}
-        """, params)[0]
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-    total1, same_day = int(r1['total'] or 0), int(r1['same_day'] or 0)
-    total2, deal      = int(r2['total'] or 0), int(r2['deal'] or 0)
-    metric = {
-        'kecepatan': round(same_day / total1 * 100, 1) if total1 else 0,
-        'closing':   round(deal / total2 * 100, 1) if total2 else 0,
-    }
-    extra = {'kecepatan': f'{same_day}/{total1} req', 'closing': f'{deal}/{total2} deal'}
-
-    rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('estimator_kpi', []):
-        actual, target, w = metric.get(k['id'], 0), k['target'], k['weight'] / 100.0
-        ach = min(round(actual / target * 100, 1), 100.0) if target else 0
-        sc = score_from_ach(ach, bands)
-        weighted = round(sc * w, 2)
-        total_w += weighted
-        total_ach_w += ach * w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target,
-                     'unit': k.get('unit', '%'), 'note': f"{k.get('note','')} · {extra.get(k['id'],'')}",
-                     'actual': actual, 'ach': ach, 'score': sc, 'weighted': weighted})
-    total_ach = round(total_ach_w, 1)
-    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
-    return jsonify({'rows': rows, 'total_kpi': round(total_w, 2),
-                    'total_ach': total_ach, 'label': label, 'months': nmonths, 'sales': None})
-
-@app.route('/api/kpi-estimator-debug')
-@login_required
-def api_kpi_estimator_debug():
-    """Diagnostik: kenapa KPI estimator 0. Buka /api/kpi-estimator-debug (pakai filter tanggal dashboard)."""
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, _p, _d = get_args()
-    def pdate(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
-    if not (d1 and d2):
-        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
-    email = cfg.get('estimator_email')
-    out = {'email_config': email, 'range': [d1.isoformat(), d2.isoformat()]}
-    dd = [d1.isoformat(), d2.isoformat()]
-    try:
-        uid = query_pg("SELECT id FROM auth.users WHERE email = %s", [email])
-        out['email_found_in_db'] = bool(uid)
-        out['done_requests_in_range'] = query_pg(
-            "SELECT COUNT(*) n FROM public.requests WHERE status='done' "
-            "AND (submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %s AND %s", dd)[0]['n']
-        out['done_requests_all_time'] = query_pg(
-            "SELECT COUNT(*) n FROM public.requests WHERE status='done'")[0]['n']
-        out['who_estimated_in_range'] = query_pg("""
-            SELECT COALESCE(u.email,'(estimator_id null / tak ada di auth)') AS estimator_email,
-                   COUNT(DISTINCT q.request_id) AS requests
-            FROM public.quotations q
-            JOIN public.requests r ON r.id = q.request_id
-            LEFT JOIN auth.users u ON u.id = q.estimator_id
-            WHERE r.status='done'
-              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %s AND %s
-            GROUP BY u.email ORDER BY requests DESC""", dd)
-        out['users_hint'] = [r['email'] for r in query_pg(
-            "SELECT email FROM auth.users WHERE email ILIKE '%%esti%%' OR email ILIKE '%%hani%%' ORDER BY email")]
-    except Exception as e:
-        out['error'] = str(e)
-        return jsonify(out), 500
-    return jsonify(out)
-
-# ═══ KPI Fungsi Inner Sales (MySQL + Google Sheets + Supabase) ═══════════════
-_MON3 = {'jan':1,'feb':2,'mar':3,'apr':4,'mei':5,'may':5,'jun':6,'jul':7,
-         'agu':8,'aug':8,'sep':9,'okt':10,'oct':10,'nov':11,'des':12,'dec':12}
-def _iddate(s):
-    """Parse tanggal: '5 Jan 2026', '02 Agu 2026', '2026-01-05', '05/01/2026'."""
-    s = str(s or '').strip()
-    if not s: return None
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
-        try: return datetime.strptime(s[:10], fmt).date()
-        except Exception: pass
-    p = s.replace(',', ' ').split()
-    if len(p) >= 3:
-        try:
-            d = int(p[0]); mo = _MON3.get(p[1][:3].lower()); y = int(p[2])
-            if mo: return datetime(y, mo, d).date()
-        except Exception: pass
-    return None
-
-_INNER_CSV_CACHE = {}
-def _inner_csv(url):
-    import time, urllib.request, csv, io
-    c = _INNER_CSV_CACHE.get(url)
-    if c and time.time() - c[0] < 120: return c[1]
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        text = resp.read().decode('utf-8', errors='replace')
-    rows = list(csv.reader(io.StringIO(text)))
-    _INNER_CSV_CACHE[url] = (time.time(), rows)
-    return rows
-
-def _hdr_idx(header, *subs, default=None):
-    for i, c in enumerate(header):
-        cl = (c or '').strip().lower()
-        if any(s in cl for s in subs): return i
-    return default
-
-def _find_header(rows, marker):
-    for i, r in enumerate(rows):
-        if any(marker in (c or '').strip().lower() for c in r): return i
-    return 0
-
-def _inner_csv_rows(url, sales_list, d1, d2):
-    """Baris CSV Database Dummy yang cocok sales inner (POOL semua sales) & Deadline dalam [d1,d2]."""
-    rows = _inner_csv(url)
-    if not rows: return [], 5, 7, 8
-    h = _find_header(rows, 'pic sales')
-    header = rows[h]
-    pic_i = _hdr_idx(header, 'pic sales', default=5)
-    dl_i  = _hdr_idx(header, 'deadline', default=7)
-    sl = [s.strip().lower() for s in sales_list]
-    out = []
-    for r in rows[h+1:]:
-        if len(r) <= max(pic_i, dl_i): continue
-        if (r[pic_i] or '').strip().lower() not in sl: continue
-        dl = _iddate(r[dl_i])
-        if not dl or not (d1 <= dl <= d2): continue
-        out.append(r)
-    return out, pic_i, dl_i, h
-
-def _inner_csv_ontime(url, sales_list, d1, d2):
-    """Kolom Q (idx16) 'keterangan waktu' = TEKS. On-time = bukan 'Terlambat'. Return (ontime, total)."""
-    rows, _pi, _di, _h = _inner_csv_rows(url, sales_list, d1, d2)
-    q_i = 16
-    ont = tot = 0
-    for r in rows:
-        if len(r) <= q_i: continue
-        q = (r[q_i] or '').strip().lower()
-        if q == '': continue
-        tot += 1
-        if 'terlambat' not in q: ont += 1
-    return ont, tot
-
-def _inner_csv_kepuasan(url, sales_list, d1, d2):
-    """Kolom V (idx21) 'Tingkat Kepuasan' = TEKS 'Puas'. null/kosong = tidak puas. Return (puas, total)."""
-    rows, _pi, _di, _h = _inner_csv_rows(url, sales_list, d1, d2)
-    v_i = 21
-    puas = tot = 0
-    for r in rows:
-        tot += 1
-        v = (r[v_i] if len(r) > v_i else '').strip().lower()
-        if v == 'puas': puas += 1
-    return puas, tot
-
-def _inner_faw_fsa(url, admin, d1, d2):
-    """CSV Form Admin: per Assign to Admin, % baris Request Date == Finish Date (kolom J=idx9)."""
-    rows = _inner_csv(url)
-    if not rows: return None, 0
-    h = _find_header(rows, 'request date')
-    header = rows[h]
-    req_i = _hdr_idx(header, 'request date', default=1)
-    adm_i = _hdr_idx(header, 'assign to admin', 'admin', default=7)
-    fin_i = 9
-    al = (admin or '').strip().lower()
-    total = ok = 0
-    for r in rows[h+1:]:
-        if len(r) <= max(req_i, adm_i, fin_i): continue
-        adm = (r[adm_i] or '').strip().lower()
-        if not adm or (al not in adm and adm not in al): continue
-        rd = _iddate(r[req_i])
-        if not rd or not (d1 <= rd <= d2): continue
-        total += 1
-        fd = _iddate(r[fin_i])
-        if fd and rd == fd: ok += 1
-    return (round(ok/total*100, 1) if total else None), total
-
-def _inner_ontime_prod(sales_list, d1s, d2s):
-    """MySQL: SPK selesai (tgl_selesai_all) <= deadline FAW, difilter PIC (order_risepack.name)."""
-    if not sales_list: return None, 0
-    ph = ','.join(['%s'] * len(sales_list))
-    r = query(f"""
-        SELECT COUNT(*) total, COALESCE(SUM(ot),0) ontime FROM (
-          SELECT fd.sko_key,
-            CASE WHEN sp.tgl_selesai IS NOT NULL AND sp.tgl_selesai <= fd.deadline THEN 1 ELSE 0 END ot
-          FROM (SELECT sko_key, MIN(tgl_deadline) deadline FROM tb_faws
-                WHERE sko_key IS NOT NULL AND tgl_deadline BETWEEN %s AND %s GROUP BY sko_key) fd
-          JOIN (SELECT sko_key, MAX(name) pic FROM order_risepack
-                WHERE (flag_dummy <> 'dummy' OR flag_dummy IS NULL) GROUP BY sko_key) o ON o.sko_key = fd.sko_key
-          LEFT JOIN (SELECT sko_key, MAX(tgl_selesai_all) tgl_selesai FROM tb_spks GROUP BY sko_key) sp
-                ON sp.sko_key = fd.sko_key
-          WHERE o.pic IN ({ph})
-        ) t
-    """, [d1s, d2s] + list(sales_list))[0]
-    total = int(r['total'] or 0); ot = int(r['ontime'] or 0)
-    return (round(ot/total*100, 1) if total else None), total
-
-def _inner_app_sample(email, d1s, d2s):
-    """Return (ontime, total) — rakit selesai <= deadline (Supabase, Jul+)."""
-    r = query_pg("""
-        SELECT COUNT(*) total,
-          COUNT(*) FILTER (WHERE tanggal_selesai_rakit <= deadline) ontime
-        FROM public.prodev_orders
-        WHERE is_cancelled = false AND tanggal_selesai_rakit IS NOT NULL AND deadline IS NOT NULL
-          AND created_by = (SELECT id FROM auth.users WHERE email = %s)
-          AND deadline BETWEEN %s AND %s
-    """, [email, d1s, d2s])[0]
-    return int(r['ontime'] or 0), int(r['total'] or 0)
-
-def _inner_app_kepuasan(email, d1s, d2s):
-    """Return (puas, total) — total = semua order (null tingkat_kepuasan dianggap tidak puas)."""
-    r = query_pg("""
-        SELECT COUNT(*) total,
-               COUNT(*) FILTER (WHERE tingkat_kepuasan = 'puas') puas
-        FROM public.prodev_orders
-        WHERE is_cancelled = false AND deadline IS NOT NULL
-          AND created_by = (SELECT id FROM auth.users WHERE email = %s)
-          AND deadline BETWEEN %s AND %s
-    """, [email, d1s, d2s])[0]
-    return int(r['puas'] or 0), int(r['total'] or 0)
-
-def _inner_compute(cfg, inner, d1, d2):
-    cutover = _iddate(cfg.get('inner_app_cutover', '2026-07-01')) or datetime(2026, 7, 1).date()
-    csv_ok = d1 <= (cutover - timedelta(days=1))
-    app_ok = d2 >= cutover
-    csv_d1, csv_d2 = d1, min(d2, cutover - timedelta(days=1))
-    app_d1, app_d2 = max(d1, cutover), d2
-    metric, extra = {}, {}
-
-    v, n = _inner_ontime_prod(inner['sales'], d1.isoformat(), d2.isoformat())
-    metric['ontime_prod'] = v or 0; extra['ontime_prod'] = f'{n} SPK'
-
-    # KPI2 & KPI4: POOL semua baris (semua sales inner + kedua era), lalu sukses ÷ total.
-    def blend(csv_fn, app_fn):
-        num = tot = 0
-        if csv_ok:
-            a, b = csv_fn(cfg['inner_csv_sample_url'], inner['sales'], csv_d1, csv_d2); num += a; tot += b
-        if app_ok:
-            a, b = app_fn(inner['email'], app_d1.isoformat(), app_d2.isoformat()); num += a; tot += b
-        return (round(num/tot*100, 1) if tot else 0), tot
-
-    metric['ontime_sample'], c2 = blend(_inner_csv_ontime, _inner_app_sample);   extra['ontime_sample'] = f'{c2} sampel'
-    v, n = _inner_faw_fsa(cfg['inner_csv_admin_url'], inner['admin'], d1, d2)
-    metric['faw_fsa'] = v or 0; extra['faw_fsa'] = f'{n} form'
-    metric['kepuasan'], c4 = blend(_inner_csv_kepuasan, _inner_app_kepuasan);     extra['kepuasan'] = f'{c4} nilai'
-    return metric, extra
-
-@app.route('/api/kpi-inner')
-@login_required
-def api_kpi_inner():
-    cfg = load_kpi_config()
-    tgl_dari, tgl_sampai, _p, _d = get_args()
-    def pd(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
-    if not (d1 and d2):
-        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
-    inners = cfg.get('inner_sales', [])
-    inner_id = request.args.get('inner') or (inners[0]['id'] if inners else None)
-    inner = next((x for x in inners if x['id'] == inner_id), None)
-    inner_list = [{'id': x['id'], 'name': x['name']} for x in inners]
-    if not inner:
-        return jsonify({'valid': False, 'inners': inner_list})
-    bands = cfg.get('scoring_bands', [])
-    try:
-        metric, extra = _inner_compute(cfg, inner, d1, d2)
-    except Exception as e:
-        return jsonify({'valid': True, 'error': str(e), 'inners': inner_list,
-                        'inner': inner['name'], 'inner_id': inner['id']})
-    rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('inner_kpi', []):
-        actual, target, w = metric.get(k['id'], 0), k['target'], k['weight']/100.0
-        ach = min(round(actual/target*100, 1), 100.0) if target else 0
-        sc = score_from_ach(ach, bands); weighted = round(sc*w, 2)
-        total_w += weighted; total_ach_w += ach*w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target,
-                     'unit': k.get('unit', '%'), 'note': f"{k.get('note','')} · {extra.get(k['id'],'')}",
-                     'actual': actual, 'ach': ach, 'score': sc, 'weighted': weighted})
-    total_ach = round(total_ach_w, 1)
-    label = next((lb for thr, lb in cfg.get('labels', []) if total_ach >= thr), '-')
-    return jsonify({'valid': True, 'inner': inner['name'], 'inner_id': inner['id'], 'inners': inner_list,
-                    'rows': rows, 'total_kpi': round(total_w, 2), 'total_ach': total_ach,
-                    'label': label, 'months': months_between(d1, d2), 'sales': 'Inner: ' + inner['name']})
-
-@app.route('/api/kpi-inner-debug')
-@login_required
-def api_kpi_inner_debug():
-    """Diagnostik KPI inner sales: sumber & sampel nilai kolom kunci."""
-    cfg = load_kpi_config()
-    out = {}
-    try:
-        s = _inner_csv(cfg.get('inner_csv_sample_url', ''))
-        a = _inner_csv(cfg.get('inner_csv_admin_url', ''))
-        hs = _find_header(s, 'pic sales'); ha = _find_header(a, 'request date')
-        out['sample_header'] = s[hs] if s else []
-        out['sample_pic_values'] = sorted({(r[_hdr_idx(s[hs], 'pic sales', default=5)] or '').strip()
-                                            for r in s[hs+1:hs+400] if len(r) > 5})[:40]
-        out['admin_header'] = a[ha] if a else []
-        out['admin_assign_values'] = sorted({(r[_hdr_idx(a[ha], 'assign to admin', 'admin', default=7)] or '').strip()
-                                             for r in a[ha+1:ha+400] if len(r) > 7})[:40]
-        out['sample_q_raw'] = [(r[16] if len(r) > 16 else '') for r in s[hs+1:hs+9]]
-        out['sample_v_raw'] = [(r[21] if len(r) > 21 else '') for r in s[hs+1:hs+9]]
-        out['sample_rows'] = len(s); out['admin_rows'] = len(a)
-    except Exception as e:
-        out['error'] = str(e)
-        return jsonify(out), 500
-    return jsonify(out)
-
-# ═══ KPI Fungsi Prodev (Adit/Fau) & Sample Maker (Kiki) ══════════════════════
-def _pdmy_rows(url, layouter_list, d1, d2):
-    """CSV Database Dummy: baris yang PIC Layouter cocok (contains) & Deadline dlm [d1,d2]."""
-    rows = _inner_csv(url)
-    if not rows: return []
-    h = _find_header(rows, 'pic sales'); header = rows[h]
-    lay_i = _hdr_idx(header, 'pic layouter', default=8)
-    dl_i  = _hdr_idx(header, 'deadline', default=7)
-    ll = [s.strip().lower() for s in layouter_list]
-    out = []
-    for r in rows[h+1:]:
-        if len(r) <= max(lay_i, dl_i): continue
-        lay = (r[lay_i] or '').strip().lower()
-        if not lay or not any(x in lay for x in ll): continue
-        dl = _iddate(r[dl_i])
-        if not dl or not (d1 <= dl <= d2): continue
-        out.append(r)
-    return out
-
-def _final_rows(url, d1, d2):
-    """CSV Database SA File Final: baris dgn Deadline (idx6) dlm [d1,d2]."""
-    rows = _inner_csv(url)
-    if not rows: return []
-    h = _find_header(rows, 'status pengerjaan'); header = rows[h]
-    dl_i = _hdr_idx(header, 'deadline', default=6)
-    out = []
-    for r in rows[h+1:]:
-        if len(r) <= dl_i: continue
-        dl = _iddate(r[dl_i])
-        if not dl or not (d1 <= dl <= d2): continue
-        out.append(r)
-    return out
-
-def _cix(r, i):
-    return (r[i] if len(r) > i else '').strip()
-
-def _pdmy_metric(rows):
-    """(ok,tot) per KPI dari baris Database Dummy: deal(Y=24), ontime(Q=16), revisi(RevProdev=20), kepuasan(V=21)."""
-    m = {}
-    tot = len(rows)
-    m['deal'] = (sum(1 for r in rows if _cix(r, 24).lower() == 'deal'), tot)
-    o_ok = o_tot = 0
-    for r in rows:
-        q = _cix(r, 16).lower()
-        if q == '': continue
-        o_tot += 1
-        if 'terlambat' not in q: o_ok += 1
-    m['ontime'] = (o_ok, o_tot)
-    m['revisi'] = (sum(1 for r in rows if _cix(r, 20) == ''), tot)        # tanpa revisi prodev = berhasil
-    m['kepuasan'] = (sum(1 for r in rows if _cix(r, 21).lower() == 'puas'), tot)
-    return m
-
-def _final_metric(rows):
-    """(ok,tot): final(N=13, 'tersedia' & non-kosong), revisi_rakit(P=15, kosong=berhasil)."""
-    f_ok = f_tot = 0
-    for r in rows:
-        v = _cix(r, 13).lower()
-        if v == '': continue
-        f_tot += 1
-        if v == 'tersedia': f_ok += 1
-    rr = sum(1 for r in rows if _cix(r, 15) == '')
-    return {'final': (f_ok, f_tot), 'revisi_rakit': (rr, len(rows))}
-
-def _merge_counts(a, b):
-    out = dict(a)
-    for k, (o, t) in b.items():
-        x, y = out.get(k, (0, 0))
-        out[k] = (x + o, y + t)
-    return out
-
-def _score_from_counts(kpi_cfg, metric, bands, labels):
-    rows, tw, taw = [], 0.0, 0.0
-    for k in kpi_cfg:
-        ok, tot = metric.get(k['id'], (0, 0))
-        actual = round(ok/tot*100, 1) if tot else 0
-        target, w = k['target'], k['weight']/100.0
-        ach = min(round(actual/target*100, 1), 100.0) if target else 0
-        sc = score_from_ach(ach, bands); wt = round(sc*w, 2)
-        tw += wt; taw += ach*w
-        rows.append({'id': k['id'], 'name': k['name'], 'weight': k['weight'], 'target': target,
-                     'unit': k.get('unit', '%'), 'note': f"{k.get('note','')} · {ok}/{tot}",
-                     'actual': actual, 'ach': ach, 'score': sc, 'weighted': wt})
-    ta = round(taw, 1)
-    lbl = next((l for t, l in labels if ta >= t), '-')
-    return rows, round(tw, 2), ta, lbl
-
-def _era(cfg, d1, d2):
-    cutover = _iddate(cfg.get('inner_app_cutover', '2026-07-01')) or datetime(2026, 7, 1).date()
-    return (d1 <= (cutover - timedelta(days=1)), d2 >= cutover,
-            d1, min(d2, cutover - timedelta(days=1)), max(d1, cutover), d2)
-
-def _pd_range():
-    tgl_dari, tgl_sampai, _p, _d = get_args()
-    def pd(s):
-        try: return datetime.strptime(s, '%Y-%m-%d').date()
-        except Exception: return None
-    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
-    if not (d1 and d2):
-        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
-    return d1, d2
-
-@app.route('/api/kpi-prodev')
-@login_required
-def api_kpi_prodev():
-    cfg = load_kpi_config()
-    d1, d2 = _pd_range()
-    lays = cfg.get('prodev_layouters', [])
-    wid = request.args.get('who') or (lays[0]['id'] if lays else None)
-    L = next((x for x in lays if x['id'] == wid), None)
-    llist = [{'id': x['id'], 'name': x['name']} for x in lays]
-    if not L:
-        return jsonify({'valid': False, 'inners': llist})
-    bands = cfg.get('scoring_bands', [])
-    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
-    try:
-        m = {}
-        if csv_ok:
-            m = _merge_counts(m, _pdmy_metric(_pdmy_rows(cfg['inner_csv_sample_url'], [L['layouter']], cd1, cd2)))
-        if app_ok:
-            r = query_pg("""
-                SELECT COUNT(*) tot,
-                  COUNT(*) FILTER (WHERE status_deal='deal') deal,
-                  COUNT(*) FILTER (WHERE tanggal_selesai_layout <= deadline) ot,
-                  COUNT(*) FILTER (WHERE tanggal_selesai_layout IS NOT NULL) ot_tot,
-                  COUNT(*) FILTER (WHERE COALESCE(revisi_prodev,0)=0) norev,
-                  COUNT(*) FILTER (WHERE tingkat_kepuasan='puas') puas
-                FROM public.prodev_orders
-                WHERE is_cancelled=false AND deadline IS NOT NULL
-                  AND layouter_id=(SELECT id FROM public.profiles WHERE full_name=%s LIMIT 1)
-                  AND deadline BETWEEN %s AND %s
-            """, [L['layouter'], ad1.isoformat(), ad2.isoformat()])[0]
-            t = int(r['tot'] or 0)
-            m = _merge_counts(m, {'deal': (int(r['deal'] or 0), t),
-                                  'ontime': (int(r['ot'] or 0), int(r['ot_tot'] or 0)),
-                                  'revisi': (int(r['norev'] or 0), t),
-                                  'kepuasan': (int(r['puas'] or 0), t)})
-    except Exception as e:
-        return jsonify({'valid': True, 'error': str(e), 'inners': llist, 'inner': L['name'], 'inner_id': L['id']})
-    rows, tk, ta, lbl = _score_from_counts(cfg['prodev_kpi'], m, bands, cfg.get('labels', []))
-    return jsonify({'valid': True, 'inner': L['name'], 'inner_id': L['id'], 'inners': llist,
-                    'rows': rows, 'total_kpi': tk, 'total_ach': ta, 'label': lbl,
-                    'months': months_between(d1, d2), 'sales': 'Prodev: ' + L['name']})
-
-@app.route('/api/kpi-sample-maker')
-@login_required
-def api_kpi_sample_maker():
-    cfg = load_kpi_config()
-    d1, d2 = _pd_range()
-    bands = cfg.get('scoring_bands', [])
-    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
-    lays = [x['layouter'] for x in cfg.get('prodev_layouters', [])]  # Adit + Fau digabung
-    try:
-        m = {}
-        if csv_ok:
-            drows = _pdmy_rows(cfg['inner_csv_sample_url'], lays, cd1, cd2)
-            pm = _pdmy_metric(drows)
-            m = _merge_counts(m, {'kepuasan': pm['kepuasan'], 'ontime': pm['ontime']})
-            m = _merge_counts(m, _final_metric(_final_rows(cfg['prodev_csv_final_url'], cd1, cd2)))
-        if app_ok:
-            r = query_pg("""
-                SELECT COUNT(*) tot,
-                  COUNT(*) FILTER (WHERE tingkat_kepuasan='puas') puas,
-                  COUNT(*) FILTER (WHERE tanggal_selesai_rakit <= deadline) ot,
-                  COUNT(*) FILTER (WHERE tanggal_selesai_rakit IS NOT NULL) ot_tot,
-                  COUNT(*) FILTER (WHERE status_dummy_final='tersedia') fin,
-                  COUNT(*) FILTER (WHERE status_dummy_final IS NOT NULL) fin_tot
-                FROM public.prodev_orders
-                WHERE is_cancelled=false AND deadline IS NOT NULL
-                  AND sample_maker_id=(SELECT id FROM auth.users WHERE email=%s)
-                  AND deadline BETWEEN %s AND %s
-            """, [cfg.get('sample_maker_email', ''), ad1.isoformat(), ad2.isoformat()])[0]
-            t = int(r['tot'] or 0)
-            m = _merge_counts(m, {'kepuasan': (int(r['puas'] or 0), t),
-                                  'ontime': (int(r['ot'] or 0), int(r['ot_tot'] or 0)),
-                                  'final': (int(r['fin'] or 0), int(r['fin_tot'] or 0))})
-    except Exception as e:
-        return jsonify({'valid': True, 'error': str(e), 'inners': []})
-    rows, tk, ta, lbl = _score_from_counts(cfg['sample_maker_kpi'], m, bands, cfg.get('labels', []))
-    return jsonify({'valid': True, 'inners': [], 'rows': rows, 'total_kpi': tk, 'total_ach': ta,
-                    'label': lbl, 'months': months_between(d1, d2), 'sales': 'Sample Maker: Kiki'})
-
-@app.route('/api/kpi-prodev-debug')
-@login_required
-def api_kpi_prodev_debug():
-    cfg = load_kpi_config()
-    out = {}
-    try:
-        s = _inner_csv(cfg.get('inner_csv_sample_url', ''))
-        f = _inner_csv(cfg.get('prodev_csv_final_url', ''))
-        hs = _find_header(s, 'pic sales'); hf = _find_header(f, 'status pengerjaan')
-        out['dummy_header'] = s[hs] if s else []
-        out['dummy_layouter_values'] = sorted({(_cix(r, 8)) for r in s[hs+1:hs+500] if len(r) > 8})[:30]
-        out['dummy_Y_deal_raw'] = [_cix(r, 24) for r in s[hs+1:hs+9]]
-        out['dummy_revprodev_raw'] = [_cix(r, 20) for r in s[hs+1:hs+9]]
-        out['final_header'] = f[hf] if f else []
-        out['final_N_raw'] = [_cix(r, 13) for r in f[hf+1:hf+12]]
-        out['final_P_raw'] = [_cix(r, 15) for r in f[hf+1:hf+12]]
-        out['final_rows'] = len(f)
-    except Exception as e:
-        out['error'] = str(e)
-        return jsonify(out), 500
-    return jsonify(out)
 
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
@@ -1263,20 +660,54 @@ def api_journey():
 @app.route('/api/sko-achievement')
 @login_required
 def api_sko_achievement():
+    # SKO 10x = target TAHUNAN. Selalu hitung 1 tahun penuh (dari tahun tgl_dari),
+    # hanya filter PIC/divisi yang berlaku (rentang tanggal diabaikan).
     tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    tahun = (tgl_dari or datetime.now().strftime('%Y-%m-%d'))[:4]
+    cond, params = build_where(None, None, pic, divisi)
     sql = f"""
         SELECT MAX(o.nama) AS nama,
                COUNT(DISTINCT o.sko_key) AS jml
         {BASE}
         AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+        AND YEAR(o.tgl_omzet_realtime) = %s
         {cond}
         GROUP BY o.id_customer
         ORDER BY jml DESC
         LIMIT 2000
     """
-    rows = query(sql, params)
+    rows = query(sql, [tahun] + params)
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
+
+@app.route('/api/customer-margin')
+@login_required
+def api_customer_margin():
+    """Margin (omzet − modal) per customer, untuk detail customer margin di tab Sales > Margin."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    sql = f"""
+        SELECT MAX(o.nama) AS nama,
+               MAX(o.nama_instansi) AS instansi,
+               COUNT(DISTINCT o.order_key) AS orders,
+               SUM(o.total_harga) AS omzet,
+               SUM(o.modal_sales) AS modal,
+               SUM(o.total_harga - o.modal_sales) AS margin
+        {BASE}
+        AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
+        {cond}
+        GROUP BY o.id_customer
+        HAVING omzet > 0
+        ORDER BY margin DESC
+        LIMIT 1500
+    """
+    rows = query(sql, params)
+    out = []
+    for r in rows:
+        omzet = float(r['omzet'] or 0); margin = float(r['margin'] or 0)
+        out.append({'nama': r['nama'], 'instansi': r['instansi'], 'orders': int(r['orders'] or 0),
+                    'omzet': omzet, 'modal': float(r['modal'] or 0), 'margin': margin,
+                    'persen_margin': round(margin / omzet * 100, 1) if omzet else 0})
+    return jsonify(out)
 
 
 # ─── Bonus Achievement Sales ─────────────────────────────────────
