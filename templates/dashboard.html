@@ -167,6 +167,11 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #sko-ach td:nth-child(1),#sko-ach th:nth-child(1){width:40%;}
 #sko-ach td:nth-child(2),#sko-ach th:nth-child(2){width:18%;}
 #sko-ach td:nth-child(3),#sko-ach th:nth-child(3){width:42%;overflow:visible;}
+/* Detail Customer Margin — rata tengah & compact */
+#cmar-table table{width:100%;}
+#cmar-table th,#cmar-table td{text-align:center;padding:9px 10px;font-variant-numeric:tabular-nums;}
+#cmar-table th:first-child,#cmar-table td:first-child{text-align:left;width:24%;}
+#cmar-table th:nth-child(n+2),#cmar-table td:nth-child(n+2){width:15.2%;}
 
 @media (max-width:1000px){.grid-2,.grid-2-wide{grid-template-columns:1fr;}}
 @media (max-width:760px){.sidebar{display:none;}}
@@ -461,13 +466,18 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div id="prodview-status">
           <div id="ov-cards"><div class="loading">Memuat…</div></div>
           <div class="card" style="margin-top:15px">
-            <h3>Proyek Terlambat dari Deadline</h3>
-            <div class="ch-sub">Monitoring keterlambatan produksi · H+n = jumlah hari lewat deadline · paling telat di atas</div>
-            <div class="toolbar" style="margin:12px 0 6px">
-              <input id="late-search" type="text" placeholder="🔎 Cari customer / SKO / produk / PIC / vendor…" oninput="onLateSearch(this.value)">
-              <span class="muted" id="late-count"></span>
+            <h3>Detail Proyek Produksi</h3>
+            <div class="ch-sub">Siapa On Time / Telat / In Full / Kurang · H+n = hari lewat deadline · klik filter untuk fokus</div>
+            <div class="toolbar" style="margin:12px 0 6px;flex-wrap:wrap;gap:8px">
+              <button class="chip active" id="pf-all" onclick="setProjFilter('all')">Semua</button>
+              <button class="chip" id="pf-ontime" onclick="setProjFilter('ontime')">✅ On Time</button>
+              <button class="chip" id="pf-telat" onclick="setProjFilter('telat')">⚠️ Telat</button>
+              <button class="chip" id="pf-infull" onclick="setProjFilter('infull')">📦 In Full</button>
+              <button class="chip" id="pf-kurang" onclick="setProjFilter('kurang')">📉 Kurang Kirim</button>
+              <input id="proj-search" type="text" placeholder="🔎 Cari SKO / produk / PIC / vendor…" oninput="onProjSearch(this.value)" style="margin-left:auto">
+              <span class="muted" id="proj-count"></span>
             </div>
-            <div class="table-wrap" id="late-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
+            <div class="table-wrap" id="proj-table" style="max-height:460px;overflow:auto"><div class="loading">Memuat…</div></div>
           </div>
         </div>
 
@@ -873,7 +883,7 @@ function renderCmar(){
     <td class="num" style="font-weight:600;color:var(--green)">${formatRp(r.margin)}</td>
     <td class="num"><span class="pill ${marginClass(r.persen_margin)}">${r.persen_margin}%</span></td>
   </tr>`).join('');
-  document.getElementById('cmar-table').innerHTML=`<table style="min-width:760px"><thead><tr>${sortHead(CMAR_COLS,CMAR,'setCmarSort')}</tr></thead><tbody>${body||'<tr><td colspan="6" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+  document.getElementById('cmar-table').innerHTML=`<table><thead><tr>${sortHead(CMAR_COLS,CMAR,'setCmarSort')}</tr></thead><tbody>${body||'<tr><td colspan="6" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 // ── Customer ──
 async function loadLTV(q){
@@ -1015,22 +1025,31 @@ async function loadProduksi(q){
       <div class="ov-foot">${ifPill}<span>dari ${fmtInt(IF.total)} order</span></div>
     </div>
   </div>`;
-  // Tabel proyek terlambat (monitoring H+n)
-  LATE.rows=(ot.rows||[]).filter(r=>r.status&&r.status.indexOf('Terlambat')===0)
-    .map(r=>({...r, days:(r.delay!=null?r.delay:daysPastDeadline(r.deadline))}))
-    .sort((a,b)=>(b.days||0)-(a.days||0));
-  renderLate();
+  // Detail proyek: gabung status Ontime (dari ot.rows) + In Full (dari dl.rows) per SKO
+  const ifMap={}; (dl.rows||[]).forEach(r=>{ if(r.sko) ifMap[r.sko]=r; });
+  PROJ.rows=(ot.rows||[]).map(r=>{ const f=ifMap[r.sko]||{};
+    return {...r, if_status:f.if_status||'', kurang:f.kurang, qty_dipesan:f.qty_dipesan, qty_dikirim:f.qty_dikirim,
+      days:(r.delay!=null?r.delay:(r.status&&r.status.indexOf('Terlambat')===0?daysPastDeadline(r.deadline):null))}; });
+  renderProj();
 }
-// ── Produksi Overview: proyek terlambat dari deadline ──
-const LATE={rows:[],term:''};
+// ── Produksi Overview: detail proyek (Ontime + In Full) ──
+const PROJ={rows:[],term:'',filter:'all'};
 function daysPastDeadline(dl){ if(!dl)return null; const d=new Date(dl+'T00:00:00'); const t=new Date(); t.setHours(0,0,0,0); const diff=Math.floor((t-d)/86400000); return diff>0?diff:0; }
-function onLateSearch(v){ LATE.term=(v||'').trim().toLowerCase(); renderLate(); }
-function renderLate(){
-  let rows=LATE.rows;
-  if(LATE.term) rows=rows.filter(r=>[r.sko,r.produk,r.pic,r.vendor].map(x=>x||'').join(' ').toLowerCase().includes(LATE.term));
-  const cnt=document.getElementById('late-count'); if(cnt) cnt.textContent=`${rows.length} proyek telat`;
-  document.getElementById('late-table').innerHTML=`<table style="min-width:900px"><thead><tr>
-    <th>SKO</th><th>Produk</th><th>PIC</th><th>Vendor</th><th>Deadline</th><th>Tgl Selesai</th><th class="num">Keterlambatan</th><th>Status</th>
+function onProjSearch(v){ PROJ.term=(v||'').trim().toLowerCase(); renderProj(); }
+function setProjFilter(f){ PROJ.filter=f; ['all','ontime','telat','infull','kurang'].forEach(x=>{const b=document.getElementById('pf-'+x); if(b)b.classList.toggle('active',x===f);}); renderProj(); }
+function renderProj(){
+  let rows=PROJ.rows; const f=PROJ.filter;
+  if(f==='ontime') rows=rows.filter(r=>r.status==='On Time');
+  else if(f==='telat') rows=rows.filter(r=>r.status&&r.status.indexOf('Terlambat')===0);
+  else if(f==='infull') rows=rows.filter(r=>r.if_status==='In Full');
+  else if(f==='kurang') rows=rows.filter(r=>r.if_status==='Kurang'||r.if_status==='Belum Dikirim');
+  if(PROJ.term) rows=rows.filter(r=>[r.sko,r.produk,r.pic,r.vendor].map(x=>x||'').join(' ').toLowerCase().includes(PROJ.term));
+  rows=rows.slice().sort((a,b)=>{const la=a.status&&a.status.indexOf('Terlambat')===0?1:0,lb=b.status&&b.status.indexOf('Terlambat')===0?1:0; if(la!==lb)return lb-la; return (b.days||0)-(a.days||0);});
+  const cnt=document.getElementById('proj-count'); if(cnt) cnt.textContent=`${rows.length} proyek`;
+  const otBadge=s=> s==='On Time'?'<span class="pill good">On Time</span>':(s&&s.indexOf('Terlambat')===0?'<span class="pill warn">Terlambat</span>':`<span class="pill">${esc(s)||'–'}</span>`);
+  const ifBadge=s=> s==='In Full'?'<span class="pill good">In Full</span>':(s==='Kurang'?'<span class="pill warn">Kurang</span>':(s==='Belum Dikirim'?'<span class="pill">Belum Dikirim</span>':'<span class="muted">–</span>'));
+  document.getElementById('proj-table').innerHTML=`<table style="min-width:960px"><thead><tr>
+    <th>SKO</th><th>Produk</th><th>PIC</th><th>Vendor</th><th>Deadline</th><th>Tgl Selesai</th><th class="num">Telat</th><th>On Time</th><th>In Full</th>
   </tr></thead><tbody>${
     rows.length? rows.map(r=>`<tr>
       <td title="${esc(r.sko,1)}">${esc(r.sko)||'-'}</td>
@@ -1038,10 +1057,11 @@ function renderLate(){
       <td>${esc(r.pic)||'-'}</td>
       <td>${esc(r.vendor)||'-'}</td>
       <td>${r.deadline||'-'}</td>
-      <td>${r.tgl_selesai||'<span class="muted">belum selesai</span>'}</td>
-      <td class="num" style="color:var(--red);font-weight:700">${r.days!=null?('H+'+r.days):'–'}</td>
-      <td><span class="pill warn">${esc(r.status)}</span></td>
-    </tr>`).join('') : `<tr><td colspan="8" class="loading">${LATE.term?'Tidak ada yang cocok':'Tidak ada proyek terlambat 🎉'}</td></tr>`
+      <td>${r.tgl_selesai||'<span class="muted">belum</span>'}</td>
+      <td class="num" style="color:${r.days?'var(--red)':'var(--ink-3)'};font-weight:${r.days?700:400}">${r.days!=null?('H+'+r.days):'–'}</td>
+      <td>${otBadge(r.status)}</td>
+      <td>${ifBadge(r.if_status)}</td>
+    </tr>`).join('') : `<tr><td colspan="9" class="loading">Tidak ada proyek pada filter ini</td></tr>`
   }</tbody></table>`;
 }
 
