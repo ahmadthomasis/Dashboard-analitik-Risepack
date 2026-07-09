@@ -481,6 +481,12 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
         <div class="section-head" style="margin-top:26px"><h2>Belum Diisi per Sales (PIC)</h2><span class="hint">Siapa yang perlu ditagih untuk melengkapi potensi</span></div>
         <div class="card" style="padding:8px"><div class="table-wrap" id="mon-pic"></div></div>
         <div class="section-head"><h2>Daftar Lead Online Baru</h2></div>
+        <div class="toolbar" style="flex-wrap:wrap;gap:8px;margin-bottom:2px">
+          <button class="chip active" id="md-all" onclick="setMonDeal('all')">Semua</button>
+          <button class="chip" id="md-deal" onclick="setMonDeal('deal')">✅ Deal</button>
+          <button class="chip" id="md-followup" onclick="setMonDeal('follow up')">🔄 Follow Up</button>
+          <button class="chip" id="md-lost" onclick="setMonDeal('lost')">❌ Lost</button>
+        </div>
         <div class="toolbar">
           <input id="mon-search" type="text" placeholder="🔎 Cari customer / instansi / PIC…" oninput="onMonSearch(this.value)">
           <label class="checkfilter"><input type="checkbox" id="mon-only" onchange="renderMon()"> Hanya yang belum diisi</label>
@@ -1432,7 +1438,7 @@ function exportDetailCSV(){
 }
 
 // ── Monitoring Potensi ──
-const MON = { rows:[], term:'', key:'tgl_kontak', dir:'desc' };
+const MON = { rows:[], term:'', key:'tgl_kontak', dir:'desc', deal:'all' };
 const MCOLS = [
   ['tgl_kontak','Tgl Kontak','str'],['nama','Customer','str'],['instansi','Instansi','str'],
   ['pic','PIC','str'],['status_deal','Status Deal','str'],['potensi','Potensi','num'],['terisi','Status Potensi','bool'],
@@ -1475,10 +1481,17 @@ function renderMonPIC(){
       <td class="num">${r.pct}%</td>
     </tr>`).join('')||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
-function monFiltered(){
+const _dealNorm = r => (r.status_deal||'').trim().toLowerCase();
+function monBase(){
+  // rows setelah filter search + "belum diisi" (TANPA filter status deal) — dipakai utk hitung chip
   let rows = MON.rows.slice();
   if(document.getElementById('mon-only').checked) rows = rows.filter(r=>!r.terisi);
   if(MON.term) rows = rows.filter(r=>[r.nama,r.instansi,r.pic,r.status_deal].join(' ').toLowerCase().includes(MON.term));
+  return rows;
+}
+function monFiltered(){
+  let rows = monBase();
+  if(MON.deal!=='all') rows = rows.filter(r=>_dealNorm(r)===MON.deal);
   const k=MON.key, dir=MON.dir==='asc'?1:-1, type=monColType(k);
   rows.sort((a,b)=>{
     let x=a[k], y=b[k];
@@ -1489,7 +1502,17 @@ function monFiltered(){
   });
   return rows;
 }
+function setMonDeal(d){ MON.deal = d; renderMon(); }
+function renderMonChips(){
+  const base = monBase();
+  const cnt = d => d==='all' ? base.length : base.filter(r=>_dealNorm(r)===d).length;
+  [['all','Semua','md-all'],['deal','✅ Deal','md-deal'],['follow up','🔄 Follow Up','md-followup'],['lost','❌ Lost','md-lost']].forEach(([d,lbl,id])=>{
+    const el=document.getElementById(id);
+    if(el){ el.textContent=`${lbl} (${cnt(d)})`; el.classList.toggle('active', MON.deal===d); }
+  });
+}
 function renderMon(){
+  renderMonChips();
   const rows = monFiltered();
   document.getElementById('mon-count').textContent = `${rows.length} lead`;
   const head = MCOLS.map(([k,label])=>{
