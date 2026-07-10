@@ -470,6 +470,7 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
           <div class="spacer-f"></div>
           <button class="btn-reset" onclick="exportDetailCSV()">⬇ Export CSV</button>
         </div>
+        <div id="detail-cards" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px"></div>
         <div class="card" style="padding:8px">
           <div class="table-wrap" id="detail-table" style="max-height:70vh;overflow:auto"><div class="loading">Memuat…</div></div>
         </div>
@@ -1383,8 +1384,10 @@ const DCOLS = [
   ['nama_produk','Produk','str'],['tanggal','Tanggal','str'],['quantity','Qty','num'],
   ['harga_modal','Harga Modal','rp'],['harga_jual','Harga Jual','rp'],
   ['total_harga','Total Harga','rp'],['persen_margin','Margin %','pct'],
+  ['profit','Total Profit','rp'],['net_margin','Net Profit Margin %','pct'],
 ];
 function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
+function marginColor(pct){ return pct>=20?'var(--green)':(pct>=10?'var(--amber)':'var(--red)'); }
 function esc(s,attr){ s=(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); return attr?s.replace(/"/g,'&quot;'):s; }
 async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
 function onDetailSearch(v){ DETAIL.term = v.trim().toLowerCase(); renderDetail(); }
@@ -1401,8 +1404,32 @@ function detailFiltered(){
   });
   return rows;
 }
+function renderDetailCards(rows){
+  const el = document.getElementById('detail-cards');
+  if(!el) return;
+  if(!rows.length){ el.innerHTML=''; return; }
+  const sumModal = rows.reduce((s,r)=>s+(r.total_modal||0),0);
+  const sumRev   = rows.reduce((s,r)=>s+(r.total_harga||0),0);
+  const sumProfit= rows.reduce((s,r)=>s+(r.profit||0),0);
+  const gross = sumRev ? Math.round(sumProfit/sumRev*1000)/10 : 0;
+  const overhead = rows[0] ? (rows[0].persen_margin - rows[0].net_margin) : 0;
+  const net = Math.round((gross - overhead)*10)/10;
+  const orders = new Set(rows.map(r=>r.sko)).size;
+  const card=(label,val,color)=>`<div style="background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;padding:11px 14px;min-width:120px;flex:1">
+    <div style="font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.02em;font-weight:600">${label}</div>
+    <div style="font-size:16px;font-weight:700;margin-top:3px;color:${color||'var(--ink)'}">${val}</div></div>`;
+  el.innerHTML =
+    card('Total Order', fmtInt(orders)) +
+    card('Total Baris', fmtInt(rows.length)) +
+    card('Total Modal', formatRp(sumModal)) +
+    card('Total Harga Jual', formatRp(sumRev)) +
+    card('Total Profit', formatRp(sumProfit), marginColor(gross)) +
+    card('Gross Margin', gross+'%', marginColor(gross)) +
+    card('Net Profit Margin', net+'%', marginColor(net));
+}
 function renderDetail(){
   const rows = detailFiltered();
+  renderDetailCards(rows);
   document.getElementById('detail-count').textContent = `${rows.length} baris`;
   const head = DCOLS.map(([k,label])=>{
     const arrow = DETAIL.key===k ? (DETAIL.dir==='asc'?' ▲':' ▼') : '';
@@ -1419,16 +1446,18 @@ function renderDetail(){
     <td class="num">${formatRpFull(r.harga_modal)}</td>
     <td class="num">${formatRpFull(r.harga_jual)}</td>
     <td class="num" style="font-weight:600">${formatRpFull(r.total_harga)}</td>
-    <td class="num">${r.persen_margin}%</td>
+    <td class="num" style="font-weight:600;color:${marginColor(r.persen_margin)}">${r.persen_margin}%</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.profit)}</td>
+    <td class="num" style="font-weight:600;color:${marginColor(r.net_margin)}">${r.net_margin}%</td>
   </tr>`).join('');
   document.getElementById('detail-table').innerHTML =
-    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="10" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="12" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportDetailCSV(){
   const rows = detailFiltered();
   const lines = [DCOLS.map(c=>c[1]).join(',')];
   rows.forEach(r=>{
-    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.total_harga,r.persen_margin];
+    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.total_harga,r.persen_margin,r.profit,r.net_margin];
     lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
