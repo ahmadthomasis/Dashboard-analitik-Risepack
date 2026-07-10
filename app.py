@@ -1127,6 +1127,8 @@ def api_detail():
             pr_pair[(p['sko_key'], (p['jenis_bahan'] or '').strip())] = p['nama_produk']
 
     out = []
+    _ft = load_kpi_config().get('financial_targets', {})
+    _overhead = float(_ft.get('gpm', 22)) - float(_ft.get('npm', 13.07))   # overhead % = GPM - NPM
     for r in rows:
         qty   = float(r['quantity'] or 0)
         total = float(r['total_harga'] or 0)
@@ -1134,6 +1136,7 @@ def api_detail():
         tgl = r['tanggal']
         jb = (r.get('jenis_bahan') or '').strip()
         nm = pr_pair.get((r['sko_key'], jb)) or pr_sko.get(r['sko_key']) or (r['nama_produk'] or '').strip()
+        pm = round((total - modal) / total * 100, 1) if total else 0
         out.append({
             'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
             'nama_produk': nm,
@@ -1142,7 +1145,10 @@ def api_detail():
             'harga_jual': float(r['harga_jual'] or 0),
             'harga_modal': round(modal / qty) if qty else 0,
             'total_harga': total,
-            'persen_margin': round((total - modal) / total * 100, 1) if total else 0,
+            'persen_margin': pm,
+            'total_modal': round(modal),
+            'profit': round(total - modal),
+            'net_margin': round(pm - _overhead, 1),
         })
     return jsonify(out)
 
