@@ -136,23 +136,25 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .toolbar .spacer-f{flex:1;}
 #detail-search,#bonus-search,#mon-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 320px;max-width:60%;}
 #detail-search:focus,#bonus-search:focus,#mon-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
-#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;}
+#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;min-width:1360px;}
 #detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
 #detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #detail-table th:hover{color:var(--orange-600);}
 #detail-table tbody tr:nth-child(even) td{background:#faf8f5;}
 #detail-table tbody tr:hover td{background:#fdeede;}
-/* lebar kolom: Customer, SKO, Sumber, Produk, Tanggal, Qty, H.Modal, H.Jual, Total, Margin */
+/* lebar kolom: Customer, SKO, Sumber, Produk, Tanggal, Qty, H.Modal, H.Jual, Margin%, Total Harga, Total Margin, NPM% */
 #detail-table th:nth-child(1),#detail-table td:nth-child(1){width:130px;}
-#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:120px;}
-#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:105px;}
-#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:240px;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:110px;}
+#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:100px;}
+#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:210px;}
 #detail-table th:nth-child(5),#detail-table td:nth-child(5){width:100px;}
-#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:80px;}
-#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:110px;}
+#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:75px;}
+#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:105px;}
 #detail-table th:nth-child(8),#detail-table td:nth-child(8){width:105px;}
-#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:130px;}
-#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:85px;}
+#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:90px;}
+#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:125px;}
+#detail-table th:nth-child(11),#detail-table td:nth-child(11){width:120px;}
+#detail-table th:nth-child(12),#detail-table td:nth-child(12){width:150px;}
 
 /* tabel customer proporsional */
 #dnr-table table,#journey-table table,#sko-ach table{table-layout:fixed;width:100%;}
@@ -1383,8 +1385,8 @@ const DCOLS = [
   ['nama','Customer','str'],['sko','SKO','str'],['sumber','Sumber','str'],
   ['nama_produk','Produk','str'],['tanggal','Tanggal','str'],['quantity','Qty','num'],
   ['harga_modal','Harga Modal','rp'],['harga_jual','Harga Jual','rp'],
-  ['total_harga','Total Harga','rp'],['persen_margin','Margin %','pct'],
-  ['profit','Total Profit','rp'],['net_margin','Net Profit Margin %','pct'],
+  ['persen_margin','Margin %','pct'],['total_harga','Total Harga','rp'],
+  ['profit','Total Margin','rp'],['net_margin','Net Profit Margin %','pct'],
 ];
 function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
 function marginColor(pct){ return pct>=20?'var(--green)':(pct>=10?'var(--amber)':'var(--red)'); }
@@ -1445,9 +1447,9 @@ function renderDetail(){
     <td class="num">${fmtInt(r.quantity)}</td>
     <td class="num">${formatRpFull(r.harga_modal)}</td>
     <td class="num">${formatRpFull(r.harga_jual)}</td>
-    <td class="num" style="font-weight:600">${formatRpFull(r.total_harga)}</td>
     <td class="num" style="font-weight:600;color:${marginColor(r.persen_margin)}">${r.persen_margin}%</td>
-    <td class="num" style="font-weight:600">${formatRpFull(r.profit)}</td>
+    <td class="num" style="font-weight:600">${formatRpFull(r.total_harga)}</td>
+    <td class="num" style="font-weight:600;color:${marginColor(r.persen_margin)}">${formatRpFull(r.profit)}</td>
     <td class="num" style="font-weight:600;color:${marginColor(r.net_margin)}">${r.net_margin}%</td>
   </tr>`).join('');
   document.getElementById('detail-table').innerHTML =
@@ -1457,7 +1459,7 @@ function exportDetailCSV(){
   const rows = detailFiltered();
   const lines = [DCOLS.map(c=>c[1]).join(',')];
   rows.forEach(r=>{
-    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.total_harga,r.persen_margin,r.profit,r.net_margin];
+    const vals=[r.nama,r.sko,r.sumber,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.persen_margin,r.total_harga,r.profit,r.net_margin];
     lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
