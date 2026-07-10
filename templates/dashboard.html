@@ -1798,9 +1798,9 @@ function renderBon(){
   const rows=bonFiltered();
   const tBonus=rows.reduce((s,r)=>s+r.bonus,0), tDenda=rows.reduce((s,r)=>s+r.denda,0), tNet=rows.reduce((s,r)=>s+r.net,0);
   document.getElementById('bonus-summary').innerHTML=`
-    ${kpiCard('a-green','🏅','Net Bonus',formatRp(tNet),`<span class="muted">${fmtInt(rows.length)} order lunas</span>`)}
-    ${kpiCard('a-blue','💰','Total Bonus',formatRp(tBonus),`<span class="muted">sebelum denda</span>`)}
-    ${kpiCard('a-orange','⚠️','Total Denda',formatRp(tDenda),`<span class="muted">potongan telat bayar</span>`)}`;
+    ${kpiCard('a-green','🏅','Net Bonus',formatRpFull(tNet),`<span class="muted">${fmtInt(rows.length)} order lunas</span>`)}
+    ${kpiCard('a-blue','💰','Total Bonus',formatRpFull(tBonus),`<span class="muted">sebelum denda</span>`)}
+    ${kpiCard('a-orange','⚠️','Total Denda',formatRpFull(tDenda),`<span class="muted">potongan telat bayar</span>`)}`;
   document.getElementById('bonus-count').textContent=`${rows.length} baris`;
   const body=rows.map(r=>{
     const late=r.hari_telat>0;
@@ -1869,9 +1869,9 @@ function renderReject(){
   const byPj=agg('pj'), byPic=agg('pic').slice(0,12), byJenis=agg('jenis').slice(0,12);
   const pj0=byPj[0], pic0=byPic[0];
   document.getElementById('rej-cards').innerHTML=
-    kpiCard('a-orange','🧾','Total Reject Cost',formatRp(total),`<span class="muted">${fmtInt(rows.length)} item reject</span>`)
-   +kpiCard('a-brown','🏭','Penanggung Terbesar',esc(pj0?pj0.label:'—'),pj0?`<span class="muted">${formatRp(pj0.cost)}</span>`:'')
-   +kpiCard('a-amber','🧑‍🔧','PIC Terbanyak',esc(pic0?pic0.label:'—'),pic0?`<span class="muted">${formatRp(pic0.cost)}</span>`:'');
+    kpiCard('a-orange','🧾','Total Reject Cost',formatRpFull(total),`<span class="muted">${fmtInt(rows.length)} item reject</span>`)
+   +kpiCard('a-brown','🏭','Penanggung Terbesar',esc(pj0?pj0.label:'—'),pj0?`<span class="muted">${formatRpFull(pj0.cost)}</span>`:'')
+   +kpiCard('a-amber','🧑‍🔧','PIC Terbanyak',esc(pic0?pic0.label:'—'),pic0?`<span class="muted">${formatRpFull(pic0.cost)}</span>`:'');
   rejBar('c-rej-pj',byPj.map(x=>x.label),byPj.map(x=>x.cost),'#cf4b3a');
   rejBar('c-rej-pic',byPic.map(x=>x.label),byPic.map(x=>x.cost),'#7a5230');
   rejBar('c-rej-jenis',byJenis.map(x=>x.label),byJenis.map(x=>x.cost),'#d99327');

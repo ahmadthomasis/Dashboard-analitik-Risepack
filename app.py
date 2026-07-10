@@ -2299,6 +2299,67 @@ def api_reject():
     })
 
 
+@app.route('/api/reject-debug')
+@login_required
+def api_reject_debug():
+    """Diagnosa selisih total reject vs Google Sheet.
+       Bandingkan: total dgn filter Tanggal (dipakai dashboard) vs total semua baris,
+       serta grouping per kolom yang mengandung 'bulan' (attribusi bulan versi finance).
+       Juga daftar baris yang PUNYA Debit tapi ter-exclude oleh filter Tanggal."""
+    cfg = load_kpi_config()
+    url = cfg.get('reject_csv_url')
+    try:
+        raw = _fetch_reject_rows(url)
+    except Exception as e:
+        return jsonify({'_error': str(e)}), 200
+    tgl_dari, tgl_sampai, _pic, _div = get_args()
+    d1, d2 = _pdate(tgl_dari), _pdate(tgl_sampai)
+
+    headers = list(raw[0].keys()) if raw else []
+    bulan_cols = [k for k in headers if 'bulan' in (k or '').strip().lower()]
+
+    in_range = out_range = unreadable = 0.0
+    n_in = n_out = n_unread = 0
+    excluded = []          # baris Debit>0 yang ter-exclude oleh filter Tanggal
+    by_bulan = {}          # sum debit per nilai kolom 'bulan' (jika ada)
+    for r in raw:
+        debit = _num(r.get('Debit'))
+        if debit <= 0:
+            continue
+        if bulan_cols:
+            bv = (r.get(bulan_cols[0]) or '').strip() or '(kosong)'
+            by_bulan[bv] = by_bulan.get(bv, 0.0) + debit
+        rd = _reject_date(r.get('Tanggal'))
+        if rd is None:
+            unreadable += debit; n_unread += 1
+            continue
+        if (d1 and rd < d1) or (d2 and rd > d2):
+            out_range += debit; n_out += 1
+            excluded.append({'tanggal': (r.get('Tanggal') or '').strip(),
+                             'parsed': rd.isoformat(),
+                             'kode': (r.get('Kode Order') or '').strip(),
+                             'pj': (r.get('Penanggung Jawab') or '').strip(),
+                             'bulan': (r.get(bulan_cols[0]).strip() if bulan_cols else ''),
+                             'debit': debit})
+            continue
+        in_range += debit; n_in += 1
+
+    excluded.sort(key=lambda x: -x['debit'])
+    return jsonify({
+        'periode': {'dari': tgl_dari, 'sampai': tgl_sampai},
+        'headers': headers,
+        'bulan_columns_terdeteksi': bulan_cols,
+        'total_dalam_range_tanggal': round(in_range),   # yang dipakai dashboard sekarang
+        'n_dalam_range': n_in,
+        'total_diluar_range_tanggal': round(out_range), # kandidat yang hilang
+        'n_diluar_range': n_out,
+        'total_tanggal_tak_terbaca': round(unreadable),
+        'n_tak_terbaca': n_unread,
+        'sum_per_kolom_bulan': sorted(({'bulan': k, 'total': round(v)} for k, v in by_bulan.items()), key=lambda x: -x['total']),
+        'baris_terexclude_oleh_filter_tanggal': excluded[:50],
+    })
+
+
 # ─── Complain Handling (sumber: Google Sheet QAQC / CPAR published CSV) ──
 _COMPLAIN_CACHE = {'ts': 0.0, 'rows': None, 'url': None}
 
