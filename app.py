@@ -2255,6 +2255,19 @@ def api_reject():
     tgl_dari, tgl_sampai, _pic, _div = get_args()
     d1, d2 = _pdate(tgl_dari), _pdate(tgl_sampai)
 
+    # Reject diatribusi per BULAN oleh finance (kolom "Bulan"), bukan per tanggal kejadian.
+    # Contoh: reject Bulan=Jun bisa saja Tanggal-nya 07 Jul. Supaya total cocok dgn pivot
+    # Google Sheet, filter periode pakai bulan yang tercakup rentang [d1,d2] (tab per-tahun).
+    allowed_months = None
+    if d1 and d2:
+        allowed_months = set()
+        y, m = d1.year, d1.month
+        while (y, m) <= (d2.year, d2.month):
+            allowed_months.add(m)
+            m += 1
+            if m > 12:
+                m = 1; y += 1
+
     total = 0.0
     count = 0
     by_pj, by_pic, by_jenis = {}, {}, {}
@@ -2263,13 +2276,16 @@ def api_reject():
         debit = _num(r.get('Debit'))
         if debit <= 0:
             continue
-        # Filter periode berdasar kolom Tanggal (lewati yang di luar rentang; yg tak terbaca tetap ikut)
-        rd = _reject_date(r.get('Tanggal'))
-        if rd is not None:
-            if d1 and rd < d1:
-                continue
-            if d2 and rd > d2:
-                continue
+        # Filter periode: utamakan kolom "Bulan" (atribusi finance); fallback ke Tanggal bila kosong.
+        if allowed_months is not None:
+            bln = _RJ_MONTHS.get((r.get('Bulan') or '').strip()[:3].lower())
+            if bln is not None:
+                if bln not in allowed_months:
+                    continue
+            else:
+                rd = _reject_date(r.get('Tanggal'))
+                if rd is not None and ((d1 and rd < d1) or (d2 and rd > d2)):
+                    continue
         pj = (r.get('Penanggung Jawab') or '').strip() or '(kosong)'
         pic = (r.get('PIC') or '').strip() or '(kosong)'
         jn = (r.get('Jenis Reject') or '').strip() or '(kosong)'
