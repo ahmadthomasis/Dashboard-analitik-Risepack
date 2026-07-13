@@ -1118,13 +1118,17 @@ def api_detail():
 
     # Nama produk asli dari tb_produksis (cocok per sko_key + jenis_bahan, fallback per sko_key)
     keys = list({r['sko_key'] for r in rows if r.get('sko_key')})
-    pr_pair, pr_sko = {}, {}
+    pr_pair, pr_sko, sv_map = {}, {}, {}
     if keys:
         ph = ','.join(['%s'] * len(keys))
         for p in query(f"SELECT sko_key, jenis_bahan, nama_produk FROM tb_produksis "
                        f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> ''", keys):
             pr_sko.setdefault(p['sko_key'], p['nama_produk'])
             pr_pair[(p['sko_key'], (p['jenis_bahan'] or '').strip())] = p['nama_produk']
+        # Vendor produksi per sko_key dari tb_spks (vendor_ve)
+        for s in query(f"SELECT sko_key, MAX(vendor_ve) AS vendor FROM tb_spks "
+                       f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys):
+            sv_map[s['sko_key']] = s['vendor']
 
     out = []
     _ft = load_kpi_config().get('financial_targets', {})
@@ -1139,6 +1143,7 @@ def api_detail():
         pm = round((total - modal) / total * 100, 1) if total else 0
         out.append({
             'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
+            'vendor': (sv_map.get(r['sko_key']) or '').strip(),
             'nama_produk': nm,
             'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
             'quantity': int(qty),
