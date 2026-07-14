@@ -734,6 +734,132 @@ def api_kpi_prodev_detail():
                             'app_range': [ad1.isoformat(), ad2.isoformat()] if app_ok else None},
                     'summary': summary, 'rows': rows})
 
+
+@app.route('/api/kpi-sample-maker-detail')
+@login_required
+def api_kpi_sample_maker_detail():
+    """Rincian per-order untuk AUDIT KPI Sample Maker (Kiki) — era calculator (Supabase).
+       Catatan: revisi_rakit (10%) belum ada kolomnya di calculator, jadi tidak diaudit di sini."""
+    cfg = load_kpi_config()
+    d1, d2 = _pd_range()
+    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
+    rows = []
+    try:
+        if app_ok:
+            recs = query_pg("""
+                SELECT kode_order, nama_customer, customer_name, brand_name,
+                       deadline, tanggal_selesai_rakit, tingkat_kepuasan, status_dummy_final
+                FROM public.prodev_orders
+                WHERE is_cancelled=false AND deadline IS NOT NULL
+                  AND sample_maker_id=(SELECT id FROM auth.users WHERE email=%s)
+                  AND deadline BETWEEN %s AND %s
+                ORDER BY deadline
+            """, [cfg.get('sample_maker_email', ''), ad1.isoformat(), ad2.isoformat()])
+            for r in recs:
+                kp = (r['tingkat_kepuasan'] or '').strip().lower()
+                fin = (r['status_dummy_final'] or '').strip().lower()
+                sr = r['tanggal_selesai_rakit']
+                dl = r['deadline']
+                rows.append({
+                    'kode': r['kode_order'] or '',
+                    'customer': (r['nama_customer'] or r['customer_name'] or r['brand_name'] or ''),
+                    'deadline': dl.isoformat() if dl else None,
+                    'selesai_rakit': sr.isoformat() if sr else None,
+                    'kepuasan': r['tingkat_kepuasan'] or '',
+                    'dummy_final': r['status_dummy_final'] or '',
+                    'is_puas': kp == 'puas',
+                    'selesai': sr is not None,
+                    'ontime': (sr is not None and dl is not None and sr <= dl),
+                    'final_ok': fin == 'tersedia',
+                    'final_in': fin != '',
+                })
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'rows': []})
+    tot = len(rows)
+    summary = {
+        'total_order': tot,
+        'puas': sum(1 for r in rows if r['is_puas']),
+        'ontime_ok': sum(1 for r in rows if r['ontime']),
+        'ontime_tot': sum(1 for r in rows if r['selesai']),
+        'final_ok': sum(1 for r in rows if r['final_ok']),
+        'final_tot': sum(1 for r in rows if r['final_in']),
+    }
+    return jsonify({'valid': True, 'era': {'csv': csv_ok, 'app': app_ok},
+                    'summary': summary, 'rows': rows})
+
+
+@app.route('/api/kpi-estimator-detail')
+@login_required
+def api_kpi_estimator_detail():
+    """Rincian per-request untuk AUDIT KPI Estimator (Hani). Sumber: requests + quotations (Supabase).
+       Kecepatan: hanya request yang sudah completed. Closing: semua request 'done' di periode."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _p, _d = get_args()
+    def pdate(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pdate(tgl_dari), pdate(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    email = cfg.get('estimator_email', '')
+    params = {'em': email, 'd1': d1.isoformat(), 'd2': d2.isoformat()}
+    rows = []
+    try:
+        recs = query_pg(f"""
+            SELECT r.*,
+              (r.submitted_at AT TIME ZONE 'Asia/Jakarta') AS _submit_wib,
+              (r.completed_at AT TIME ZONE 'Asia/Jakarta') AS _complete_wib,
+              CASE WHEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::time >= TIME '16:30'
+                   THEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date + 1
+                   ELSE (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date END AS _deadline,
+              CASE WHEN r.completed_at IS NULL THEN NULL
+                   WHEN (r.completed_at AT TIME ZONE 'Asia/Jakarta')::date <=
+                        CASE WHEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::time >= TIME '16:30'
+                             THEN (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date + 1
+                             ELSE (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date END
+                   THEN true ELSE false END AS _same_day,
+              (SELECT dq.deal_status FROM public.quotations dq
+                 WHERE dq.request_id = r.id AND dq.is_active = true LIMIT 1) AS _deal_status
+            FROM public.requests r
+            WHERE r.status = 'done' AND r.submitted_at IS NOT NULL
+              AND (r.submitted_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN %(d1)s AND %(d2)s
+              AND EXISTS (SELECT 1 FROM public.quotations q WHERE q.request_id = r.id
+                          AND q.estimator_id = (SELECT id FROM auth.users WHERE email = %(em)s))
+            ORDER BY r.submitted_at
+        """, params)
+        _labelkeys = ['customer_name', 'nama_customer', 'nama', 'product_name',
+                      'nama_produk', 'title', 'request_no', 'kode', 'name']
+        for r in recs:
+            label = ''
+            for k in _labelkeys:
+                if r.get(k):
+                    label = str(r[k]); break
+            sub = r.get('_submit_wib'); comp = r.get('_complete_wib'); dl = r.get('_deadline')
+            deal = (r.get('_deal_status') or '').strip().lower()
+            rows.append({
+                'label': label,
+                'submit': sub.isoformat(sep=' ', timespec='minutes') if sub else None,
+                'complete': comp.isoformat(sep=' ', timespec='minutes') if comp else None,
+                'deadline': dl.isoformat() if dl else None,
+                'in_speed': comp is not None,          # masuk penyebut kecepatan
+                'same_day': bool(r.get('_same_day')),
+                'deal_status': r.get('_deal_status') or '',
+                'is_deal': deal == 'deal',
+            })
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'rows': []})
+    total2 = len(rows)
+    total1 = sum(1 for r in rows if r['in_speed'])
+    summary = {
+        'total_done': total2,
+        'speed_ok': sum(1 for r in rows if r['same_day']),
+        'speed_tot': total1,
+        'deal': sum(1 for r in rows if r['is_deal']),
+        'deal_tot': total2,
+    }
+    return jsonify({'valid': True, 'range': [d1.isoformat(), d2.isoformat()],
+                    'summary': summary, 'rows': rows})
+
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
     """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""

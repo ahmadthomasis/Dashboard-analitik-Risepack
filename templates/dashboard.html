@@ -435,6 +435,11 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <div class="ch-sub">Kecepatan Perhitungan 1 Hari (submit ≥16:30 WIB → deadline besok) · Closing Rate Deal (target 15%) · data dari aplikasi calculator (Supabase)</div>
             <div class="table-wrap" id="estimator-table"><div class="loading">Memuat…</div></div>
           </div>
+          <div class="card" style="margin-top:15px" id="estimator-audit-card">
+            <h3>Rincian per Request — Audit KPI</h3>
+            <div class="ch-sub">Cek asal angka Kecepatan &amp; Closing baris per baris · ✓ = dihitung tercapai · sumber: requests + quotations (Supabase)</div>
+            <div class="table-wrap" id="estimator-audit" style="max-height:60vh;overflow:auto;margin-top:10px"><div class="loading">Memuat…</div></div>
+          </div>
         </div>
         <div id="kpiview-inner" style="display:none">
           <div id="inner-picker" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
@@ -465,6 +470,11 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <h3>KPI Scorecard — Sample Maker (Kiki)</h3>
             <div class="ch-sub">Kepuasan &amp; Ketepatan Sampel (Adit+Fau digabung) · 100% Sampel Final (kolom N) · Revisi rakit (kolom P) · Jan–Jun sheet, Jul+ calculator</div>
             <div class="table-wrap" id="sm-table"><div class="loading">Memuat…</div></div>
+          </div>
+          <div class="card" style="margin-top:15px" id="sm-audit-card">
+            <h3>Rincian per Order — Audit KPI (era calculator)</h3>
+            <div class="ch-sub">Cek asal angka Kepuasan, Ketepatan Rakit &amp; Sampel Final baris per baris · ✓ = dihitung tercapai · sumber: prodev_orders (Supabase). Catatan: Revisi rakit belum ada kolomnya di calculator.</div>
+            <div class="table-wrap" id="sm-audit" style="max-height:60vh;overflow:auto;margin-top:10px"><div class="loading">Memuat…</div></div>
           </div>
         </div>
       </section>
@@ -1627,6 +1637,35 @@ async function loadKpiEstimator(q){
   const d = await fetchJSON('/api/kpi-estimator?'+q);
   if(d && d.error){ document.getElementById('estimator-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
   renderScorecard(d, 'estimator-summary', 'estimator-table');
+  loadEstimatorAudit(q);
+}
+async function loadEstimatorAudit(q){
+  const el=document.getElementById('estimator-audit'); if(!el) return;
+  const d=await fetchJSON('/api/kpi-estimator-detail?'+q);
+  if(!d || !d.valid){ el.innerHTML='<div class="loading">–</div>'; return; }
+  if(d.error){ el.innerHTML=`<div class="loading">Gagal: ${esc(d.error)}</div>`; return; }
+  const s=d.summary||{};
+  const yes='<span style="color:var(--green);font-weight:700">✓</span>';
+  const no='<span style="color:var(--red)">✗</span>';
+  const gr='<span style="color:var(--ink-3)">–</span>';
+  const body=(d.rows||[]).map((r,i)=>`<tr>
+    <td class="num">${i+1}</td>
+    <td>${esc(r.label)||'<span style="color:var(--ink-3)">(tanpa nama)</span>'}</td>
+    <td>${r.submit||'-'}</td>
+    <td>${r.complete||'<span style="color:var(--ink-3)">belum</span>'}</td>
+    <td>${r.deadline||'-'}</td>
+    <td style="text-align:center">${r.in_speed?(r.same_day?yes:no):gr}</td>
+    <td style="text-align:center">${esc(r.deal_status)||gr} ${r.is_deal?yes:''}</td>
+  </tr>`).join('');
+  el.innerHTML=`<table style="min-width:820px;font-size:12.5px"><thead><tr>
+      <th class="num">#</th><th>Request</th><th>Submit (WIB)</th><th>Selesai (WIB)</th><th>Deadline</th>
+      <th style="text-align:center">Kecepatan 1 Hari</th><th style="text-align:center">Closing (Deal)</th>
+    </tr></thead><tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada request pada periode ini</td></tr>'}
+    <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
+      <td colspan="5" style="text-align:right">TOTAL (cocokkan dgn scorecard)</td>
+      <td style="text-align:center">${s.speed_ok}/${s.speed_tot}</td>
+      <td style="text-align:center">${s.deal}/${s.deal_tot}</td>
+    </tr></tbody></table>`;
 }
 let PRODEV_SEL = null;
 function prodevPick(id){ PRODEV_SEL = id; renderView(); }
@@ -1683,6 +1722,40 @@ async function loadKpiSampleMaker(q){
   const d = await fetchJSON('/api/kpi-sample-maker?'+q);
   if(d && d.error){ document.getElementById('sm-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
   renderScorecard(d, 'sm-summary', 'sm-table');
+  loadSmAudit(q);
+}
+async function loadSmAudit(q){
+  const el=document.getElementById('sm-audit'); if(!el) return;
+  const card=document.getElementById('sm-audit-card');
+  const d=await fetchJSON('/api/kpi-sample-maker-detail?'+q);
+  if(!d || !d.valid){ el.innerHTML='<div class="loading">–</div>'; return; }
+  if(d.error){ el.innerHTML=`<div class="loading">Gagal: ${esc(d.error)}</div>`; return; }
+  if(card) card.style.display = d.era && d.era.app ? '' : 'none';
+  if(!d.era || !d.era.app) return;
+  const s=d.summary||{};
+  const yes='<span style="color:var(--green);font-weight:700">✓</span>';
+  const no='<span style="color:var(--red)">✗</span>';
+  const gr='<span style="color:var(--ink-3)">–</span>';
+  const body=(d.rows||[]).map((r,i)=>`<tr>
+    <td class="num">${i+1}</td>
+    <td>${esc(r.kode)||'-'}</td>
+    <td>${esc(r.customer)||'-'}</td>
+    <td>${r.deadline||'-'}</td>
+    <td>${r.selesai_rakit||'<span style="color:var(--ink-3)">belum</span>'}</td>
+    <td style="text-align:center">${esc(r.kepuasan)||'<span style="color:var(--ink-3)">-</span>'} ${r.is_puas?yes:''}</td>
+    <td style="text-align:center">${r.selesai?(r.ontime?yes:no):gr}</td>
+    <td style="text-align:center">${esc(r.dummy_final)||'<span style="color:var(--ink-3)">-</span>'} ${r.final_in?(r.final_ok?yes:no):''}</td>
+  </tr>`).join('');
+  el.innerHTML=`<table style="min-width:880px;font-size:12.5px"><thead><tr>
+      <th class="num">#</th><th>Kode Order</th><th>Customer</th><th>Deadline</th><th>Selesai Rakit</th>
+      <th style="text-align:center">Kepuasan</th><th style="text-align:center">Tepat Waktu Rakit</th><th style="text-align:center">Sampel Final</th>
+    </tr></thead><tbody>${body||'<tr><td colspan="8" class="loading">Tidak ada order pada periode ini</td></tr>'}
+    <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
+      <td colspan="5" style="text-align:right">TOTAL (cocokkan dgn scorecard)</td>
+      <td style="text-align:center">${s.puas}/${s.total_order}</td>
+      <td style="text-align:center">${s.ontime_ok}/${s.ontime_tot}</td>
+      <td style="text-align:center">${s.final_ok}/${s.final_tot}</td>
+    </tr></tbody></table>`;
 }
 let INNER_SEL = null;
 function innerPick(id){ INNER_SEL = id; renderView(); }
