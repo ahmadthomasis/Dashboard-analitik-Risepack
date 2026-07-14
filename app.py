@@ -671,6 +671,69 @@ def api_kpi_prodev_debug():
         return jsonify(out), 500
     return jsonify(out)
 
+
+@app.route('/api/kpi-prodev-detail')
+@login_required
+def api_kpi_prodev_detail():
+    """Rincian per-order untuk AUDIT KPI Prodev (layouter) — supaya angka mis. 3/21 bisa dicek
+       satu per satu. Hanya era calculator (Supabase); era sheet (Jan–Jun) tidak per-baris di sini."""
+    cfg = load_kpi_config()
+    d1, d2 = _pd_range()
+    lays = cfg.get('prodev_layouters', [])
+    wid = request.args.get('who') or (lays[0]['id'] if lays else None)
+    L = next((x for x in lays if x['id'] == wid), None)
+    if not L:
+        return jsonify({'valid': False})
+    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
+    rows = []
+    try:
+        if app_ok:
+            recs = query_pg("""
+                SELECT kode_order, nama_customer, customer_name, brand_name,
+                       deadline, tanggal_selesai_layout, status_deal,
+                       revisi_prodev, tingkat_kepuasan
+                FROM public.prodev_orders
+                WHERE is_cancelled=false AND deadline IS NOT NULL
+                  AND layouter_id=(SELECT id FROM public.profiles WHERE full_name=%s LIMIT 1)
+                  AND deadline BETWEEN %s AND %s
+                ORDER BY deadline
+            """, [L['layouter'], ad1.isoformat(), ad2.isoformat()])
+            for r in recs:
+                sd = (r['status_deal'] or '').strip().lower()
+                sel = r['tanggal_selesai_layout']
+                dl = r['deadline']
+                kp = (r['tingkat_kepuasan'] or '').strip().lower()
+                rv = r['revisi_prodev']
+                rows.append({
+                    'kode': r['kode_order'] or '',
+                    'customer': (r['nama_customer'] or r['customer_name'] or r['brand_name'] or ''),
+                    'deadline': dl.isoformat() if dl else None,
+                    'selesai_layout': sel.isoformat() if sel else None,
+                    'status_deal': r['status_deal'] or '',
+                    'revisi_prodev': rv if rv is not None else '',
+                    'kepuasan': r['tingkat_kepuasan'] or '',
+                    'is_deal': sd == 'deal',
+                    'selesai': sel is not None,
+                    'ontime': (sel is not None and dl is not None and sel <= dl),
+                    'no_revisi': (rv in (None, 0)),
+                    'is_puas': kp == 'puas',
+                })
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'rows': []})
+    tot = len(rows)
+    summary = {
+        'total_order': tot,
+        'deal': sum(1 for r in rows if r['is_deal']),
+        'ontime_ok': sum(1 for r in rows if r['ontime']),
+        'ontime_tot': sum(1 for r in rows if r['selesai']),
+        'no_revisi': sum(1 for r in rows if r['no_revisi']),
+        'puas': sum(1 for r in rows if r['is_puas']),
+    }
+    return jsonify({'valid': True, 'who': L['name'],
+                    'era': {'csv': csv_ok, 'app': app_ok,
+                            'app_range': [ad1.isoformat(), ad2.isoformat()] if app_ok else None},
+                    'summary': summary, 'rows': rows})
+
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
     """WHERE tambahan berbasis rentang tanggal (range), PIC, dan divisi."""

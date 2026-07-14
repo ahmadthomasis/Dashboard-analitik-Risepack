@@ -453,6 +453,11 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <div class="ch-sub">50% Sampel jadi Deal (kolom Y) · Ketepatan Waktu (kolom Q) · Revisi file/desain · Kepuasan (kolom V) · Jan–Jun sheet, Jul+ calculator · pilih layouter di atas</div>
             <div class="table-wrap" id="prodev-table"><div class="loading">Memuat…</div></div>
           </div>
+          <div class="card" style="margin-top:15px" id="prodev-audit-card">
+            <h3>Rincian per Order — Audit KPI (era calculator)</h3>
+            <div class="ch-sub">Cek asal angka tiap KPI (mis. Deal 3/21) baris per baris · ✓ = dihitung sebagai tercapai · sumber: tabel prodev_orders (Supabase)</div>
+            <div class="table-wrap" id="prodev-audit" style="max-height:60vh;overflow:auto;margin-top:10px"><div class="loading">Memuat…</div></div>
+          </div>
         </div>
         <div id="kpiview-sm" style="display:none">
           <div class="kpi-grid" id="sm-summary" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin-bottom:16px"></div>
@@ -1636,6 +1641,43 @@ async function loadKpiProdev(q){
   if(d && d.error){ document.getElementById('prodev-table').innerHTML=`<div class="loading">Gagal memuat: ${esc(d.error)}</div>`; return; }
   if(!d.valid){ document.getElementById('prodev-table').innerHTML='<div class="loading">Pilih layouter…</div>'; return; }
   renderScorecard(d, 'prodev-summary', 'prodev-table');
+  loadProdevAudit(q);
+}
+async function loadProdevAudit(q){
+  const el=document.getElementById('prodev-audit'); if(!el) return;
+  const card=document.getElementById('prodev-audit-card');
+  const url='/api/kpi-prodev-detail?'+q + (PRODEV_SEL ? '&who='+encodeURIComponent(PRODEV_SEL) : '');
+  const d=await fetchJSON(url);
+  if(!d || !d.valid){ el.innerHTML='<div class="loading">–</div>'; return; }
+  if(d.error){ el.innerHTML=`<div class="loading">Gagal: ${esc(d.error)}</div>`; return; }
+  if(card) card.style.display = d.era && d.era.app ? '' : 'none';   // sembunyikan kalau periode murni sheet (Jan–Jun)
+  if(!d.era || !d.era.app) return;
+  const s=d.summary||{};
+  const yes='<span style="color:var(--green);font-weight:700">✓</span>';
+  const no='<span style="color:var(--red)">✗</span>';
+  const body=(d.rows||[]).map((r,i)=>`<tr>
+    <td class="num">${i+1}</td>
+    <td>${esc(r.kode)||'-'}</td>
+    <td>${esc(r.customer)||'-'}</td>
+    <td>${r.deadline||'-'}</td>
+    <td>${r.selesai_layout||'<span style="color:var(--ink-3)">belum</span>'}</td>
+    <td style="text-align:center">${esc(r.status_deal)||'<span style="color:var(--ink-3)">-</span>'} ${r.is_deal?yes:''}</td>
+    <td style="text-align:center">${r.selesai?(r.ontime?yes:no):'<span style="color:var(--ink-3)">–</span>'}</td>
+    <td style="text-align:center">${r.no_revisi?yes:('Rev'+r.revisi_prodev+' '+no)}</td>
+    <td style="text-align:center">${esc(r.kepuasan)||'<span style="color:var(--ink-3)">-</span>'} ${r.is_puas?yes:''}</td>
+  </tr>`).join('');
+  el.innerHTML=`<table style="min-width:920px;font-size:12.5px"><thead><tr>
+      <th class="num">#</th><th>Kode Order</th><th>Customer</th><th>Deadline</th><th>Selesai Layout</th>
+      <th style="text-align:center">Deal</th><th style="text-align:center">Tepat Waktu</th>
+      <th style="text-align:center">Tanpa Revisi</th><th style="text-align:center">Kepuasan</th>
+    </tr></thead><tbody>${body||'<tr><td colspan="9" class="loading">Tidak ada order pada periode ini</td></tr>'}
+    <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
+      <td colspan="5" style="text-align:right">TOTAL (cocokkan dgn scorecard)</td>
+      <td style="text-align:center">${s.deal}/${s.total_order}</td>
+      <td style="text-align:center">${s.ontime_ok}/${s.ontime_tot}</td>
+      <td style="text-align:center">${s.no_revisi}/${s.total_order}</td>
+      <td style="text-align:center">${s.puas}/${s.total_order}</td>
+    </tr></tbody></table>`;
 }
 async function loadKpiSampleMaker(q){
   const d = await fetchJSON('/api/kpi-sample-maker?'+q);
