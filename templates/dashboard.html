@@ -450,9 +450,9 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <div class="table-wrap" id="inner-table"><div class="loading">Memuat…</div></div>
           </div>
           <div class="card" style="margin-top:15px" id="inner-audit-card">
-            <h3>Rincian per Order — Audit KPI Sampel (era calculator)</h3>
-            <div class="ch-sub">Cek Ketepatan &amp; Kepuasan Sampel baris per baris (order dibuat inner ini) · ✓ = tercapai · sumber: prodev_orders. KPI Produksi (MySQL) &amp; FAW/FSA (sheet) tidak per-baris di sini.</div>
-            <div class="table-wrap" id="inner-audit" style="max-height:55vh;overflow:auto;margin-top:10px"><div class="loading">Memuat…</div></div>
+            <h3>Rincian per KPI — Audit Inner Sales</h3>
+            <div class="ch-sub">Keempat KPI dipecah per baris (grain beda: SKO produksi · form admin · order sampel) · ✓ = tercapai · TOTAL tiap sub-tabel harus cocok dgn scorecard di atas.</div>
+            <div class="table-wrap" id="inner-audit" style="max-height:62vh;overflow:auto;margin-top:10px"><div class="loading">Memuat…</div></div>
           </div>
         </div>
         <div id="kpiview-prodev" style="display:none">
@@ -1781,36 +1781,54 @@ async function loadKpiInner(q){
 }
 async function loadInnerAudit(q){
   const el=document.getElementById('inner-audit'); if(!el) return;
-  const card=document.getElementById('inner-audit-card');
   const url='/api/kpi-inner-detail?'+q + (INNER_SEL ? '&inner='+encodeURIComponent(INNER_SEL) : '');
   const d=await fetchJSON(url);
   if(!d || !d.valid){ el.innerHTML='<div class="loading">–</div>'; return; }
   if(d.error){ el.innerHTML=`<div class="loading">Gagal: ${esc(d.error)}</div>`; return; }
-  if(card) card.style.display = d.era && d.era.app ? '' : 'none';
-  if(!d.era || !d.era.app) return;
-  const s=d.summary||{};
   const yes='<span style="color:var(--green);font-weight:700">✓</span>';
   const no='<span style="color:var(--red)">✗</span>';
   const gr='<span style="color:var(--ink-3)">–</span>';
-  const body=(d.rows||[]).map((r,i)=>`<tr>
-    <td class="num">${i+1}</td>
-    <td>${esc(r.kode)||'-'}</td>
-    <td>${esc(r.customer)||'-'}</td>
-    <td style="text-align:center">${esc(r.tipe)||'-'}</td>
-    <td>${r.deadline||'-'}</td>
-    <td>${r.selesai_rakit||'<span style="color:var(--ink-3)">belum</span>'}</td>
-    <td style="text-align:center">${r.selesai?(r.ontime?yes:no):gr}</td>
-    <td style="text-align:center">${esc(r.kepuasan)||'<span style="color:var(--ink-3)">-</span>'} ${r.is_puas?yes:''}</td>
-  </tr>`).join('');
-  el.innerHTML=`<table style="min-width:860px;font-size:12.5px"><thead><tr>
-      <th class="num">#</th><th>Kode Order</th><th>Customer</th><th style="text-align:center">Tipe</th><th>Deadline</th><th>Selesai Rakit</th>
-      <th style="text-align:center">Ketepatan Sampel</th><th style="text-align:center">Kepuasan</th>
-    </tr></thead><tbody>${body||'<tr><td colspan="8" class="loading">Tidak ada order pada periode ini</td></tr>'}
-    <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
-      <td colspan="6" style="text-align:right">TOTAL (cocokkan dgn scorecard)</td>
-      <td style="text-align:center">${s.ontime_ok}/${s.ontime_tot}</td>
-      <td style="text-align:center">${s.puas}/${s.total_order}</td>
-    </tr></tbody></table>`;
+  const sub=(t)=>`<div style="font-weight:700;font-size:13px;margin:16px 0 6px;color:var(--ink)">${t}</div>`;
+  // KPI1 — On-Time Produksi (MySQL, per SKO)
+  const P=d.prod||{rows:[],summary:{}}; const ps=P.summary||{};
+  const pbody=(P.rows||[]).map((r,i)=>`<tr>
+    <td class="num">${i+1}</td><td>${esc(r.sko)||'-'}</td><td>${esc(r.pic)||'-'}</td>
+    <td>${r.deadline||'-'}</td><td>${r.tgl_selesai||'<span style="color:var(--ink-3)">belum</span>'}</td>
+    <td style="text-align:center">${r.ontime?yes:no}</td></tr>`).join('');
+  const ptab=P.error?`<div class="loading">Gagal: ${esc(P.error)}</div>`:
+    `<table style="min-width:640px;font-size:12.5px"><thead><tr><th class="num">#</th><th>SKO</th><th>PIC (sales)</th><th>Deadline FAW</th><th>Selesai SPK</th><th style="text-align:center">On-Time</th></tr></thead>
+     <tbody>${pbody||'<tr><td colspan="6" class="loading">Tidak ada SPK pada periode ini</td></tr>'}
+     <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:center">${ps.ontime||0}/${ps.total||0}</td></tr></tbody></table>`;
+  // KPI3 — FAW/FSA/FPS Tepat Waktu (sheet admin, per form)
+  const F=d.faw||{rows:[],summary:{}}; const fs=F.summary||{};
+  const fbody=(F.rows||[]).map((r,i)=>`<tr>
+    <td class="num">${i+1}</td><td>${esc(r.kode)||'-'}</td>
+    <td>${r.request_date||'-'}</td><td>${r.finish_date||'<span style="color:var(--ink-3)">-</span>'}</td>
+    <td style="text-align:center">${r.ok?yes:no}</td></tr>`).join('');
+  const ftab=F.error?`<div class="loading">Gagal: ${esc(F.error)}</div>`:
+    `<table style="min-width:560px;font-size:12.5px"><thead><tr><th class="num">#</th><th>Kode/Form</th><th>Request Date</th><th>Finish Date</th><th style="text-align:center">Tepat Waktu</th></tr></thead>
+     <tbody>${fbody||'<tr><td colspan="5" class="loading">Tidak ada form pada periode ini</td></tr>'}
+     <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5"><td colspan="4" style="text-align:right">TOTAL</td><td style="text-align:center">${fs.ok||0}/${fs.total||0}</td></tr></tbody></table>`;
+  // KPI2+KPI4 — Ketepatan & Kepuasan Sampel (calculator, per prodev order)
+  const s=d.summary||{};
+  let stab;
+  if(d.era && d.era.app){
+    const sbody=(d.rows||[]).map((r,i)=>`<tr>
+      <td class="num">${i+1}</td><td>${esc(r.kode)||'-'}</td><td>${esc(r.customer)||'-'}</td>
+      <td style="text-align:center">${esc(r.tipe)||'-'}</td><td>${r.deadline||'-'}</td>
+      <td>${r.selesai_rakit||'<span style="color:var(--ink-3)">belum</span>'}</td>
+      <td style="text-align:center">${r.selesai?(r.ontime?yes:no):gr}</td>
+      <td style="text-align:center">${esc(r.kepuasan)||'<span style="color:var(--ink-3)">-</span>'} ${r.is_puas?yes:''}</td></tr>`).join('');
+    stab=`<table style="min-width:860px;font-size:12.5px"><thead><tr><th class="num">#</th><th>Kode Order</th><th>Customer</th><th style="text-align:center">Tipe</th><th>Deadline</th><th>Selesai Rakit</th><th style="text-align:center">Ketepatan Sampel</th><th style="text-align:center">Kepuasan</th></tr></thead>
+     <tbody>${sbody||'<tr><td colspan="8" class="loading">Tidak ada order pada periode ini</td></tr>'}
+     <tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5"><td colspan="6" style="text-align:right">TOTAL</td><td style="text-align:center">${s.ontime_ok}/${s.ontime_tot}</td><td style="text-align:center">${s.puas}/${s.total_order}</td></tr></tbody></table>`;
+  } else {
+    stab=`<div class="loading" style="padding:20px">Periode ini memakai data sheet (Jan–Jun), belum ada rincian per-order calculator. Pilih periode Jul+ untuk audit sampel per baris.</div>`;
+  }
+  el.innerHTML =
+    sub('1 · On-Time Pengiriman Produksi <span style="font-weight:400;color:var(--ink-3)">(MySQL · per SKO · bobot 50%)</span>')+`<div style="overflow-x:auto">${ptab}</div>`+
+    sub('3 · FAW/FSA/FPS Tepat Waktu <span style="font-weight:400;color:var(--ink-3)">(sheet admin · per form · bobot 20%)</span>')+`<div style="overflow-x:auto">${ftab}</div>`+
+    sub('2 &amp; 4 · Ketepatan &amp; Kepuasan Sampel <span style="font-weight:400;color:var(--ink-3)">(calculator · per order · bobot 20% + 10%)</span>')+`<div style="overflow-x:auto">${stab}</div>`;
 }
 
 

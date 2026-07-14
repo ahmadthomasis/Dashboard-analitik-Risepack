@@ -868,12 +868,64 @@ def api_kpi_estimator_detail():
                     'summary': summary, 'rows': rows})
 
 
+def _inner_ontime_prod_rows(sales_list, d1s, d2s):
+    """Per-SKO (MySQL): SPK selesai <= deadline FAW, difilter PIC. Audit KPI On-Time Produksi."""
+    if not sales_list:
+        return []
+    ph = ','.join(['%s'] * len(sales_list))
+    return query(f"""
+        SELECT o.sko, o.pic, fd.deadline, sp.tgl_selesai,
+          CASE WHEN sp.tgl_selesai IS NOT NULL AND sp.tgl_selesai <= fd.deadline THEN 1 ELSE 0 END ot
+        FROM (SELECT sko_key, MIN(tgl_deadline) deadline FROM tb_faws
+              WHERE sko_key IS NOT NULL AND tgl_deadline BETWEEN %s AND %s GROUP BY sko_key) fd
+        JOIN (SELECT sko_key, MAX(name) pic, MAX(sko) sko FROM order_risepack
+              WHERE (flag_dummy <> 'dummy' OR flag_dummy IS NULL) GROUP BY sko_key) o ON o.sko_key = fd.sko_key
+        LEFT JOIN (SELECT sko_key, MAX(tgl_selesai_all) tgl_selesai FROM tb_spks GROUP BY sko_key) sp
+              ON sp.sko_key = fd.sko_key
+        WHERE o.pic IN ({ph})
+        ORDER BY fd.deadline
+    """, [d1s, d2s] + list(sales_list))
+
+def _inner_faw_fsa_rows(url, admin, d1, d2):
+    """Per-form (CSV admin): Request Date == Finish Date (kolom J). Audit FAW/FSA/FPS Tepat Waktu."""
+    rows = _inner_csv(url)
+    if not rows:
+        return []
+    h = _find_header(rows, 'request date')
+    header = rows[h]
+    req_i = _hdr_idx(header, 'request date', default=1)
+    adm_i = _hdr_idx(header, 'assign to admin', 'admin', default=7)
+    cod_i = _hdr_idx(header, 'kode', 'no rsp', 'sko', 'nomor')
+    fin_i = 9
+    al = (admin or '').strip().lower()
+    out = []
+    for r in rows[h+1:]:
+        if len(r) <= max(req_i, adm_i, fin_i):
+            continue
+        adm = (r[adm_i] or '').strip().lower()
+        if not adm or (al not in adm and adm not in al):
+            continue
+        rd = _iddate(r[req_i])
+        if not rd or not (d1 <= rd <= d2):
+            continue
+        fd = _iddate(r[fin_i])
+        out.append({
+            'kode': (r[cod_i].strip() if (cod_i is not None and len(r) > cod_i and r[cod_i]) else ''),
+            'request_date': rd.isoformat(),
+            'finish_date': fd.isoformat() if fd else None,
+            'ok': bool(fd and rd == fd),
+        })
+    return out
+
+def _dstr(x):
+    return x.isoformat() if hasattr(x, 'isoformat') else (str(x) if x else None)
+
 @app.route('/api/kpi-inner-detail')
 @login_required
 def api_kpi_inner_detail():
-    """Rincian per-order (era calculator) untuk audit KPI Inner Sales: Ketepatan Sampel &
-       Kepuasan (dari prodev_orders, created_by inner). KPI On-Time Produksi (MySQL) &
-       FAW/FSA (sheet) bukan per-order calculator, jadi tidak ditampilkan di sini."""
+    """Rincian per-order untuk audit KPI Inner Sales, digabung dalam 1 kartu (3 sub-tabel karena
+       grain berbeda): On-Time Produksi (MySQL, per SKO), FAW/FSA/FPS (sheet, per form),
+       Ketepatan & Kepuasan Sampel (calculator, per prodev_order)."""
     cfg = load_kpi_config()
     tgl_dari, tgl_sampai, _p, _d = get_args()
     def pd(s):
@@ -923,8 +975,29 @@ def api_kpi_inner_detail():
         'ontime_tot': sum(1 for r in rows if r['selesai']),
         'puas': sum(1 for r in rows if r['is_puas']),
     }
+
+    # KPI1 On-Time Produksi (MySQL) & KPI3 FAW/FSA (sheet) — full range [d1,d2], bukan era-based
+    prod_rows, faw_rows, prod_err, faw_err = [], [], None, None
+    try:
+        for p in _inner_ontime_prod_rows(inner.get('sales', []), d1.isoformat(), d2.isoformat()):
+            prod_rows.append({
+                'sko': p.get('sko') or '', 'pic': p.get('pic') or '',
+                'deadline': _dstr(p.get('deadline')), 'tgl_selesai': _dstr(p.get('tgl_selesai')),
+                'selesai': p.get('tgl_selesai') is not None, 'ontime': bool(p.get('ot')),
+            })
+    except Exception as e:
+        prod_err = str(e)
+    try:
+        faw_rows = _inner_faw_fsa_rows(cfg.get('inner_csv_admin_url', ''), inner.get('admin', ''), d1, d2)
+    except Exception as e:
+        faw_err = str(e)
+    prod_sum = {'ontime': sum(1 for r in prod_rows if r['ontime']), 'total': len(prod_rows)}
+    faw_sum = {'ok': sum(1 for r in faw_rows if r['ok']), 'total': len(faw_rows)}
+
     return jsonify({'valid': True, 'who': inner['name'], 'era': {'csv': csv_ok, 'app': app_ok},
-                    'summary': summary, 'rows': rows})
+                    'summary': summary, 'rows': rows,
+                    'prod': {'rows': prod_rows, 'summary': prod_sum, 'error': prod_err},
+                    'faw': {'rows': faw_rows, 'summary': faw_sum, 'error': faw_err}})
 
 # ─── Helpers filter ──────────────────────────────────────────────
 def build_where(tgl_dari, tgl_sampai, pic, divisi):
