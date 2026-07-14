@@ -632,17 +632,20 @@ def api_kpi_sample_maker():
                   COUNT(*) FILTER (WHERE tingkat_kepuasan='puas') puas,
                   COUNT(*) FILTER (WHERE tanggal_selesai_rakit <= deadline) ot,
                   COUNT(*) FILTER (WHERE tanggal_selesai_rakit IS NOT NULL) ot_tot,
-                  COUNT(*) FILTER (WHERE status_dummy_final='tersedia') fin,
-                  COUNT(*) FILTER (WHERE status_dummy_final IS NOT NULL) fin_tot
+                  COUNT(*) FILTER (WHERE form_type='fsa' AND lower(status_dummy_final)='tersedia') fin,
+                  COUNT(*) FILTER (WHERE form_type='fsa') fin_tot
                 FROM public.prodev_orders
                 WHERE is_cancelled=false AND deadline IS NOT NULL
                   AND sample_maker_id=(SELECT id FROM auth.users WHERE email=%s)
                   AND deadline BETWEEN %s AND %s
             """, [cfg.get('sample_maker_email', ''), ad1.isoformat(), ad2.isoformat()])[0]
             t = int(r['tot'] or 0)
+            # Sampel Final: hanya FSA; 'Belum'/kosong ikut penyebut (belum = 0). Revisi rakit belum
+            # ada kolomnya di calculator -> dianggap 100% (tanpa revisi = berhasil).
             m = _merge_counts(m, {'kepuasan': (int(r['puas'] or 0), t),
                                   'ontime': (int(r['ot'] or 0), int(r['ot_tot'] or 0)),
-                                  'final': (int(r['fin'] or 0), int(r['fin_tot'] or 0))})
+                                  'final': (int(r['fin'] or 0), int(r['fin_tot'] or 0)),
+                                  'revisi_rakit': (t, t)})
     except Exception as e:
         return jsonify({'valid': True, 'error': str(e), 'inners': []})
     rows, tk, ta, lbl = _score_from_counts(cfg['sample_maker_kpi'], m, bands, cfg.get('labels', []))
@@ -747,7 +750,7 @@ def api_kpi_sample_maker_detail():
     try:
         if app_ok:
             recs = query_pg("""
-                SELECT kode_order, nama_customer, customer_name, brand_name,
+                SELECT kode_order, nama_customer, customer_name, brand_name, form_type,
                        deadline, tanggal_selesai_rakit, tingkat_kepuasan, status_dummy_final
                 FROM public.prodev_orders
                 WHERE is_cancelled=false AND deadline IS NOT NULL
@@ -758,11 +761,14 @@ def api_kpi_sample_maker_detail():
             for r in recs:
                 kp = (r['tingkat_kepuasan'] or '').strip().lower()
                 fin = (r['status_dummy_final'] or '').strip().lower()
+                ft = (r['form_type'] or '').strip().lower()
                 sr = r['tanggal_selesai_rakit']
                 dl = r['deadline']
+                is_fsa = ft == 'fsa'
                 rows.append({
                     'kode': r['kode_order'] or '',
                     'customer': (r['nama_customer'] or r['customer_name'] or r['brand_name'] or ''),
+                    'tipe': (r['form_type'] or '').upper(),
                     'deadline': dl.isoformat() if dl else None,
                     'selesai_rakit': sr.isoformat() if sr else None,
                     'kepuasan': r['tingkat_kepuasan'] or '',
@@ -770,8 +776,9 @@ def api_kpi_sample_maker_detail():
                     'is_puas': kp == 'puas',
                     'selesai': sr is not None,
                     'ontime': (sr is not None and dl is not None and sr <= dl),
-                    'final_ok': fin == 'tersedia',
-                    'final_in': fin != '',
+                    'is_fsa': is_fsa,                 # Sampel Final hanya untuk FSA
+                    'final_ok': is_fsa and fin == 'tersedia',
+                    'final_in': is_fsa,              # penyebut = semua FSA (termasuk 'Belum')
                 })
     except Exception as e:
         return jsonify({'valid': True, 'error': str(e), 'rows': []})
@@ -858,6 +865,65 @@ def api_kpi_estimator_detail():
         'deal_tot': total2,
     }
     return jsonify({'valid': True, 'range': [d1.isoformat(), d2.isoformat()],
+                    'summary': summary, 'rows': rows})
+
+
+@app.route('/api/kpi-inner-detail')
+@login_required
+def api_kpi_inner_detail():
+    """Rincian per-order (era calculator) untuk audit KPI Inner Sales: Ketepatan Sampel &
+       Kepuasan (dari prodev_orders, created_by inner). KPI On-Time Produksi (MySQL) &
+       FAW/FSA (sheet) bukan per-order calculator, jadi tidak ditampilkan di sini."""
+    cfg = load_kpi_config()
+    tgl_dari, tgl_sampai, _p, _d = get_args()
+    def pd(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    inners = cfg.get('inner_sales', [])
+    iid = request.args.get('inner') or (inners[0]['id'] if inners else None)
+    inner = next((x for x in inners if x['id'] == iid), None)
+    if not inner:
+        return jsonify({'valid': False})
+    csv_ok, app_ok, cd1, cd2, ad1, ad2 = _era(cfg, d1, d2)
+    rows = []
+    try:
+        if app_ok:
+            recs = query_pg("""
+                SELECT kode_order, nama_customer, customer_name, brand_name, form_type,
+                       deadline, tanggal_selesai_rakit, tingkat_kepuasan
+                FROM public.prodev_orders
+                WHERE is_cancelled=false AND deadline IS NOT NULL
+                  AND created_by=(SELECT id FROM auth.users WHERE email=%s)
+                  AND deadline BETWEEN %s AND %s
+                ORDER BY deadline
+            """, [inner.get('email', ''), ad1.isoformat(), ad2.isoformat()])
+            for r in recs:
+                kp = (r['tingkat_kepuasan'] or '').strip().lower()
+                sr = r['tanggal_selesai_rakit']; dl = r['deadline']
+                rows.append({
+                    'kode': r['kode_order'] or '',
+                    'customer': (r['nama_customer'] or r['customer_name'] or r['brand_name'] or ''),
+                    'tipe': (r['form_type'] or '').upper(),
+                    'deadline': dl.isoformat() if dl else None,
+                    'selesai_rakit': sr.isoformat() if sr else None,
+                    'kepuasan': r['tingkat_kepuasan'] or '',
+                    'is_puas': kp == 'puas',
+                    'selesai': sr is not None,
+                    'ontime': (sr is not None and dl is not None and sr <= dl),
+                })
+    except Exception as e:
+        return jsonify({'valid': True, 'error': str(e), 'rows': []})
+    tot = len(rows)
+    summary = {
+        'total_order': tot,
+        'ontime_ok': sum(1 for r in rows if r['ontime']),
+        'ontime_tot': sum(1 for r in rows if r['selesai']),
+        'puas': sum(1 for r in rows if r['is_puas']),
+    }
+    return jsonify({'valid': True, 'who': inner['name'], 'era': {'csv': csv_ok, 'app': app_ok},
                     'summary': summary, 'rows': rows})
 
 # ─── Helpers filter ──────────────────────────────────────────────
