@@ -1263,6 +1263,91 @@ def api_produksi():
     """
     return jsonify(query(sql, params)[0])
 
+@app.route('/api/tracking-order')
+@login_required
+def api_tracking_order():
+    """Tracking SPK produksi yang BELUM selesai, dikelompokkan berdasar kedekatan deadline ke
+       hari ini: Terlambat / Hari H / <=3 hari / <=6 hari / Aman (>6). Universe = proyek FAW
+       (SKO ber-deadline) yang belum ada tgl_selesai (tb_spks). Filter tanggal dashboard DIABAIKAN
+       (tracking relatif hari ini); filter PIC/divisi tetap dihormati."""
+    _dari, _sampai, pic, divisi = get_args()
+    faw = query("""
+        SELECT f.sko_key, MIN(f.tgl_deadline) AS deadline
+        FROM tb_faws f
+        WHERE f.sko_key IS NOT NULL AND f.tgl_deadline IS NOT NULL
+        GROUP BY f.sko_key
+    """)
+    keys = [r['sko_key'] for r in faw]
+    if not keys:
+        return jsonify({'today': datetime.now().date().isoformat(),
+                        'summary': {'total': 0, 'terlambat': 0, 'hari_h': 0, 'd3': 0, 'd6': 0, 'aman': 0},
+                        'rows': []})
+    ph = ','.join(['%s'] * len(keys))
+    spks = query(f"SELECT sko_key, MAX(tgl_selesai_all) AS tgl_selesai, MAX(vendor_ve) AS vendor "
+                 f"FROM tb_spks WHERE sko_key IN ({ph}) GROUP BY sko_key", keys)
+    sp_map = {r['sko_key']: r for r in spks}
+    vcond = [f"o.sko_key IN ({ph})"]
+    vparams = list(keys)
+    if pic:
+        vcond.append("o.name = %s"); vparams.append(pic)
+    if divisi:
+        vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        vparams.append(divisi)
+    view = query(f"""
+        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
+        FROM order_risepack o
+        WHERE {' AND '.join(vcond)}
+        GROUP BY o.sko_key
+    """, vparams)
+    v_map = {r['sko_key']: r for r in view}
+    prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
+                 f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' GROUP BY sko_key", keys)
+    pr_map = {r['sko_key']: r['produk'] for r in prod}
+    filtered = bool(pic or divisi)
+    today = datetime.now().date()
+
+    def to_date(v):
+        if v is None: return None
+        if isinstance(v, datetime): return v.date()
+        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'): return v
+        try: return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
+        except Exception: return None
+
+    buckets = {'terlambat': 0, 'hari_h': 0, 'd3': 0, 'd6': 0, 'aman': 0}
+    rows = []
+    for f in faw:
+        k = f['sko_key']
+        if filtered and k not in v_map:
+            continue
+        sp = sp_map.get(k) or {}
+        if to_date(sp.get('tgl_selesai')) is not None:   # sudah selesai -> tidak perlu ditrack
+            continue
+        dl = to_date(f['deadline'])
+        if dl is None:
+            continue
+        days = (dl - today).days
+        if days < 0:    b = 'terlambat'
+        elif days == 0: b = 'hari_h'
+        elif days <= 3: b = 'd3'
+        elif days <= 6: b = 'd6'
+        else:           b = 'aman'
+        buckets[b] += 1
+        v = v_map.get(k, {})
+        rows.append({
+            'sko': v.get('sko') or '',
+            'produk': pr_map.get(k) or v.get('produk') or '',
+            'pic': v.get('pic') or '',
+            'vendor': (sp.get('vendor') or '').strip(),
+            'deadline': dl.isoformat(),
+            'days': days,
+            'bucket': b,
+        })
+    rows.sort(key=lambda r: r['days'])   # paling overdue di atas
+    return jsonify({'today': today.isoformat(),
+                    'summary': {'total': len(rows), **buckets},
+                    'rows': rows})
+
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
