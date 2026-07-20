@@ -1913,14 +1913,14 @@ function rejectScmSubset(rj){
   return {total_cost:total,count:rows.length,by_jenis:agg('jenis'),by_pic:agg('pic'),rows};
 }
 // hitung scorecard KPI produksi (dipakai tab KPI & slide presentasi)
-function prodKpiCompute(cfg,vals){
+function prodKpiCompute(cfg,vals,notes){
   const defs=(cfg&&cfg.produksi_kpi)||[];
   const scorePct=(a,bands)=>{ if(a==null)return 0; for(const [thr,sc] of bands){ if(a>=thr)return sc; } return 0; };
   const scoreLte=(v,bands)=>{ if(v==null)return 0; for(const [thr,sc] of bands){ if(v<=thr)return sc; } return 1; };
   let totW=0, totAchW=0;
   const rows=defs.map(k=>{
     const w=k.weight/100, a=vals[k.src];
-    let score,ach,actualDisp,targetDisp,note='';
+    let score,ach,actualDisp,targetDisp,note=(notes&&notes[k.src])||'';
     if(k.unit==='%'){ score=scorePct(a,k.bands||[]); ach=(a!=null&&k.objective)?Math.round(a/k.objective*1000)/10:0; actualDisp=(a!=null?a+'%':'–'); targetDisp=k.objective+'%'; }
     else if(k.unit==='Rp'){ score=scoreLte(a,k.bands_lte||[]); ach=(a>0)?Math.min(Math.round(k.objective/a*1000)/10,100):100; actualDisp=formatRp(a); targetDisp='≤ '+formatRp(k.objective); note='penanggung jawab SCM'; }
     else { score=scoreLte(a,k.bands_lte||[]); ach=Math.round(score/6*1000)/10; actualDisp=fmtInt(a||0)+' case'; targetDisp=k.objective+' case'; }
@@ -1942,8 +1942,11 @@ async function loadKpiProduksi(q){
     fetchJSON('/api/complain?'+q).catch(()=>({})),
   ]);
   const IF=dl.in_full||{};
-  const vals={ontime:ot.pct, infull:IF.pct, reject_scm:rejectScmSubset(rj).total_cost, kelolosan_case:kl.kendala, complain:cm.pct};
-  renderKpiProd(prodKpiCompute(cfg,vals));
+  // Kelolosan: % SPK BEBAS kelolosan reject = (SPK − case) / SPK · target 100%
+  const kelPct = kl.spk ? Math.round((kl.spk-(kl.kendala||0))/kl.spk*1000)/10 : null;
+  const vals={ontime:ot.pct, infull:IF.pct, reject_scm:rejectScmSubset(rj).total_cost, kelolosan_pct:kelPct, complain:cm.pct};
+  const notes={kelolosan_pct:`${fmtInt(kl.kendala||0)} case dari ${fmtInt(kl.spk||0)} SPK`};
+  renderKpiProd(prodKpiCompute(cfg,vals,notes));
 }
 function renderKpiProd(d){
   const lblClass=d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
@@ -2631,7 +2634,9 @@ function buildSlides(D){
   // sumber data SCM (dipakai bareng)
   const ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{}, rjS=rejectScmSubset(D.reject||{}), kl=D.kelolosan||{}, cm=D.complain||{};
   // 8b. KPI DIVISI PRODUKSI (scorecard, dinamis per periode)
-  const prodKpi=prodKpiCompute(D.kpiConfig||{},{ontime:ot.pct,infull:IF.pct,reject_scm:rjS.total_cost,kelolosan_case:kl.kendala,complain:cm.pct});
+  const _kelPct = kl.spk ? Math.round((kl.spk-(kl.kendala||0))/kl.spk*1000)/10 : null;
+  const prodKpi=prodKpiCompute(D.kpiConfig||{},{ontime:ot.pct,infull:IF.pct,reject_scm:rjS.total_cost,kelolosan_pct:_kelPct,complain:cm.pct},
+    {kelolosan_pct:`${fmtInt(kl.kendala||0)} case dari ${fmtInt(kl.spk||0)} SPK`});
   const prodLbl=prodKpi.total_ach>=80?'ps-win':(prodKpi.total_ach<60?'ps-lose':'');
   S.push({html:head(`KPI Divisi Produksi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
