@@ -1294,7 +1294,7 @@ def api_tracking_order():
         vcond.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         vparams.append(divisi)
     view = query(f"""
-        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic,
+        SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic, MAX(o.nama) AS customer,
                MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
         FROM order_risepack o
         WHERE {' AND '.join(vcond)}
@@ -1336,6 +1336,7 @@ def api_tracking_order():
         v = v_map.get(k, {})
         rows.append({
             'sko': v.get('sko') or '',
+            'customer': v.get('customer') or '',
             'produk': pr_map.get(k) or v.get('produk') or '',
             'pic': v.get('pic') or '',
             'vendor': (sp.get('vendor') or '').strip(),
@@ -1520,7 +1521,7 @@ def api_detail():
                o.tgl_omzet_realtime AS tanggal,
                o.jumlah_produk AS quantity,
                o.harga_produk AS harga_jual,
-               o.modal_sales, o.total_harga
+               o.modal_sales, o.total_harga, o.status_order
         {BASE}
         AND o.status_deal='Deal'
         {cond}
@@ -1543,6 +1544,13 @@ def api_detail():
                        f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys):
             sv_map[s['sko_key']] = s['vendor']
 
+    def _pstatus(s):
+        s = (s or '').strip().lower()
+        if 'selesai' in s: return 'Selesai Produksi'
+        if 'berjalan' in s or 'proses' in s or 'progres' in s: return 'On Progres'
+        if 'belum' in s: return 'Pending'
+        return s.title() if s else '-'
+
     out = []
     _ft = load_kpi_config().get('financial_targets', {})
     _overhead = float(_ft.get('gpm', 22)) - float(_ft.get('npm', 13.07))   # overhead % = GPM - NPM
@@ -1557,6 +1565,7 @@ def api_detail():
         out.append({
             'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
             'vendor': (sv_map.get(r['sko_key']) or '').strip(),
+            'status': _pstatus(r.get('status_order')),
             'nama_produk': nm,
             'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
             'quantity': int(qty),
