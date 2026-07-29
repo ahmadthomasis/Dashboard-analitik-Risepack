@@ -157,6 +157,21 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #detail-table th:nth-child(12),#detail-table td:nth-child(12){width:120px;}
 #detail-table th:nth-child(13),#detail-table td:nth-child(13){width:125px;}
 
+/* Tracking Order — lebar kolom proporsional */
+#trk-table table{table-layout:fixed;width:100%;min-width:1150px;}
+#trk-table th,#trk-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#trk-table th:nth-child(1),#trk-table td:nth-child(1){width:158px;}
+#trk-table th:nth-child(2),#trk-table td:nth-child(2){width:108px;}
+#trk-table th:nth-child(3),#trk-table td:nth-child(3){width:150px;}
+#trk-table th:nth-child(4),#trk-table td:nth-child(4){width:80px;}
+#trk-table th:nth-child(5),#trk-table td:nth-child(5){width:76px;}
+#trk-table th:nth-child(6),#trk-table td:nth-child(6){width:92px;}
+#trk-table th:nth-child(7),#trk-table td:nth-child(7){width:88px;}
+#trk-table th:nth-child(8),#trk-table td:nth-child(8){width:100px;}
+#trk-table th:nth-child(9),#trk-table td:nth-child(9){width:100px;}
+#trk-table th:nth-child(10),#trk-table td:nth-child(10){width:92px;}
+#trk-table th:nth-child(11),#trk-table td:nth-child(11){width:104px;}
+
 /* tabel customer proporsional */
 #dnr-table table,#journey-table table,#sko-ach table{table-layout:fixed;width:100%;}
 #dnr-table th,#dnr-table td,#journey-table th,#journey-table td,#sko-ach th,#sko-ach td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1273,9 +1288,9 @@ function renderTrk(){
     <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
     <td>${esc(r.pic)||'-'}</td>
     <td>${esc(r.vendor)||'-'}</td>
-    <td class="num">${fmtInt(r.qty_po)}</td>
-    <td class="num">${fmtInt(r.qty_kirim)}</td>
-    <td class="num" style="font-weight:600;color:${r.qty_kurang>0?'var(--red)':'var(--green)'}">${r.qty_kurang>0?fmtInt(r.qty_kurang):'0'}</td>
+    <td style="text-align:center">${fmtInt(r.qty_po)}</td>
+    <td style="text-align:center">${fmtInt(r.qty_kirim)}</td>
+    <td style="text-align:center;font-weight:600;color:${r.qty_kurang>0?'var(--red)':'var(--green)'}">${r.qty_kurang>0?fmtInt(r.qty_kurang):'0'}</td>
     <td>${r.deadline||'-'}</td>
     <td>${trkBadge(r.days)}</td>
     <td><span style="color:${m.color};font-weight:600">${m.emoji||''} ${m.label||''}</span></td>
@@ -1284,12 +1299,12 @@ function renderTrk(){
   const tKurang=tPo>tKirim?tPo-tKirim:0;
   const foot=rows.length?`<tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
     <td colspan="5" style="text-align:right">TOTAL (${rows.length} SPK)</td>
-    <td class="num">${fmtInt(tPo)}</td><td class="num">${fmtInt(tKirim)}</td>
-    <td class="num" style="color:${tKurang>0?'var(--red)':'var(--green)'}">${fmtInt(tKurang)}</td>
+    <td style="text-align:center">${fmtInt(tPo)}</td><td style="text-align:center">${fmtInt(tKirim)}</td>
+    <td style="text-align:center;color:${tKurang>0?'var(--red)':'var(--green)'}">${fmtInt(tKurang)}</td>
     <td colspan="3"></td></tr>`:'';
-  el.innerHTML=`<table style="min-width:1180px"><thead><tr>
+  el.innerHTML=`<table><thead><tr>
     <th>SKO</th><th>Customer</th><th>Produk</th><th>PIC</th><th>Vendor</th>
-    <th class="num">Total PO</th><th class="num">Terkirim</th><th class="num">Kekurangan</th>
+    <th style="text-align:center">Total PO</th><th style="text-align:center">Terkirim</th><th style="text-align:center">Kekurangan</th>
     <th>Deadline</th><th>Sisa Waktu</th><th>Status</th>
   </tr></thead><tbody>${body||'<tr><td colspan="11" class="loading">Tidak ada SPK pada kategori ini</td></tr>'}${foot}</tbody></table>`;
 }
