@@ -1618,6 +1618,30 @@ def api_detail():
                        f"WHERE sko_key IN ({ph}) GROUP BY sko_key", keys):
             sv_map[s['sko_key']] = s['vendor']
 
+    # Status bayar & TOP per SKO dari invoices (via invoice_details, kode_order = sko) — sama spt Bonus
+    skos = list({r['sko'] for r in rows if r.get('sko')})
+    inv_map = {}
+    if skos:
+        ph2 = ','.join(['%s'] * len(skos))
+        for iv in query(f"""
+            SELECT idt.kode_order AS sko,
+                   MAX(inv.tanggal_pelunasan) AS pelunasan,
+                   MAX(inv.tanggal_jatuh_tempo) AS jatuh_tempo
+            FROM invoice_details idt
+            JOIN invoices inv ON idt.invoice_key = inv.invoice_key
+            WHERE idt.kode_order IN ({ph2})
+            GROUP BY idt.kode_order
+        """, skos):
+            inv_map[iv['sko']] = iv
+
+    _today = datetime.now().date()
+    def _to_date(v):
+        if v is None: return None
+        if isinstance(v, datetime): return v.date()
+        if hasattr(v, 'year') and hasattr(v, 'month') and hasattr(v, 'day'): return v
+        try: return datetime.strptime(str(v)[:10], '%Y-%m-%d').date()
+        except Exception: return None
+
     def _pstatus(s):
         s = (s or '').strip().lower()
         if 'selesai' in s: return 'Selesai Produksi'
@@ -1636,10 +1660,25 @@ def api_detail():
         jb = (r.get('jenis_bahan') or '').strip()
         nm = pr_pair.get((r['sko_key'], jb)) or pr_sko.get(r['sko_key']) or (r['nama_produk'] or '').strip()
         pm = round((total - modal) / total * 100, 1) if total else 0
+        iv = inv_map.get(r['sko']) or {}
+        pel = _to_date(iv.get('pelunasan'))
+        jt = _to_date(iv.get('jatuh_tempo'))
+        sudah_bayar = pel is not None
+        if jt is None:
+            top = '-'; hari_lewat = 0
+        else:
+            ref = pel if sudah_bayar else _today
+            hari_lewat = (ref - jt).days if ref > jt else 0
+            top = 'Lewat TOP' if hari_lewat > 0 else 'Aman'
         out.append({
             'sko': r['sko'], 'nama': r['nama'], 'sumber': r['sumber'],
             'vendor': (sv_map.get(r['sko_key']) or '').strip(),
             'status': _pstatus(r.get('status_order')),
+            'bayar': 'Lunas' if sudah_bayar else 'Belum',
+            'top': top,
+            'hari_lewat': hari_lewat,
+            'tgl_bayar': pel.isoformat() if pel else None,
+            'jatuh_tempo': jt.isoformat() if jt else None,
             'nama_produk': nm,
             'tanggal': tgl.strftime('%Y-%m-%d') if tgl else None,
             'quantity': int(qty),
