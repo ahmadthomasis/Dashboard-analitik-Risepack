@@ -382,6 +382,11 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
           </div>
           <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
+          <div class="card" style="margin-top:15px">
+            <h3>Rekap Capaian Penjualan Sales</h3>
+            <div class="ch-sub" id="st-sub">Target vs realisasi per sales · Persentase = Total Deal ÷ Target bulanan · target diatur di kpi_config.json</div>
+            <div class="table-wrap" id="sales-target-table"><div class="loading">Memuat…</div></div>
+          </div>
         </div>
 
         <div id="subview-bonus" class="subview">
@@ -878,7 +883,7 @@ const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan],['cmar-table',loadCustomerMargin]],
   customer:[['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
-  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales]],
+  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales],['sales-target-table',loadSalesTarget]],
   bonus:[['bonus-table',loadBonus]],
 };
 async function renderView(){
@@ -1093,6 +1098,36 @@ async function loadTopSales(q){
   document.getElementById('tbl-top-sales').innerHTML=`<table>
     <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:500">${r.PIC}</td><td class="num">${fmtInt(r.total_order)}</td><td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td></tr>`).join('')}</tbody></table>`;
+}
+async function loadSalesTarget(q){
+  const el=document.getElementById('sales-target-table'); if(!el) return;
+  const d=await fetchJSON('/api/sales-target?'+q);
+  const rows=d.rows||[], gt=d.grand_total||{}, n=rows.length;
+  const sub=document.getElementById('st-sub');
+  if(sub) sub.textContent=`Hari berjalan ${d.days_elapsed}/${d.days_in_month} · Persentase = Total Deal ÷ Target bulanan · target diatur di kpi_config.json`;
+  const body=rows.map((r,i)=>{
+    const bg = i===0 ? 'background:#e6f5ee' : (i===n-1 ? 'background:#fbe4e0' : '');
+    const pcol = i===0 ? 'var(--green)' : (i===n-1 ? 'var(--red)' : 'var(--ink)');
+    return `<tr style="${bg}">
+      <td class="num">${i+1}</td>
+      <td style="font-weight:500">${esc(r.nama)||'-'}</td>
+      <td class="num">${formatRpFull(r.target_month)}</td>
+      <td class="num">${formatRpFull(r.target_days)}</td>
+      <td class="num">${formatRpFull(r.target_today)}</td>
+      <td class="num" style="font-weight:600">${formatRpFull(r.total_deal)}</td>
+      <td class="num" style="font-weight:700;color:${pcol}">${r.persentase}%</td>
+    </tr>`;}).join('');
+  const foot=n?`<tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
+    <td colspan="2" style="text-align:right">Grand Total</td>
+    <td class="num">${formatRpFull(gt.target_month)}</td>
+    <td class="num">${formatRpFull(gt.target_days)}</td>
+    <td class="num">${formatRpFull(gt.target_today)}</td>
+    <td class="num">${formatRpFull(gt.total_deal)}</td>
+    <td class="num">${gt.persentase}%</td></tr>`:'';
+  el.innerHTML=`<table style="min-width:840px"><thead><tr>
+    <th class="num">Rank</th><th>Nama Sales</th><th class="num">Target / Month</th><th class="num">Target / Days</th>
+    <th class="num">Target / Today</th><th class="num">Total Deal</th><th class="num">Persentase</th>
+  </tr></thead><tbody>${body||'<tr><td colspan="7" class="loading">Belum ada target sales di kpi_config.json</td></tr>'}${foot}</tbody></table>`;
 }
 // ── Produksi Overview ──
 async function loadProduksi(q){

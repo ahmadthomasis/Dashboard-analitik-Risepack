@@ -8,6 +8,16 @@
   "complain_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9PyErN1C52doIeuWNPzX3i7Pc8Qr_P_9Ss13ps_EMEUYDuS32ZfVJaE6T8YDPdYb032qG5B5jFXKt/pub?gid=905613565&single=true&output=csv",
   "financial_targets": {"revenue_bulanan": 2500000000, "net_profit_bulanan": 326770000, "gpm": 22, "npm": 13.07},
   "sales_targets": {"omzet_new_bulanan": 500000000},
+  "_catatan_sales_target": "Target bulanan per sales (Rp). Nama harus sama persis dgn kolom PIC di dashboard. Edit angka/target di sini.",
+  "sales_monthly_targets": [
+    {"name": "Management", "target": 1000000000},
+    {"name": "Ma'ruf",     "target": 500000000},
+    {"name": "Kiki",       "target": 500000000},
+    {"name": "Faisal",     "target": 400000000},
+    {"name": "CS Food",    "target": 230000000},
+    {"name": "Amel",       "target": 100000000},
+    {"name": "Sales Food", "target": 20000000}
+  ],
 
   "produksi_kpi": [
     {"id": "ontime",     "name": "On Time Delivery",              "weight": 30, "objective": 95,      "unit": "%",   "src": "ontime",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
