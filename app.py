@@ -1455,6 +1455,42 @@ def api_tracking_order_debug():
                                 'header_ada': int(d['header_ada'] or 0)} for d in detail]})
     return jsonify(out)
 
+@app.route('/api/sj-header-debug')
+@login_required
+def api_sj_header_debug():
+    """Dump semua kolom header tb_surat_jalan utk surat jalan milik SKO tertentu,
+       supaya kelihatan field pembeda antara pengiriman sah vs tidak. ?q=<potongan SKO>"""
+    import decimal
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({'_hint': 'pakai ?q=<potongan SKO>, contoh ?q=RSP24137'})
+    like = f"%{q}%"
+    keys = query("SELECT DISTINCT sjd.surat_jalan_key FROM tb_surat_jalan_detail sjd "
+                 "WHERE sjd.kode_order LIKE %s LIMIT 40", [like])
+    kl = [r['surat_jalan_key'] for r in keys if r['surat_jalan_key']]
+    if not kl:
+        return jsonify({'headers': [], 'detail_qty': []})
+    ph = ','.join(['%s'] * len(kl))
+
+    def ser(r):
+        o = {}
+        for k, v in r.items():
+            if hasattr(v, 'isoformat'):
+                o[k] = v.isoformat()
+            elif isinstance(v, decimal.Decimal):
+                o[k] = float(v)
+            elif isinstance(v, (bytes, bytearray)):
+                o[k] = v.decode('utf-8', 'replace')
+            else:
+                o[k] = v
+        return o
+
+    headers = [ser(r) for r in query(f"SELECT * FROM tb_surat_jalan WHERE surat_jalan_key IN ({ph})", kl)]
+    det = [ser(r) for r in query(
+        f"SELECT surat_jalan_key, kode_order, SUM(quantity) AS qty FROM tb_surat_jalan_detail "
+        f"WHERE surat_jalan_key IN ({ph}) AND kode_order LIKE %s GROUP BY surat_jalan_key, kode_order", kl + [like])]
+    return jsonify({'headers': headers, 'detail_qty': det})
+
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
