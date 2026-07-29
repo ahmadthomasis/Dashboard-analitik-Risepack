@@ -1360,13 +1360,14 @@ def api_tracking_order():
     prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
                  f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' GROUP BY sko_key", keys)
     pr_map = {r['sko_key']: r['produk'] for r in prod}
-    # Qty terkirim per SKO (kode_order = sko) — HARUS join ke tb_surat_jalan (header valid),
-    # persis seperti In Full Delivery. Tanpa join, baris detail tanpa header ikut terhitung -> membengkak.
+    # Qty terkirim per SKO (kode_order = sko): hanya surat jalan SAH — status bukan 'draft'
+    # dan belum terhapus. Surat jalan draft = belum benar-benar dikirim, jangan dihitung.
     sj = query("""
         SELECT sjd.kode_order AS sko, SUM(sjd.quantity) AS qty_kirim
         FROM tb_surat_jalan_detail sjd
         JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
         WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
+          AND COALESCE(s.status,'') <> 'draft' AND s.deleted_at IS NULL
         GROUP BY sjd.kode_order
     """)
     sj_map = {r['sko']: float(r['qty_kirim'] or 0) for r in sj}
@@ -2420,6 +2421,7 @@ def api_delivery():
         FROM tb_surat_jalan_detail sjd
         JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
         WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
+          AND COALESCE(s.status,'') <> 'draft' AND s.deleted_at IS NULL
         GROUP BY sjd.kode_order
     """)
     sj_map = {r['sko']: r for r in sj}
