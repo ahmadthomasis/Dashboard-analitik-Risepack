@@ -1295,7 +1295,8 @@ def api_tracking_order():
         vparams.append(divisi)
     view = query(f"""
         SELECT o.sko_key, MAX(o.sko) AS sko, MAX(o.name) AS pic, MAX(o.nama) AS customer,
-               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk
+               MAX(TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,'')))) AS produk,
+               SUM(o.jumlah_produk) AS qty_po
         FROM order_risepack o
         WHERE {' AND '.join(vcond)}
         GROUP BY o.sko_key
@@ -1304,6 +1305,14 @@ def api_tracking_order():
     prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
                  f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' GROUP BY sko_key", keys)
     pr_map = {r['sko_key']: r['produk'] for r in prod}
+    # Qty terkirim per SKO (kode_order = sko) dari surat jalan — sama seperti In Full Delivery
+    sj = query("""
+        SELECT sjd.kode_order AS sko, SUM(sjd.quantity) AS qty_kirim
+        FROM tb_surat_jalan_detail sjd
+        WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
+        GROUP BY sjd.kode_order
+    """)
+    sj_map = {r['sko']: float(r['qty_kirim'] or 0) for r in sj}
     filtered = bool(pic or divisi)
     today = datetime.now().date()
 
@@ -1334,6 +1343,9 @@ def api_tracking_order():
         else:           b = 'aman'
         buckets[b] += 1
         v = v_map.get(k, {})
+        po = int(float(v.get('qty_po') or 0))
+        kirim = int(sj_map.get(v.get('sko'), 0))
+        kurang = po - kirim if po > kirim else 0
         rows.append({
             'sko': v.get('sko') or '',
             'customer': v.get('customer') or '',
@@ -1343,10 +1355,17 @@ def api_tracking_order():
             'deadline': dl.isoformat(),
             'days': days,
             'bucket': b,
+            'qty_po': po,
+            'qty_kirim': kirim,
+            'qty_kurang': kurang,
         })
     rows.sort(key=lambda r: r['days'])   # paling overdue di atas
+    tot_po = sum(r['qty_po'] for r in rows)
+    tot_kirim = sum(r['qty_kirim'] for r in rows)
     return jsonify({'today': today.isoformat(),
-                    'summary': {'total': len(rows), **buckets},
+                    'summary': {'total': len(rows), **buckets,
+                                'qty_po': tot_po, 'qty_kirim': tot_kirim,
+                                'qty_kurang': (tot_po - tot_kirim if tot_po > tot_kirim else 0)},
                     'rows': rows})
 
 @app.route('/api/kategori')

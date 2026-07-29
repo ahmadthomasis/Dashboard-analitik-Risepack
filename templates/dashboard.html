@@ -1273,13 +1273,25 @@ function renderTrk(){
     <td title="${esc(r.produk,1)}">${esc(r.produk)||'-'}</td>
     <td>${esc(r.pic)||'-'}</td>
     <td>${esc(r.vendor)||'-'}</td>
+    <td class="num">${fmtInt(r.qty_po)}</td>
+    <td class="num">${fmtInt(r.qty_kirim)}</td>
+    <td class="num" style="font-weight:600;color:${r.qty_kurang>0?'var(--red)':'var(--green)'}">${r.qty_kurang>0?fmtInt(r.qty_kurang):'0'}</td>
     <td>${r.deadline||'-'}</td>
     <td>${trkBadge(r.days)}</td>
     <td><span style="color:${m.color};font-weight:600">${m.emoji||''} ${m.label||''}</span></td>
   </tr>`;}).join('');
-  el.innerHTML=`<table style="min-width:980px"><thead><tr>
-    <th>SKO</th><th>Customer</th><th>Produk</th><th>PIC</th><th>Vendor</th><th>Deadline</th><th>Sisa Waktu</th><th>Status</th>
-  </tr></thead><tbody>${body||'<tr><td colspan="8" class="loading">Tidak ada SPK pada kategori ini</td></tr>'}</tbody></table>`;
+  const tPo=rows.reduce((s,r)=>s+(r.qty_po||0),0), tKirim=rows.reduce((s,r)=>s+(r.qty_kirim||0),0);
+  const tKurang=tPo>tKirim?tPo-tKirim:0;
+  const foot=rows.length?`<tr style="border-top:2px solid var(--border-strong);font-weight:700;background:#faf8f5">
+    <td colspan="5" style="text-align:right">TOTAL (${rows.length} SPK)</td>
+    <td class="num">${fmtInt(tPo)}</td><td class="num">${fmtInt(tKirim)}</td>
+    <td class="num" style="color:${tKurang>0?'var(--red)':'var(--green)'}">${fmtInt(tKurang)}</td>
+    <td colspan="3"></td></tr>`:'';
+  el.innerHTML=`<table style="min-width:1180px"><thead><tr>
+    <th>SKO</th><th>Customer</th><th>Produk</th><th>PIC</th><th>Vendor</th>
+    <th class="num">Total PO</th><th class="num">Terkirim</th><th class="num">Kekurangan</th>
+    <th>Deadline</th><th>Sisa Waktu</th><th>Status</th>
+  </tr></thead><tbody>${body||'<tr><td colspan="11" class="loading">Tidak ada SPK pada kategori ini</td></tr>'}${foot}</tbody></table>`;
 }
 
 // ── In Full Delivery ──
