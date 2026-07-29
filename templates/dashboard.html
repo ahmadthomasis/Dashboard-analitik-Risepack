@@ -381,7 +381,6 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
             <div class="card"><h3>Trend Omzet Bulanan</h3><div class="ch-sub">Omzet per kategori sepanjang tahun</div><div class="chart-wrap"><canvas id="c-trend"></canvas></div></div>
             <div class="card"><h3>Kategori Omzet</h3><div class="ch-sub">Jumlah order per rentang nilai</div><div class="chart-wrap"><canvas id="c-kat-omzet"></canvas></div></div>
           </div>
-          <div class="card" style="margin-top:15px"><h3>Top 10 Sales Rep</h3><div class="ch-sub">Berdasarkan omzet</div><div class="table-wrap" id="tbl-top-sales"><div class="loading">Memuat...</div></div></div>
           <div class="card" style="margin-top:15px">
             <h3>Rekap Capaian Penjualan Sales</h3>
             <div class="ch-sub" id="st-sub">Target vs realisasi per sales · Persentase = Total Deal ÷ Target bulanan · target diatur di kpi_config.json</div>
@@ -883,7 +882,7 @@ const SUB_TASKS = {
   produk:[['c-trend-bahan',loadTrendBahan],['c-bahan',loadBahan],['c-kategori',loadKategori]],
   margin:[['c-margin',loadSalesByMargin],['c-margin-bulan',loadMarginBulanan],['cmar-table',loadCustomerMargin]],
   customer:[['c-sumber',loadSumber],['dnr-table',loadDealNvR],['journey-table',loadJourney],['sko-ach',loadSko]],
-  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['tbl-top-sales',loadTopSales],['sales-target-table',loadSalesTarget]],
+  penjualan:[['c-trend',loadTrend],['c-kat-omzet',loadKatOmzet],['sales-target-table',loadSalesTarget]],
   bonus:[['bonus-table',loadBonus]],
 };
 async function renderView(){
@@ -1092,12 +1091,6 @@ async function loadKatOmzet(q){
     datasets:[{label:'Jumlah Order',data:rows.map(r=>r.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omzet:rows.map(r=>r.omzet)}]},
     {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · omzet ${formatRp(c.dataset._omzet[c.dataIndex])}`}}},
      scales:{y:{ticks:{precision:0},grid:{color:'#f0eae2'},border:{display:false}},x:{grid:{display:false}}}});
-}
-async function loadTopSales(q){
-  const rows=await fetchJSON('/api/top-sales?'+q);
-  document.getElementById('tbl-top-sales').innerHTML=`<table>
-    <thead><tr><th>#</th><th>Nama</th><th class="num">Order</th><th class="num">Omzet</th></tr></thead>
-    <tbody>${rows.map((r,i)=>`<tr><td><span class="rank">${i+1}</span></td><td style="font-weight:500">${r.PIC}</td><td class="num">${fmtInt(r.total_order)}</td><td class="num" style="font-weight:600">${formatRpShort(r.total_omzet)}</td></tr>`).join('')}</tbody></table>`;
 }
 async function loadSalesTarget(q){
   const el=document.getElementById('sales-target-table'); if(!el) return;
