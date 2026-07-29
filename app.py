@@ -1360,10 +1360,12 @@ def api_tracking_order():
     prod = query(f"SELECT sko_key, MAX(nama_produk) AS produk FROM tb_produksis "
                  f"WHERE sko_key IN ({ph}) AND nama_produk IS NOT NULL AND nama_produk <> '' GROUP BY sko_key", keys)
     pr_map = {r['sko_key']: r['produk'] for r in prod}
-    # Qty terkirim per SKO (kode_order = sko) dari surat jalan — sama seperti In Full Delivery
+    # Qty terkirim per SKO (kode_order = sko) — HARUS join ke tb_surat_jalan (header valid),
+    # persis seperti In Full Delivery. Tanpa join, baris detail tanpa header ikut terhitung -> membengkak.
     sj = query("""
         SELECT sjd.kode_order AS sko, SUM(sjd.quantity) AS qty_kirim
         FROM tb_surat_jalan_detail sjd
+        JOIN tb_surat_jalan s ON s.surat_jalan_key = sjd.surat_jalan_key
         WHERE sjd.kode_order IS NOT NULL AND sjd.kode_order <> '-'
         GROUP BY sjd.kode_order
     """)
@@ -1422,6 +1424,36 @@ def api_tracking_order():
                                 'qty_po': tot_po, 'qty_kirim': tot_kirim,
                                 'qty_kurang': (tot_po - tot_kirim if tot_po > tot_kirim else 0)},
                     'rows': rows})
+
+@app.route('/api/tracking-order-debug')
+@login_required
+def api_tracking_order_debug():
+    """Diagnosa qty terkirim per SKO: bandingkan dgn-join vs tanpa-join ke tb_surat_jalan.
+       Pakai ?q=<potongan SKO>, mis. /api/tracking-order-debug?q=RSP24137"""
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({'_hint': 'pakai ?q=<potongan SKO>, contoh ?q=RSP24137'})
+    like = f"%{q}%"
+    po = query("SELECT o.sko, SUM(o.jumlah_produk) AS po FROM order_risepack o "
+               "WHERE o.sko LIKE %s AND (o.flag_dummy!='dummy' OR o.flag_dummy IS NULL) "
+               "GROUP BY o.sko LIMIT 30", [like])
+    out = []
+    for r in po:
+        sko = r['sko']
+        wj = query("SELECT COALESCE(SUM(sjd.quantity),0) v, COUNT(*) n "
+                   "FROM tb_surat_jalan_detail sjd JOIN tb_surat_jalan s ON s.surat_jalan_key=sjd.surat_jalan_key "
+                   "WHERE sjd.kode_order=%s", [sko])[0]
+        nj = query("SELECT COALESCE(SUM(sjd.quantity),0) v, COUNT(*) n "
+                   "FROM tb_surat_jalan_detail sjd WHERE sjd.kode_order=%s", [sko])[0]
+        detail = query("SELECT sjd.surat_jalan_key, sjd.quantity, "
+                       "(SELECT COUNT(*) FROM tb_surat_jalan s WHERE s.surat_jalan_key=sjd.surat_jalan_key) AS header_ada "
+                       "FROM tb_surat_jalan_detail sjd WHERE sjd.kode_order=%s LIMIT 20", [sko])
+        out.append({'sko': sko, 'po': int(r['po'] or 0),
+                    'kirim_dengan_join': int(wj['v'] or 0), 'n_baris_join': int(wj['n'] or 0),
+                    'kirim_tanpa_join': int(nj['v'] or 0), 'n_baris_tanpa_join': int(nj['n'] or 0),
+                    'detail': [{'surat_jalan_key': d['surat_jalan_key'], 'quantity': int(d['quantity'] or 0),
+                                'header_ada': int(d['header_ada'] or 0)} for d in detail]})
+    return jsonify(out)
 
 @app.route('/api/kategori')
 @login_required
