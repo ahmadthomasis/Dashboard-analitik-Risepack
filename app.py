@@ -1230,6 +1230,61 @@ def api_top_sales():
     rows = query(sql, params)
     return jsonify([{**r, 'total_omzet': float(r['total_omzet'] or 0), 'total_margin': float(r['total_margin'] or 0)} for r in rows])
 
+@app.route('/api/sales-target')
+@login_required
+def api_sales_target():
+    """Rekap Capaian Penjualan Sales vs target bulanan (kpi_config.sales_monthly_targets).
+       Target/Days = target ÷ hari dalam bulan; Target/Today = Target/Days × hari berjalan
+       (jumlah hari rentang terpilih); Persentase = Total Deal ÷ target × 100."""
+    import calendar
+    cfg = load_kpi_config()
+    targets = cfg.get('sales_monthly_targets', [])
+    tgl_dari, tgl_sampai, _pic, divisi = get_args()
+
+    def pd(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    days_in_month = calendar.monthrange(d1.year, d1.month)[1]
+    days_elapsed = (d2 - d1).days + 1
+    if days_elapsed < 1: days_elapsed = 1
+
+    # Omzet deal per sales (semua PIC) pada periode — filter divisi bila dipilih
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
+               "o.status_deal='Deal'", "o.name IS NOT NULL", "o.name!=''"]
+    params = []
+    if tgl_dari: clauses.append("DATE(o.tgl_omzet_realtime) >= %s"); params.append(tgl_dari)
+    if tgl_sampai: clauses.append("DATE(o.tgl_omzet_realtime) <= %s"); params.append(tgl_sampai)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    omz = query(f"SELECT o.name AS pic, SUM(o.total_harga) AS omzet FROM order_risepack o "
+                f"WHERE {' AND '.join(clauses)} GROUP BY o.name", params)
+    omz_map = {(r['pic'] or '').strip().lower(): float(r['omzet'] or 0) for r in omz}
+
+    rows = []
+    for t in targets:
+        nm = (t.get('name') or '').strip()
+        tgt = float(t.get('target') or 0)
+        deal = omz_map.get(nm.lower(), 0.0)
+        t_days = tgt / days_in_month if days_in_month else 0
+        t_today = t_days * days_elapsed
+        pct = round(deal / tgt * 100, 2) if tgt else 0
+        rows.append({'nama': nm, 'target_month': round(tgt), 'target_days': round(t_days),
+                     'target_today': round(t_today), 'total_deal': round(deal), 'persentase': pct})
+    rows.sort(key=lambda r: -r['persentase'])
+
+    gt_month = sum(r['target_month'] for r in rows)
+    gt_days = sum(r['target_days'] for r in rows)
+    gt_today = sum(r['target_today'] for r in rows)
+    gt_deal = sum(r['total_deal'] for r in rows)
+    gt_pct = round(sum(r['persentase'] for r in rows) / len(rows), 2) if rows else 0
+    return jsonify({'rows': rows, 'days_in_month': days_in_month, 'days_elapsed': days_elapsed,
+                    'grand_total': {'target_month': gt_month, 'target_days': gt_days,
+                                    'target_today': gt_today, 'total_deal': gt_deal, 'persentase': gt_pct}})
+
 @app.route('/api/sales-by-sumber')
 @login_required
 def api_sales_by_sumber():
