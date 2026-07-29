@@ -136,26 +136,28 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .toolbar .spacer-f{flex:1;}
 #detail-search,#bonus-search,#mon-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 320px;max-width:60%;}
 #detail-search:focus,#bonus-search:focus,#mon-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
-#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;min-width:1440px;}
+#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;min-width:1495px;}
 #detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
 #detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #detail-table th:hover{color:var(--orange-600);}
 #detail-table tbody tr:nth-child(even) td{background:#faf8f5;}
 #detail-table tbody tr:hover td{background:#fdeede;}
-/* lebar kolom: Customer, SKO, Sumber, Vendor, Status, Produk, Tanggal, Qty, H.Modal, H.Jual, Margin%, Total Harga, Total Margin */
-#detail-table th:nth-child(1),#detail-table td:nth-child(1){width:130px;}
-#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:110px;}
-#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:90px;}
-#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:110px;}
-#detail-table th:nth-child(5),#detail-table td:nth-child(5){width:130px;}
-#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:180px;}
-#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:95px;}
-#detail-table th:nth-child(8),#detail-table td:nth-child(8){width:65px;}
-#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:100px;}
-#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:100px;}
-#detail-table th:nth-child(11),#detail-table td:nth-child(11){width:85px;}
-#detail-table th:nth-child(12),#detail-table td:nth-child(12){width:120px;}
-#detail-table th:nth-child(13),#detail-table td:nth-child(13){width:125px;}
+/* lebar kolom: Customer, SKO, Sumber, Vendor, Status, Bayar, TOP, Produk, Tanggal, Qty, H.Modal, H.Jual, Margin%, Total Harga, Total Margin */
+#detail-table th:nth-child(1),#detail-table td:nth-child(1){width:118px;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:104px;}
+#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:86px;}
+#detail-table th:nth-child(4),#detail-table td:nth-child(4){width:86px;text-align:center;}
+#detail-table th:nth-child(5),#detail-table td:nth-child(5){width:104px;text-align:center;}
+#detail-table th:nth-child(6),#detail-table td:nth-child(6){width:78px;text-align:center;}
+#detail-table th:nth-child(7),#detail-table td:nth-child(7){width:104px;text-align:center;}
+#detail-table th:nth-child(8),#detail-table td:nth-child(8){width:172px;}
+#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:92px;}
+#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:60px;}
+#detail-table th:nth-child(11),#detail-table td:nth-child(11){width:92px;}
+#detail-table th:nth-child(12),#detail-table td:nth-child(12){width:92px;}
+#detail-table th:nth-child(13),#detail-table td:nth-child(13){width:78px;}
+#detail-table th:nth-child(14),#detail-table td:nth-child(14){width:112px;}
+#detail-table th:nth-child(15),#detail-table td:nth-child(15){width:115px;}
 
 /* Tracking Order — lebar kolom proporsional */
 #trk-table table{table-layout:fixed;width:100%;min-width:1150px;}
@@ -1531,7 +1533,7 @@ function renderCmpTable(){
 const DETAIL = { rows:[], term:'', key:'tanggal', dir:'desc' };
 const DCOLS = [
   ['nama','Customer','str'],['sko','SKO','str'],['sumber','Sumber','str'],
-  ['vendor','Vendor','str'],['status','Status','str'],
+  ['vendor','Vendor','str'],['status','Status','str'],['bayar','Bayar','str'],['top','TOP','str'],
   ['nama_produk','Produk','str'],['tanggal','Tanggal','str'],['quantity','Qty','num'],
   ['harga_modal','Harga Modal','rp'],['harga_jual','Harga Jual','rp'],
   ['persen_margin','Margin %','pct'],['total_harga','Total Harga','rp'],
@@ -1539,10 +1541,17 @@ const DCOLS = [
 ];
 function colType(k){ return (DCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
 function marginColor(pct){ return pct>=20?'var(--green)':(pct>=10?'var(--amber)':'var(--red)'); }
+function pill(txt,bg,col){ return `<span class="pill" style="background:${bg};color:${col};white-space:nowrap">${esc(txt)||'-'}</span>`; }
 function detailStatusPill(s){
   const map={'Selesai Produksi':['#e6f5ee','#2f7a4f'],'On Progres':['#fdf0df','#b5610f'],'Pending':['#f1ece6','#8a7a66']};
   const c=map[s]||['#f1ece6','#6b5d4d'];
-  return `<span class="pill" style="background:${c[0]};color:${c[1]};white-space:nowrap">${esc(s)||'-'}</span>`;
+  return pill(s,c[0],c[1]);
+}
+function bayarPill(s){ return s==='Lunas' ? pill('Lunas','#e6f5ee','#2f7a4f') : pill('Belum','#fdf0df','#b5610f'); }
+function topPill(r){
+  if(!r.top || r.top==='-') return '<span style="color:var(--ink-3)">-</span>';
+  if(r.top==='Lewat TOP') return pill('Lewat TOP'+(r.hari_lewat?` (${r.hari_lewat}h)`:''),'#fbe4e0','#b23c2b');
+  return pill('Aman','#e6f5ee','#2f7a4f');
 }
 function esc(s,attr){ s=(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); return attr?s.replace(/"/g,'&quot;'):s; }
 async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
@@ -1595,6 +1604,8 @@ function renderDetail(){
     <td title="${esc(r.sumber,1)}">${esc(r.sumber)||'-'}</td>
     <td title="${esc(r.vendor,1)}">${esc(r.vendor)||'-'}</td>
     <td>${detailStatusPill(r.status)}</td>
+    <td>${bayarPill(r.bayar)}</td>
+    <td>${topPill(r)}</td>
     <td title="${esc(r.nama_produk,1)}">${esc(r.nama_produk)||'-'}</td>
     <td>${r.tanggal||'-'}</td>
     <td class="num">${fmtInt(r.quantity)}</td>
@@ -1605,13 +1616,13 @@ function renderDetail(){
     <td class="num" style="font-weight:600;color:${marginColor(r.persen_margin)}">${formatRpFull(r.profit)}</td>
   </tr>`).join('');
   document.getElementById('detail-table').innerHTML =
-    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="13" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+    `<table><thead><tr>${head}</tr></thead><tbody>${body || '<tr><td colspan="15" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportDetailCSV(){
   const rows = detailFiltered();
   const lines = [DCOLS.map(c=>c[1]).join(',')];
   rows.forEach(r=>{
-    const vals=[r.nama,r.sko,r.sumber,r.vendor,r.status,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.persen_margin,r.total_harga,r.profit];
+    const vals=[r.nama,r.sko,r.sumber,r.vendor,r.status,r.bayar,r.top,r.nama_produk,r.tanggal,r.quantity,r.harga_modal,r.harga_jual,r.persen_margin,r.total_harga,r.profit];
     lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
