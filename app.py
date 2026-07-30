@@ -1782,11 +1782,32 @@ def api_monitoring_potensi():
         clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         params.append(divisi)
     where = " AND ".join(clauses)
+
+    # Deteksi kolom nomor telepon secara dinamis (nama kolom di ERP bisa beda-beda)
+    phone_col = ''
+    try:
+        cols = [c['COLUMN_NAME'] for c in query(
+            "SELECT COLUMN_NAME FROM information_schema.columns "
+            "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_risepack'")]
+        low = {c.lower(): c for c in cols}
+        for cand in ['no_telp', 'no_telepon', 'nomor_telepon', 'telepon', 'no_hp',
+                     'nomor_hp', 'no_wa', 'nomor_wa', 'whatsapp', 'phone', 'telp', 'hp']:
+            if cand in low:
+                phone_col = low[cand]; break
+        if not phone_col:
+            for cl, orig in low.items():
+                if 'telp' in cl or 'telepon' in cl or 'phone' in cl or 'whatsapp' in cl or cl.endswith('_hp') or cl == 'hp' or '_wa' in cl:
+                    phone_col = orig; break
+    except Exception:
+        phone_col = ''
+    tel_sel = f"o.`{phone_col}` AS telepon" if phone_col else "'' AS telepon"
+
     # Pakai order_risepack (tabel cepat, tanpa join) — sudah berisi waktu_kontak & total_harga
     sql = f"""
         SELECT DATE_FORMAT(o.waktu_kontak,'%Y-%m-%d') AS tgl_kontak,
                o.nama AS nama,
                o.nama_instansi AS instansi,
+               {tel_sel},
                o.name AS pic,
                o.status_deal AS status_deal,
                o.total_harga AS potensi
@@ -1801,7 +1822,9 @@ def api_monitoring_potensi():
         potensi = float(r['potensi'] or 0)
         out.append({
             'tgl_kontak': r['tgl_kontak'],
-            'nama': r['nama'], 'instansi': r['instansi'], 'pic': r['pic'],
+            'nama': r['nama'], 'instansi': r['instansi'],
+            'telepon': (str(r.get('telepon') or '').strip() or None),
+            'pic': r['pic'],
             'status_deal': r['status_deal'],
             'potensi': potensi,
             'terisi': potensi > 0,
