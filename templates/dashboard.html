@@ -175,15 +175,16 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #trk-table th:nth-child(11),#trk-table td:nth-child(11){width:104px;}
 
 /* Monitoring Potensi — lebar kolom proporsional */
-#mon-table table{table-layout:fixed;width:100%;min-width:920px;}
+#mon-table table{table-layout:fixed;width:100%;min-width:1040px;}
 #mon-table th,#mon-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#mon-table th:nth-child(1),#mon-table td:nth-child(1){width:11%;}
-#mon-table th:nth-child(2),#mon-table td:nth-child(2){width:15%;}
-#mon-table th:nth-child(3),#mon-table td:nth-child(3){width:24%;}
-#mon-table th:nth-child(4),#mon-table td:nth-child(4){width:12%;}
-#mon-table th:nth-child(5),#mon-table td:nth-child(5){width:13%;text-align:center;}
-#mon-table th:nth-child(6),#mon-table td:nth-child(6){width:13%;}
-#mon-table th:nth-child(7),#mon-table td:nth-child(7){width:12%;text-align:center;}
+#mon-table th:nth-child(1),#mon-table td:nth-child(1){width:10%;}
+#mon-table th:nth-child(2),#mon-table td:nth-child(2){width:13%;}
+#mon-table th:nth-child(3),#mon-table td:nth-child(3){width:19%;}
+#mon-table th:nth-child(4),#mon-table td:nth-child(4){width:13%;text-align:center;}
+#mon-table th:nth-child(5),#mon-table td:nth-child(5){width:11%;}
+#mon-table th:nth-child(6),#mon-table td:nth-child(6){width:12%;text-align:center;}
+#mon-table th:nth-child(7),#mon-table td:nth-child(7){width:12%;}
+#mon-table th:nth-child(8),#mon-table td:nth-child(8){width:10%;text-align:center;}
 
 /* tabel customer proporsional */
 #dnr-table table,#journey-table table,#sko-ach table{table-layout:fixed;width:100%;}
@@ -1646,7 +1647,8 @@ function exportDetailCSV(){
 const MON = { rows:[], term:'', key:'tgl_kontak', dir:'desc', deal:'all' };
 const MCOLS = [
   ['tgl_kontak','Tgl Kontak','str'],['nama','Customer','str'],['instansi','Instansi','str'],
-  ['pic','PIC','str'],['status_deal','Status Deal','str'],['potensi','Potensi','num'],['terisi','Status Potensi','bool'],
+  ['telepon','No. Telepon','str'],['pic','PIC','str'],['status_deal','Status Deal','str'],
+  ['potensi','Potensi','num'],['terisi','Status Potensi','bool'],
 ];
 function monColType(k){ return (MCOLS.find(c=>c[0]===k)||['','','str'])[2]; }
 async function loadMonitoring(q){ MON.rows = await fetchJSON('/api/monitoring-potensi?'+q); renderMonAll(); }
@@ -1729,6 +1731,7 @@ function renderMon(){
     <td>${r.tgl_kontak||'-'}</td>
     <td style="font-weight:500" title="${esc(r.nama,1)}">${esc(r.nama)||'-'}</td>
     <td title="${esc(r.instansi,1)}">${esc(r.instansi)||'-'}</td>
+    <td title="${esc(r.telepon,1)}">${esc(r.telepon)||'-'}</td>
     <td title="${esc(r.pic,1)}">${esc(r.pic)||'-'}</td>
     <td>${esc(r.status_deal)||'-'}</td>
     <td class="num" style="font-weight:600">${formatRpFull(r.potensi)}</td>
@@ -1736,14 +1739,14 @@ function renderMon(){
   </tr>`).join('');
   document.getElementById('mon-table').innerHTML = `<table>
     <thead><tr>${head}</tr></thead>
-    <tbody>${body||'<tr><td colspan="7" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
+    <tbody>${body||'<tr><td colspan="8" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 function exportMonCSV(){
   const rows = monFiltered();
-  const head = ['Tgl Kontak','Customer','Instansi','PIC','Status Deal','Potensi','Status Potensi'];
+  const head = ['Tgl Kontak','Customer','Instansi','No. Telepon','PIC','Status Deal','Potensi','Status Potensi'];
   const lines = [head.join(',')];
   rows.forEach(r=>{
-    const vals=[r.tgl_kontak,r.nama,r.instansi,r.pic,r.status_deal,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
+    const vals=[r.tgl_kontak,r.nama,r.instansi,r.telepon,r.pic,r.status_deal,r.potensi,r.terisi?'Sudah diisi':'Belum diisi'];
     lines.push(vals.map(v=>{ v=(v==null?'':String(v)); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','));
   });
   const blob=new Blob(['﻿'+lines.join('\n')],{type:'text/csv;charset=utf-8;'});
