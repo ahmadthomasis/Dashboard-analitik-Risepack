@@ -1264,9 +1264,19 @@ def api_sales_target():
                 f"WHERE {' AND '.join(clauses)} GROUP BY o.name", params)
     omz_map = {(r['pic'] or '').strip().lower(): float(r['omzet'] or 0) for r in omz}
 
+    # Keanggotaan divisi (otomatis dari data): sales muncul di divisi X jika punya order di X.
+    div_members = None
+    if divisi:
+        dm = query("""SELECT DISTINCT o.name AS pic FROM order_risepack o
+                      JOIN tb_orders t ON t.order_key = o.order_key
+                      WHERE t.sub_division = %s AND o.name IS NOT NULL AND o.name <> ''""", [divisi])
+        div_members = {(r['pic'] or '').strip().lower() for r in dm}
+
     rows = []
     for t in targets:
         nm = (t.get('name') or '').strip()
+        if div_members is not None and nm.lower() not in div_members:
+            continue   # sales bukan anggota divisi terpilih -> tidak ditampilkan
         tgt = float(t.get('target') or 0)
         deal = omz_map.get(nm.lower(), 0.0)
         t_days = tgt / days_in_month if days_in_month else 0
