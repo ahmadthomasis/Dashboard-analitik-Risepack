@@ -1163,6 +1163,34 @@ def new_funnel(tgl_dari, tgl_sampai, pic, divisi):
         'closing_rate_new': round(d / q * 100, 1) if q else 0,
     }
 
+@app.route('/api/closing-new-debug')
+@login_required
+def api_closing_new_debug():
+    """Diagnosa kenapa Closing Rate New sebuah sales 0. Pakai ?pic=<nama>&tgl_dari=YYYY-MM-DD&tgl_sampai=YYYY-MM-DD"""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    if not pic:
+        return jsonify({'_hint': 'set ?pic=Kiki&tgl_dari=2026-07-01&tgl_sampai=2026-07-30'})
+    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    bysumber = query(f"""
+        SELECT o.sumber AS sumber, COUNT(DISTINCT o.sko_key) AS n, SUM(o.total_harga) AS omzet
+        {BASE} AND o.status_deal='Deal' {cond} GROUP BY o.sumber
+    """, params)
+    clauses = ["(o.flag_dummy!='dummy' OR o.flag_dummy IS NULL)", "o.sumber='Online'", "o.name=%s"]
+    p2 = [pic]
+    if tgl_dari: clauses.append("o.waktu_kontak>=%s"); p2.append(tgl_dari)
+    if tgl_sampai: clauses.append("o.waktu_kontak<=%s"); p2.append(tgl_sampai + ' 23:59:59')
+    onl = query(f"""SELECT COUNT(DISTINCT o.sko_key) qualified,
+        COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.sko_key END) deal
+        FROM order_risepack o WHERE {' AND '.join(clauses)}""", p2)[0]
+    return jsonify({
+        'pic': pic, 'periode': [tgl_dari, tgl_sampai],
+        'yang_dipakai_KPI__new_funnel_online_by_waktu_kontak': nf,
+        'deal_kiki_by_sumber__by_tanggal_deal': [
+            {'sumber': r['sumber'], 'n_deal': int(r['n'] or 0), 'omzet': float(r['omzet'] or 0)} for r in bysumber],
+        'online_leads_by_waktu_kontak': {'qualified': int(onl['qualified'] or 0), 'deal': int(onl['deal'] or 0)},
+    })
+
 @app.route('/api/kpi')
 @login_required
 def api_kpi():
