@@ -2262,7 +2262,8 @@ def api_kpi_fungsi():
     umbrella_val = sum_months(cfg.get('fungsi_umbrella', {}).get(pic, {}), d1, d2, nmonths, 0)
 
     rows, total_w, total_ach_w = [], 0.0, 0.0
-    for k in cfg.get('fungsi_kpi', []):
+    kpi_list = cfg.get('fungsi_kpi_override', {}).get(pic) or cfg.get('fungsi_kpi', [])
+    for k in kpi_list:
         basis, target, w = k['basis'], k['target'], k['weight'] / 100.0
         target_eff = target
         if basis == 'omzet_sales':

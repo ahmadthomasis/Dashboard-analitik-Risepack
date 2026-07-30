@@ -52,6 +52,18 @@
     {"id": "gross_margin", "name": "Gross Margin 25%",     "weight": 15, "target": 25,  "basis": "gross_margin",     "unit": "%",  "note": "Rata-rata margin per bulan"},
     {"id": "umbrella",     "name": "Umbrella Contract",    "weight": 5,  "target": 1,   "basis": "umbrella_sales",   "unit": "kontrak", "note": "1 / bulan (diisi manual di bawah)"}
   ],
+  "_catatan_fungsi_override": "KPI khusus per sales. Kalau nama sales ada di sini, dipakai daftar ini (bukan fungsi_kpi default). Bobot harus total 100.",
+  "fungsi_kpi_override": {
+    "Amel": [
+      {"id": "omzet",        "name": "Omzet 100% Target", "weight": 70, "target": 100, "basis": "omzet_sales",  "unit": "Rp", "note": "Omzet sales / target sales per bulan"},
+      {"id": "gross_margin", "name": "Gross Margin 25%",  "weight": 30, "target": 25,  "basis": "gross_margin", "unit": "%",  "note": "Rata-rata margin per bulan"}
+    ],
+    "Faisal": [
+      {"id": "omzet",        "name": "Omzet 100% Target", "weight": 65, "target": 100, "basis": "omzet_sales",  "unit": "Rp", "note": "Omzet sales / target sales per bulan"},
+      {"id": "repeat",       "name": "Repeat Order 70%",  "weight": 20, "target": 70,  "basis": "repeat_sales", "unit": "Rp", "note": "Target = 70% dari target omzet sales"},
+      {"id": "gross_margin", "name": "Gross Margin 25%",  "weight": 15, "target": 25,  "basis": "gross_margin", "unit": "%",  "note": "Rata-rata margin per bulan"}
+    ]
+  },
   "fungsi_sales": ["Kiki", "Ma'ruf", "Faisal", "Amel"],
   "fungsi_omzet_target": {
     "Kiki": 500000000,
