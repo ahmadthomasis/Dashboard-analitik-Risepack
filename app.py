@@ -1156,12 +1156,73 @@ def new_funnel(tgl_dari, tgl_sampai, pic, divisi):
     q = int(r['qualified'] or 0)
     d = int(r['deal_new'] or 0)
     om = float(r['omzet_new'] or 0)
+
+    # Closing Rate New (definisi final):
+    #  pembilang = jumlah customer BARU (non-Repeat Order, SEMUA sumber) yang Deal, by TANGGAL ORDER.
+    #  pembagi   = qualified leads (tipe_kontak 'Bukan Sampah') by WAKTU KONTAK.
+    #  Keduanya dihormati filter PIC / divisi.
+    def _pf(c, p):
+        c, p = list(c), list(p)
+        if pic:
+            c.append("o.name = %s"); p.append(pic)
+        if divisi:
+            c.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+            p.append(divisi)
+        return c, p
+
+    num_c = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.status_deal='Deal'",
+             "o.sumber <> 'Repeat Order'", "o.id_customer IS NOT NULL"]
+    num_p = []
+    if tgl_dari: num_c.append("DATE(o.tgl_omzet_realtime) >= %s"); num_p.append(tgl_dari)
+    if tgl_sampai: num_c.append("DATE(o.tgl_omzet_realtime) <= %s"); num_p.append(tgl_sampai)
+    num_c, num_p = _pf(num_c, num_p)
+    new_cust = int(query(f"SELECT COUNT(DISTINCT o.id_customer) v FROM order_risepack o "
+                         f"WHERE {' AND '.join(num_c)}", num_p)[0]['v'] or 0)
+
+    den_c = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.tipe_kontak = 'Bukan Sampah'"]
+    den_p = []
+    if tgl_dari: den_c.append("o.waktu_kontak >= %s"); den_p.append(tgl_dari)
+    if tgl_sampai: den_c.append("o.waktu_kontak <= %s"); den_p.append(tgl_sampai + ' 23:59:59')
+    den_c, den_p = _pf(den_c, den_p)
+    qleads = int(query(f"SELECT COUNT(DISTINCT o.sko_key) v FROM order_risepack o "
+                       f"WHERE {' AND '.join(den_c)}", den_p)[0]['v'] or 0)
+
     return {
         'qualified_new': q,
         'total_new': d,
         'omzet_new': om,
-        'closing_rate_new': round(d / q * 100, 1) if q else 0,
+        'new_cust': new_cust,
+        'qleads_new': qleads,
+        'closing_rate_new': round(new_cust / qleads * 100, 1) if qleads else 0,
     }
+
+@app.route('/api/closing-new-debug')
+@login_required
+def api_closing_new_debug():
+    """Diagnosa kenapa Closing Rate New sebuah sales 0. Pakai ?pic=<nama>&tgl_dari=YYYY-MM-DD&tgl_sampai=YYYY-MM-DD"""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    if not pic:
+        return jsonify({'_hint': 'set ?pic=Kiki&tgl_dari=2026-07-01&tgl_sampai=2026-07-30'})
+    nf = new_funnel(tgl_dari, tgl_sampai, pic, divisi)
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    bysumber = query(f"""
+        SELECT o.sumber AS sumber, COUNT(DISTINCT o.sko_key) AS n, SUM(o.total_harga) AS omzet
+        {BASE} AND o.status_deal='Deal' {cond} GROUP BY o.sumber
+    """, params)
+    clauses = ["(o.flag_dummy!='dummy' OR o.flag_dummy IS NULL)", "o.sumber='Online'", "o.name=%s"]
+    p2 = [pic]
+    if tgl_dari: clauses.append("o.waktu_kontak>=%s"); p2.append(tgl_dari)
+    if tgl_sampai: clauses.append("o.waktu_kontak<=%s"); p2.append(tgl_sampai + ' 23:59:59')
+    onl = query(f"""SELECT COUNT(DISTINCT o.sko_key) qualified,
+        COUNT(DISTINCT CASE WHEN o.status_deal='Deal' THEN o.sko_key END) deal
+        FROM order_risepack o WHERE {' AND '.join(clauses)}""", p2)[0]
+    return jsonify({
+        'pic': pic, 'periode': [tgl_dari, tgl_sampai],
+        'yang_dipakai_KPI__new_funnel_online_by_waktu_kontak': nf,
+        'deal_kiki_by_sumber__by_tanggal_deal': [
+            {'sumber': r['sumber'], 'n_deal': int(r['n'] or 0), 'omzet': float(r['omzet'] or 0)} for r in bysumber],
+        'online_leads_by_waktu_kontak': {'qualified': int(onl['qualified'] or 0), 'deal': int(onl['deal'] or 0)},
+    })
 
 @app.route('/api/kpi')
 @login_required
