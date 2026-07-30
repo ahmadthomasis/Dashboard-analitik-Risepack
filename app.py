@@ -1269,7 +1269,7 @@ def api_sales_target():
     # hanya karena kebetulan pernah 1-2 order di sana.
     primary_div = {}
     if divisi:
-        pr = query("""SELECT o.name AS pic, t.sub_division AS div, COUNT(*) AS n
+        pr = query("""SELECT o.name AS pic, t.sub_division AS subdiv, COUNT(*) AS n
                       FROM order_risepack o JOIN tb_orders t ON t.order_key = o.order_key
                       WHERE o.name IS NOT NULL AND o.name <> ''
                         AND t.sub_division IS NOT NULL AND t.sub_division <> ''
@@ -1278,7 +1278,7 @@ def api_sales_target():
         for r in pr:
             nm2 = (r['pic'] or '').strip().lower(); c = int(r['n'] or 0)
             if nm2 not in best or c > best[nm2][1]:
-                best[nm2] = (r['div'], c)
+                best[nm2] = (r['subdiv'], c)
         primary_div = {k: v[0] for k, v in best.items()}
 
     rows = []
