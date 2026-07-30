@@ -1264,19 +1264,28 @@ def api_sales_target():
                 f"WHERE {' AND '.join(clauses)} GROUP BY o.name", params)
     omz_map = {(r['pic'] or '').strip().lower(): float(r['omzet'] or 0) for r in omz}
 
-    # Keanggotaan divisi (otomatis dari data): sales muncul di divisi X jika punya order di X.
-    div_members = None
+    # Divisi UTAMA tiap sales (otomatis) = sub_division dgn jumlah order terbanyak (all-time).
+    # Sales hanya tampil di filter divisi yang == divisi utamanya, supaya tidak bocor ke divisi lain
+    # hanya karena kebetulan pernah 1-2 order di sana.
+    primary_div = {}
     if divisi:
-        dm = query("""SELECT DISTINCT o.name AS pic FROM order_risepack o
-                      JOIN tb_orders t ON t.order_key = o.order_key
-                      WHERE t.sub_division = %s AND o.name IS NOT NULL AND o.name <> ''""", [divisi])
-        div_members = {(r['pic'] or '').strip().lower() for r in dm}
+        pr = query("""SELECT o.name AS pic, t.sub_division AS div, COUNT(*) AS n
+                      FROM order_risepack o JOIN tb_orders t ON t.order_key = o.order_key
+                      WHERE o.name IS NOT NULL AND o.name <> ''
+                        AND t.sub_division IS NOT NULL AND t.sub_division <> ''
+                      GROUP BY o.name, t.sub_division""")
+        best = {}
+        for r in pr:
+            nm2 = (r['pic'] or '').strip().lower(); c = int(r['n'] or 0)
+            if nm2 not in best or c > best[nm2][1]:
+                best[nm2] = (r['div'], c)
+        primary_div = {k: v[0] for k, v in best.items()}
 
     rows = []
     for t in targets:
         nm = (t.get('name') or '').strip()
-        if div_members is not None and nm.lower() not in div_members:
-            continue   # sales bukan anggota divisi terpilih -> tidak ditampilkan
+        if divisi and primary_div.get(nm.lower()) != divisi:
+            continue   # divisi utama sales ini bukan divisi terpilih -> tidak ditampilkan
         tgt = float(t.get('target') or 0)
         deal = omz_map.get(nm.lower(), 0.0)
         t_days = tgt / days_in_month if days_in_month else 0
