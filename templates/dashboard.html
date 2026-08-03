@@ -136,7 +136,7 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 .toolbar .spacer-f{flex:1;}
 #detail-search,#bonus-search,#mon-search{padding:9px 13px;border:1px solid var(--border-strong);border-radius:9px;font-family:inherit;font-size:13px;color:var(--ink);outline:none;flex:0 0 320px;max-width:60%;}
 #detail-search:focus,#bonus-search:focus,#mon-search:focus{border-color:var(--orange);box-shadow:0 0 0 3px var(--orange-soft);}
-#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;min-width:1495px;}
+#detail-table table{font-size:12.5px;table-layout:fixed;width:100%;min-width:1575px;}
 #detail-table th{position:sticky;top:0;background:var(--surface);white-space:nowrap;user-select:none;z-index:1;}
 #detail-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #detail-table th:hover{color:var(--orange-600);}
@@ -144,15 +144,15 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #detail-table tbody tr:hover td{background:#fdeede;}
 /* lebar kolom: Customer, SKO, Sumber, Vendor, Status, Bayar, TOP, Produk, Tanggal, Qty, H.Modal, H.Jual, Margin%, Total Harga, Total Margin */
 #detail-table th:nth-child(1),#detail-table td:nth-child(1){width:118px;}
-#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:104px;}
-#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:86px;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){width:120px;}
+#detail-table th:nth-child(3),#detail-table td:nth-child(3){width:108px;}
 #detail-table th:nth-child(4),#detail-table td:nth-child(4){width:86px;text-align:center;}
 #detail-table th:nth-child(5),#detail-table td:nth-child(5){width:104px;text-align:center;}
 #detail-table th:nth-child(6),#detail-table td:nth-child(6){width:78px;text-align:center;}
 #detail-table th:nth-child(7),#detail-table td:nth-child(7){width:104px;text-align:center;}
 #detail-table th:nth-child(8),#detail-table td:nth-child(8){width:172px;}
-#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:92px;}
-#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:60px;}
+#detail-table th:nth-child(9),#detail-table td:nth-child(9){width:104px;}
+#detail-table th:nth-child(10),#detail-table td:nth-child(10){width:88px;}
 #detail-table th:nth-child(11),#detail-table td:nth-child(11){width:92px;}
 #detail-table th:nth-child(12),#detail-table td:nth-child(12){width:92px;}
 #detail-table th:nth-child(13),#detail-table td:nth-child(13){width:78px;}
@@ -1619,8 +1619,8 @@ function renderDetail(){
     <td>${bayarPill(r.bayar)}</td>
     <td>${topPill(r)}</td>
     <td title="${esc(r.nama_produk,1)}">${esc(r.nama_produk)||'-'}</td>
-    <td>${r.tanggal||'-'}</td>
-    <td class="num">${fmtInt(r.quantity)}</td>
+    <td title="${r.tanggal||''}">${r.tanggal||'-'}</td>
+    <td class="num" title="${fmtInt(r.quantity)}">${fmtInt(r.quantity)}</td>
     <td class="num">${formatRpFull(r.harga_modal)}</td>
     <td class="num">${formatRpFull(r.harga_jual)}</td>
     <td class="num" style="font-weight:600;color:${marginColor(r.persen_margin)}">${r.persen_margin}%</td>
