@@ -80,7 +80,7 @@
 
   "marketing_kpi": [
     {"id": "potensi",   "name": "Potensi Omzet 3M",  "weight": 50, "target": 3000000000, "basis": "potensi_total",  "unit": "Rp",    "note": "Total potensi baru / bulan"},
-    {"id": "qualified", "name": "Qualified Leads 200","weight": 30, "target": 200,        "basis": "qualified_leads","unit": "leads", "note": "Qualified leads semua sumber / bulan"},
+    {"id": "qualified", "name": "Qualified Leads 200","weight": 30, "target": 200,        "basis": "qualified_leads","unit": "leads", "note": "Lead online baru (sumber Online, by waktu kontak) = sama dgn Monitoring Potensi"},
     {"id": "roi",       "name": "ROI 15x",           "weight": 20, "target": 15,         "basis": "roi_ads",        "unit": "x",     "note": "Omzet new ÷ belanja iklan (isi belanja di bawah)"}
   ],
   "marketing_adspend": {
