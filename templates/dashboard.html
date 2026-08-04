@@ -158,6 +158,13 @@ tbody tr:nth-child(3) .rank{background:#f7e7d4;color:#8a5a2b;}
 #detail-table th:nth-child(13),#detail-table td:nth-child(13){width:78px;}
 #detail-table th:nth-child(14),#detail-table td:nth-child(14){width:112px;}
 #detail-table th:nth-child(15),#detail-table td:nth-child(15){width:115px;}
+/* Freeze 2 kolom kiri (Customer + SKO) saat scroll horizontal */
+#detail-table th:nth-child(1),#detail-table td:nth-child(1){position:sticky;left:0;z-index:2;}
+#detail-table th:nth-child(2),#detail-table td:nth-child(2){position:sticky;left:118px;z-index:2;box-shadow:1px 0 0 var(--border);}
+#detail-table th:nth-child(1),#detail-table th:nth-child(2){z-index:3;}
+#detail-table td:nth-child(1),#detail-table td:nth-child(2){background:var(--surface);}
+#detail-table tbody tr:nth-child(even) td:nth-child(1),#detail-table tbody tr:nth-child(even) td:nth-child(2){background:#faf8f5;}
+#detail-table tbody tr:hover td:nth-child(1),#detail-table tbody tr:hover td:nth-child(2){background:#fdeede;}
 
 /* Tracking Order — lebar kolom proporsional */
 #trk-table table{table-layout:fixed;width:100%;min-width:1150px;}
