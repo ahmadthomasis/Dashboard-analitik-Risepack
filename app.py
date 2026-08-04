@@ -1453,6 +1453,8 @@ def api_tracking_order():
     sj_map = {r['sko']: float(r['qty_kirim'] or 0) for r in sj}
     filtered = bool(pic or divisi)
     today = datetime.now().date()
+    # SPK yang telat > N hari disembunyikan dari monitoring harian (sampah data lama). Atur di config.
+    hide_days = int(load_kpi_config().get('tracking_hide_overdue_days', 60) or 0)
 
     def to_date(v):
         if v is None: return None
@@ -1474,6 +1476,8 @@ def api_tracking_order():
         if dl is None:
             continue
         days = (dl - today).days
+        if hide_days and days < -hide_days:   # telat lebih dari N hari -> sembunyikan
+            continue
         if days < 0:    b = 'terlambat'
         elif days == 0: b = 'hari_h'
         elif days <= 3: b = 'd3'
