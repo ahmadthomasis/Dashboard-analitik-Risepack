@@ -1118,7 +1118,7 @@ async function loadSalesTarget(q){
   const d=await fetchJSON('/api/sales-target?'+q);
   const rows=d.rows||[], gt=d.grand_total||{}, n=rows.length;
   const sub=document.getElementById('st-sub');
-  if(sub) sub.textContent=`Hari berjalan ${d.days_elapsed}/${d.days_in_month} · Persentase = Total Deal ÷ Target bulanan · target diatur di kpi_config.json`;
+  if(sub) sub.textContent=`Hari berjalan ${d.days_elapsed}/${d.days_in_month} · Persentase = Total Deal ÷ Target bulanan · target bulanan dari app (tb_target_sales), fallback config`;
   const body=rows.map((r,i)=>{
     const bg = i===0 ? 'background:#e6f5ee' : (i===n-1 ? 'background:#fbe4e0' : '');
     const pcol = i===0 ? 'var(--green)' : (i===n-1 ? 'var(--red)' : 'var(--ink)');

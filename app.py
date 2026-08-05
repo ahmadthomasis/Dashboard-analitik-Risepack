@@ -1312,6 +1312,27 @@ def api_sales_target():
     days_elapsed = (d2 - d1).days + 1
     if days_elapsed < 1: days_elapsed = 1
 
+    # Target bulanan dari APP (tb_target_sales, diset manager) — per sales, dijumlah sepanjang rentang.
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+    months = []
+    _y, _mo = d1.year, d1.month
+    for _ in range(nmonths):
+        months.append(f"{_y:04d}-{_mo:02d}")
+        _mo += 1
+        if _mo > 12: _mo = 1; _y += 1
+    tgt_db = {}
+    _names = [(t.get('name') or '').strip() for t in targets if (t.get('name') or '').strip()]
+    if _names and months:
+        ph_n = ','.join(['%s'] * len(_names))
+        ph_m = ','.join(['%s'] * len(months))
+        trows = query(
+            f"SELECT u.name AS pic, COALESCE(SUM(ts.target_revenue),0) AS target "
+            f"FROM tb_target_sales ts JOIN users u ON ts.user_id = u.id "
+            f"WHERE u.name IN ({ph_n}) AND ts.deleted_at IS NULL "
+            f"AND CONCAT(ts.year,'-',LPAD(ts.month,2,'0')) IN ({ph_m}) GROUP BY u.name",
+            _names + months)
+        tgt_db = {(r['pic'] or '').strip().lower(): float(r['target'] or 0) for r in trows}
+
     # Omzet deal per sales (semua PIC) pada periode — filter divisi bila dipilih
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
                "o.status_deal='Deal'", "o.name IS NOT NULL", "o.name!=''"]
@@ -1347,7 +1368,10 @@ def api_sales_target():
         nm = (t.get('name') or '').strip()
         if divisi and primary_div.get(nm.lower()) != divisi:
             continue   # divisi utama sales ini bukan divisi terpilih -> tidak ditampilkan
-        tgt = float(t.get('target') or 0)
+        # Target dari app (tb_target_sales) diutamakan; fallback ke config × jumlah bulan
+        tgt = tgt_db.get(nm.lower(), 0.0)
+        if tgt <= 0:
+            tgt = float(t.get('target') or 0) * nmonths
         deal = omz_map.get(nm.lower(), 0.0)
         t_days = tgt / days_in_month if days_in_month else 0
         t_today = t_days * days_elapsed
