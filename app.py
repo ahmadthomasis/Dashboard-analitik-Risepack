@@ -1389,6 +1389,108 @@ def api_sales_target():
                     'grand_total': {'target_month': gt_month, 'target_days': gt_days,
                                     'target_today': gt_today, 'total_deal': gt_deal, 'persentase': gt_pct}})
 
+def bonus_net_by_pic(tgl_dari, tgl_sampai, divisi):
+    """Net bonus (bonus - denda telat bayar) per PIC — logika sama persis dgn tab Bonus."""
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)",
+               "o.status_deal = 'Deal'", "inv.tanggal_pelunasan IS NOT NULL"]
+    params = []
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    if tgl_dari:
+        clauses.append("inv.tanggal_pelunasan >= %s"); params.append(tgl_dari)
+    if tgl_sampai:
+        clauses.append("inv.tanggal_pelunasan <= %s"); params.append(tgl_sampai)
+    sql = f"""
+        SELECT MAX(o.name) AS pic, MAX(o.sumber) AS sumber,
+               MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
+               DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
+        FROM order_risepack o
+        JOIN invoice_details idt ON o.sko = idt.kode_order
+        JOIN invoices inv ON idt.invoice_key = inv.invoice_key
+        WHERE {' AND '.join(clauses)}
+        GROUP BY o.sko_key, o.sko
+        LIMIT 5000
+    """
+    m = {}
+    for r in query(sql, params):
+        margin = float(r['total_harga'] or 0) - float(r['modal_sales'] or 0)
+        sumber = r['sumber'] or ''
+        rate = 0.025 if sumber == 'Repeat Order' else (0.05 if sumber in ('Online', 'Online Lintas') else 0.0)
+        bonus = margin * rate
+        h = r['hari_telat']; h = int(h) if h is not None else None
+        mult = 0.0 if (h is None or h <= 0) else (0.25 if h <= 7 else (0.50 if h <= 14 else 1.0))
+        net = bonus - bonus * mult
+        pic = (r['pic'] or '').strip().lower()
+        m[pic] = m.get(pic, 0.0) + net
+    return m
+
+@app.route('/api/sales-efisiensi')
+@login_required
+def api_sales_efisiensi():
+    """Efisiensi sales: Biaya (Gaji config + Net Bonus) vs Gross Margin (omzet-modal deal).
+       Rasio = Margin ÷ Biaya. Net = Margin − Biaya. Gaji per bulan dari config sales_gaji."""
+    cfg = load_kpi_config()
+    gaji_cfg = cfg.get('sales_gaji', {})
+    tgl_dari, tgl_sampai, _pic, divisi = get_args()
+
+    def pd(s):
+        try: return datetime.strptime(s, '%Y-%m-%d').date()
+        except Exception: return None
+    d1, d2 = pd(tgl_dari), pd(tgl_sampai)
+    if not (d1 and d2):
+        t = datetime.now().date(); d1, d2 = t.replace(day=1), t
+    nmonths = months_between(d1, d2) if (d1 and d2) else 1
+
+    # Gross margin per PIC (Deal, by tanggal order) — sama definisi dgn tab Margin
+    clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.status_deal='Deal'",
+               "o.name IS NOT NULL", "o.name!=''"]
+    params = []
+    if tgl_dari: clauses.append("DATE(o.tgl_omzet_realtime) >= %s"); params.append(tgl_dari)
+    if tgl_sampai: clauses.append("DATE(o.tgl_omzet_realtime) <= %s"); params.append(tgl_sampai)
+    if divisi:
+        clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+        params.append(divisi)
+    mg = query(f"SELECT o.name AS pic, SUM(o.total_harga - o.modal_sales) AS margin "
+               f"FROM order_risepack o WHERE {' AND '.join(clauses)} GROUP BY o.name", params)
+    margin_map = {(r['pic'] or '').strip().lower(): float(r['margin'] or 0) for r in mg}
+
+    bonus_map = bonus_net_by_pic(tgl_dari, tgl_sampai, divisi)
+
+    # Divisi utama tiap sales (biar filter divisi hanya menampilkan sales divisi itu)
+    primary_div = {}
+    if divisi:
+        pr = query("""SELECT o.name AS pic, t.sub_division AS subdiv, COUNT(*) AS n
+                      FROM order_risepack o JOIN tb_orders t ON t.order_key = o.order_key
+                      WHERE o.name IS NOT NULL AND o.name <> ''
+                        AND t.sub_division IS NOT NULL AND t.sub_division <> ''
+                      GROUP BY o.name, t.sub_division""")
+        best = {}
+        for r in pr:
+            nm2 = (r['pic'] or '').strip().lower(); c = int(r['n'] or 0)
+            if nm2 not in best or c > best[nm2][1]:
+                best[nm2] = (r['subdiv'], c)
+        primary_div = {k: v[0] for k, v in best.items()}
+
+    rows = []
+    for name, gmap in gaji_cfg.items():
+        nm = name.strip()
+        if divisi and primary_div.get(nm.lower()) != divisi:
+            continue
+        gaji = sum_months(gmap, d1, d2, nmonths, 0)
+        bonus = bonus_map.get(nm.lower(), 0.0)
+        margin = margin_map.get(nm.lower(), 0.0)
+        biaya = gaji + bonus
+        ratio = round(margin / biaya, 2) if biaya > 0 else 0
+        rows.append({'nama': nm, 'gaji': round(gaji), 'bonus': round(bonus),
+                     'biaya': round(biaya), 'margin': round(margin),
+                     'ratio': ratio, 'net': round(margin - biaya)})
+    rows.sort(key=lambda r: -r['ratio'])
+    tb = sum(r['biaya'] for r in rows); tm = sum(r['margin'] for r in rows)
+    return jsonify({'rows': rows, 'summary': {
+        'biaya': tb, 'margin': tm,
+        'ratio': (round(tm / tb, 2) if tb > 0 else 0), 'net': tm - tb}})
+
 @app.route('/api/sales-by-sumber')
 @login_required
 def api_sales_by_sumber():
