@@ -1406,7 +1406,7 @@ def bonus_net_by_pic(tgl_dari, tgl_sampai, divisi):
                MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
+        JOIN invoice_details idt ON o.sko = idt.kode_order
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {' AND '.join(clauses)}
         GROUP BY o.sko_key, o.sko
@@ -2248,7 +2248,7 @@ def api_bonus():
                DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
+        JOIN invoice_details idt ON o.sko = idt.kode_order
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {where}
         GROUP BY o.sko_key, o.sko
@@ -2282,6 +2282,65 @@ def api_bonus():
             'denda': round(denda), 'net': round(bonus - denda),
         })
     return jsonify(out)
+
+@app.route('/api/bonus-debug')
+@login_required
+def api_bonus_debug():
+    """Rekonstruksi bonus per PIC utk cocokkan dgn ERP.
+       Menampilkan: (A) baris yg cocok invoice by SKO persis (logika sekarang),
+       (B) baris SKO terpecah (-N) yg TIDAK punya invoice sendiri tapi base-nya ada.
+       Params: pic, tgl_dari, tgl_sampai (filter tgl_pelunasan)."""
+    import decimal
+    pic = (request.args.get('pic') or '').strip()
+    tgl_dari = request.args.get('tgl_dari'); tgl_sampai = request.args.get('tgl_sampai')
+
+    def rate_of(s):
+        return 0.025 if s == 'Repeat Order' else (0.05 if s in ('Online', 'Online Lintas') else 0.0)
+
+    # (A) baris yg saat ini terhitung (match invoice by SKO persis)
+    cA = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.status_deal='Deal'",
+          "inv.tanggal_pelunasan IS NOT NULL"]
+    pA = []
+    if pic: cA.append("o.name=%s"); pA.append(pic)
+    if tgl_dari: cA.append("inv.tanggal_pelunasan >= %s"); pA.append(tgl_dari)
+    if tgl_sampai: cA.append("inv.tanggal_pelunasan <= %s"); pA.append(tgl_sampai)
+    A = query(f"""SELECT o.sko, MAX(o.sumber) AS sumber, MAX(o.total_harga) AS total_harga,
+                    MAX(o.modal_sales) AS modal_sales,
+                    DATE_FORMAT(MAX(inv.tanggal_pelunasan),'%Y-%m-%d') AS pelunasan
+                 FROM order_risepack o
+                 JOIN invoice_details idt ON o.sko = idt.kode_order
+                 JOIN invoices inv ON idt.invoice_key = inv.invoice_key
+                 WHERE {' AND '.join(cA)} GROUP BY o.sko_key, o.sko LIMIT 3000""", pA)
+
+    # (B) baris SKO ber-akhiran -N yg base-nya (tanpa -N) ada di invoice, tapi -N sendiri tidak
+    cB = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.status_deal='Deal'",
+          "o.sko REGEXP '-[0-9]+$'", "inv.tanggal_pelunasan IS NOT NULL"]
+    pB = []
+    if pic: cB.append("o.name=%s"); pB.append(pic)
+    if tgl_dari: cB.append("inv.tanggal_pelunasan >= %s"); pB.append(tgl_dari)
+    if tgl_sampai: cB.append("inv.tanggal_pelunasan <= %s"); pB.append(tgl_sampai)
+    B = query(f"""SELECT o.sko, MAX(o.sumber) AS sumber, MAX(o.total_harga) AS total_harga,
+                    MAX(o.modal_sales) AS modal_sales,
+                    DATE_FORMAT(MAX(inv.tanggal_pelunasan),'%Y-%m-%d') AS pelunasan
+                 FROM order_risepack o
+                 JOIN invoice_details idt ON o.sko LIKE CONCAT(idt.kode_order,'-%')
+                 JOIN invoices inv ON idt.invoice_key = inv.invoice_key
+                 WHERE {' AND '.join(cB)} GROUP BY o.sko_key, o.sko LIMIT 3000""", pB)
+
+    def enrich(rows):
+        out = []
+        for r in rows:
+            m = float(r['total_harga'] or 0) - float(r['modal_sales'] or 0)
+            b = m * rate_of(r['sumber'] or '')
+            out.append({'sko': r['sko'], 'sumber': r['sumber'], 'margin': round(m),
+                        'bonus': round(b), 'pelunasan': r['pelunasan']})
+        return out
+    A2, B2 = enrich(A), enrich(B)
+    return jsonify({
+        'A_match_sko_persis': {'baris': len(A2), 'total_bonus': round(sum(x['bonus'] for x in A2)), 'rows': A2},
+        'B_split_-N_base_ada': {'baris': len(B2), 'total_bonus': round(sum(x['bonus'] for x in B2)), 'rows': B2},
+        'total_A_plus_B': round(sum(x['bonus'] for x in A2) + sum(x['bonus'] for x in B2)),
+    })
 
 
 # ─── KPI Sales (OKR scorecard) ───────────────────────────────────
