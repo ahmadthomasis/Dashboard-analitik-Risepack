@@ -1704,6 +1704,47 @@ def api_sj_header_debug():
         f"WHERE surat_jalan_key IN ({ph}) AND kode_order LIKE %s GROUP BY surat_jalan_key, kode_order", kl + [like])]
     return jsonify({'headers': headers, 'detail_qty': det})
 
+@app.route('/api/detail-order-debug')
+@login_required
+def api_detail_order_debug():
+    """Bandingkan order_risepack (yg dipakai Detail Order) vs invoice utk 1 Kode Order.
+       Pakai ?q=<potongan kode order>, contoh ?q=RSP20038"""
+    import decimal
+    q = (request.args.get('q') or '').strip()
+    if not q:
+        return jsonify({'_hint': 'pakai ?q=<potongan kode order>, contoh ?q=RSP20038'})
+    like = f"%{q}%"
+
+    def ser(r):
+        o = {}
+        for k, v in r.items():
+            if hasattr(v, 'isoformat'):
+                o[k] = v.isoformat()
+            elif isinstance(v, decimal.Decimal):
+                o[k] = float(v)
+            elif isinstance(v, (bytes, bytearray)):
+                o[k] = v.decode('utf-8', 'replace')
+            else:
+                o[k] = v
+        return o
+
+    orp = [ser(r) for r in query(
+        "SELECT sko, nama AS customer, name AS pic, sumber, status_deal, flag_dummy, "
+        "jenis_bahan, nama_brand, jumlah_produk, harga_produk, total_harga, modal_sales, "
+        "tgl_omzet_realtime FROM order_risepack WHERE sko LIKE %s LIMIT 50", [like])]
+    invd = [ser(r) for r in query(
+        "SELECT * FROM invoice_details WHERE kode_order LIKE %s LIMIT 50", [like])]
+    inv = [ser(r) for r in query(
+        "SELECT * FROM invoices WHERE invoice_key IN "
+        "(SELECT DISTINCT invoice_key FROM invoice_details WHERE kode_order LIKE %s) LIMIT 50", [like])]
+    return jsonify({
+        'order_risepack': orp,
+        'sum_total_harga_orp': sum(float(r.get('total_harga') or 0) for r in orp),
+        'jumlah_baris_orp': len(orp),
+        'invoice_details': invd,
+        'invoices': inv,
+    })
+
 @app.route('/api/kategori')
 @login_required
 def api_kategori():
