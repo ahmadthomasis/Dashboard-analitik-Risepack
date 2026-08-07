@@ -1,142 +1,847 @@
 {
   "_catatan": "Edit file ini untuk mengubah target/bobot/angka manual. Bobot tiap blok harus total 100. Target & umbrella per bulan format YYYY-MM. Nama sales harus sama persis dgn kolom PIC di dashboard.",
-  "scoring_bands": [[95, 6], [80, 5], [60, 4], [40, 3], [20, 2], [10, 1]],
-  "tracking_hide_overdue_days": 60,
-  "labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
-  "ring_thresholds": {"ring1": 100000000, "ring2": 30000000},
-  "reject_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZgPbCPJ_jREkfZMkgNRIX1v8bw-MvQywSnXHdBrMB70IMUlbrgwCt22faCV19FD6iaQxh7oDYBm4S/pub?gid=1699073558&single=true&output=csv",
-  "financial_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtHRz2UZuCFWKX0Z8F4hSEIfZW2AwbuLJEk7GHvGdt3wNPNXjoL7mBWvew5LtTrqYj5K5Gl9mwEEKV/pub?gid=125449772&single=true&output=csv",
-  "complain_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9PyErN1C52doIeuWNPzX3i7Pc8Qr_P_9Ss13ps_EMEUYDuS32ZfVJaE6T8YDPdYb032qG5B5jFXKt/pub?gid=905613565&single=true&output=csv",
-  "financial_targets": {"revenue_bulanan": 2500000000, "net_profit_bulanan": 326770000, "gpm": 22, "npm": 13.07},
-  "sales_targets": {"omzet_new_bulanan": 500000000},
-  "_catatan_sales_target": "Target bulanan per sales (Rp). Nama harus sama persis dgn kolom PIC di dashboard. Edit angka/target di sini.",
-  "sales_monthly_targets": [
-    {"name": "Management", "target": 1000000000},
-    {"name": "Ma'ruf",     "target": 500000000},
-    {"name": "Kiki",       "target": 500000000},
-    {"name": "Faisal",     "target": 400000000},
-    {"name": "CS Food",    "target": 230000000},
-    {"name": "Amel",       "target": 100000000},
-    {"name": "Sales Food", "target": 20000000}
-  ],
-  "_catatan_sales_gaji": "Gaji per sales PER BULAN (Rp) untuk fitur Efisiensi (Biaya vs Margin). Isi/ubah tiap bulan. Nama = sama persis dgn PIC. Bulan yang belum diisi dianggap 0.",
-  "sales_gaji": {
-    "Management": {"2026-01": 15000000, "2026-02": 15000000, "2026-03": 15000000, "2026-04": 15000000, "2026-05": 15000000, "2026-06": 15000000, "2026-07": 15000000, "2026-08": 15000000, "2026-09": 15000000, "2026-10": 15000000, "2026-11": 15000000, "2026-12": 15000000},
-    "Ma'ruf":     {"2026-01": 8000000,  "2026-02": 8000000,  "2026-03": 8000000,  "2026-04": 8000000,  "2026-05": 8000000,  "2026-06": 8000000,  "2026-07": 8000000,  "2026-08": 8000000,  "2026-09": 8000000,  "2026-10": 8000000,  "2026-11": 8000000,  "2026-12": 8000000},
-    "Kiki":       {"2026-01": 7000000,  "2026-02": 7000000,  "2026-03": 7000000,  "2026-04": 7000000,  "2026-05": 7000000,  "2026-06": 7000000,  "2026-07": 7000000,  "2026-08": 7000000,  "2026-09": 7000000,  "2026-10": 7000000,  "2026-11": 7000000,  "2026-12": 7000000},
-    "Faisal":     {"2026-01": 7000000,  "2026-02": 7000000,  "2026-03": 7000000,  "2026-04": 7000000,  "2026-05": 7000000,  "2026-06": 7000000,  "2026-07": 7000000,  "2026-08": 7000000,  "2026-09": 7000000,  "2026-10": 7000000,  "2026-11": 7000000,  "2026-12": 7000000},
-    "CS Food":    {"2026-01": 6000000,  "2026-02": 6000000,  "2026-03": 6000000,  "2026-04": 6000000,  "2026-05": 6000000,  "2026-06": 6000000,  "2026-07": 6000000,  "2026-08": 6000000,  "2026-09": 6000000,  "2026-10": 6000000,  "2026-11": 6000000,  "2026-12": 6000000},
-    "Amel":       {"2026-01": 6000000,  "2026-02": 6000000,  "2026-03": 6000000,  "2026-04": 6000000,  "2026-05": 6000000,  "2026-06": 6000000,  "2026-07": 6000000,  "2026-08": 6000000,  "2026-09": 6000000,  "2026-10": 6000000,  "2026-11": 6000000,  "2026-12": 6000000},
-    "Sales Food": {"2026-01": 5000000,  "2026-02": 5000000,  "2026-03": 5000000,  "2026-04": 5000000,  "2026-05": 5000000,  "2026-06": 5000000,  "2026-07": 5000000,  "2026-08": 5000000,  "2026-09": 5000000,  "2026-10": 5000000,  "2026-11": 5000000,  "2026-12": 5000000}
-  },
-
-  "produksi_kpi": [
-    {"id": "ontime",     "name": "On Time Delivery",              "weight": 30, "objective": 95,      "unit": "%",   "src": "ontime",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
-    {"id": "infull",     "name": "In Full Delivery",              "weight": 15, "objective": 95,      "unit": "%",   "src": "infull",        "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]},
-    {"id": "reject_cost","name": "Reject Cost (SCM)",             "weight": 20, "objective": 3000000, "unit": "Rp",  "src": "reject_scm",    "bands_lte": [[3000000,6],[5000000,5],[7000000,4],[10000000,3],[15000000,2]]},
-    {"id": "kelolosan",  "name": "Kelolosan Reject ke Customer",  "weight": 15, "objective": 100,     "unit": "%",   "src": "kelolosan_pct", "bands": [[100,6],[95,5],[85,4],[80,3],[70,2],[60,1]]},
-    {"id": "complain",   "name": "Complaint Handling",            "weight": 20, "objective": 90,      "unit": "%",   "src": "complain",      "bands": [[95,6],[80,5],[70,4],[50,3],[30,2],[10,1]]}
-  ],
-  "produksi_labels": [[90, "Excellent"], [80, "Good Perform"], [60, "Average Perform"], [40, "Below Average"], [0, "Poor"]],
-
-  "kpi": [
-    {"id": "omzet",       "name": "Omzet",                "weight": 40, "target": 2500000000, "basis": "omzet_monthly",     "unit": "Rp", "note": "Target per bulan (atur di omzet_target)"},
-    {"id": "repeat",      "name": "Repeat Order 70%",     "weight": 20, "target": 70,         "basis": "repeat_vs_target",  "unit": "Rp", "note": "Target = 70% dari target omzet bulan"},
-    {"id": "umbrella",    "name": "Umbrella Contract",    "weight": 5,  "target": 2,          "basis": "umbrella_manual",   "unit": "kontrak", "note": "2 / bulan (diisi manual di bawah)"},
-    {"id": "closing_new", "name": "Closing Rate New 10%", "weight": 20, "target": 10,         "basis": "closing_rate_new",  "unit": "%",  "note": "Deal new / qualified leads"},
-    {"id": "potensi",     "name": "Potensi 3M",           "weight": 15, "target": 3000000000, "basis": "potensi_total",     "unit": "Rp", "note": "Rp 3 M / bulan total nilai potensi"}
-  ],
-  "omzet_target": {
-    "2026-01": 2500000000, "2026-02": 2500000000, "2026-03": 2500000000, "2026-04": 2500000000,
-    "2026-05": 2500000000, "2026-06": 2600000000, "2026-07": 2500000000, "2026-08": 2500000000,
-    "2026-09": 2500000000, "2026-10": 2500000000, "2026-11": 2500000000, "2026-12": 2500000000
-  },
-  "umbrella_manual": {
-    "2026-01": 1, "2026-02": 0, "2026-03": 0, "2026-04": 0, "2026-05": 0, "2026-06": 0,
-    "2026-07": 0, "2026-08": 0, "2026-09": 0, "2026-10": 0, "2026-11": 0, "2026-12": 0
-  },
-
-  "fungsi_kpi": [
-    {"id": "omzet",        "name": "Omzet 100% Target",    "weight": 40, "target": 100, "basis": "omzet_sales",      "unit": "Rp", "note": "Omzet sales / target sales per bulan"},
-    {"id": "repeat",       "name": "Repeat Order 70%",     "weight": 30, "target": 70,  "basis": "repeat_sales",     "unit": "Rp", "note": "Target = 70% dari target omzet sales"},
-    {"id": "closing_new",  "name": "Closing Rate New 8%",  "weight": 10, "target": 8,   "basis": "closing_rate_new", "unit": "%",  "note": "Deal new / qualified leads (sales ini)"},
-    {"id": "gross_margin", "name": "Gross Margin 25%",     "weight": 15, "target": 25,  "basis": "gross_margin",     "unit": "%",  "note": "Rata-rata margin per bulan"},
-    {"id": "umbrella",     "name": "Umbrella Contract",    "weight": 5,  "target": 1,   "basis": "umbrella_sales",   "unit": "kontrak", "note": "1 / bulan (diisi manual di bawah)"}
-  ],
   "_catatan_fungsi_override": "KPI khusus per sales. Kalau nama sales ada di sini, dipakai daftar ini (bukan fungsi_kpi default). Bobot harus total 100.",
-  "fungsi_kpi_override": {
-    "Amel": [
-      {"id": "omzet",        "name": "Omzet 100% Target", "weight": 70, "target": 100, "basis": "omzet_sales",  "unit": "Rp", "note": "Omzet sales / target sales per bulan"},
-      {"id": "gross_margin", "name": "Gross Margin 25%",  "weight": 30, "target": 25,  "basis": "gross_margin", "unit": "%",  "note": "Rata-rata margin per bulan"}
-    ],
-    "Faisal": [
-      {"id": "omzet",        "name": "Omzet 100% Target", "weight": 65, "target": 100, "basis": "omzet_sales",  "unit": "Rp", "note": "Omzet sales / target sales per bulan"},
-      {"id": "repeat",       "name": "Repeat Order 70%",  "weight": 20, "target": 70,  "basis": "repeat_sales", "unit": "Rp", "note": "Target = 70% dari target omzet sales"},
-      {"id": "gross_margin", "name": "Gross Margin 25%",  "weight": 15, "target": 25,  "basis": "gross_margin", "unit": "%",  "note": "Rata-rata margin per bulan"}
-    ]
-  },
-  "fungsi_sales": ["Kiki", "Ma'ruf", "Faisal", "Amel"],
-  "fungsi_omzet_target": {
-    "Kiki": 500000000,
-    "Ma'ruf": 400000000,
-    "Faisal": 400000000,
-    "Amel": 300000000
-  },
-  "fungsi_umbrella": {
-    "Kiki":   {"2026-01": 0, "2026-02": 0, "2026-03": 0, "2026-04": 0, "2026-05": 0, "2026-06": 0, "2026-07": 0, "2026-08": 0, "2026-09": 0, "2026-10": 0, "2026-11": 0, "2026-12": 0},
-    "Ma'ruf": {"2026-01": 0, "2026-02": 0, "2026-03": 0, "2026-04": 0, "2026-05": 0, "2026-06": 0, "2026-07": 0, "2026-08": 0, "2026-09": 0, "2026-10": 0, "2026-11": 0, "2026-12": 0},
-    "Faisal": {"2026-01": 0, "2026-02": 0, "2026-03": 0, "2026-04": 0, "2026-05": 0, "2026-06": 0, "2026-07": 0, "2026-08": 0, "2026-09": 0, "2026-10": 0, "2026-11": 0, "2026-12": 0},
-    "Amel":   {"2026-01": 0, "2026-02": 0, "2026-03": 0, "2026-04": 0, "2026-05": 0, "2026-06": 0, "2026-07": 0, "2026-08": 0, "2026-09": 0, "2026-10": 0, "2026-11": 0, "2026-12": 0}
-  },
-
-  "marketing_kpi": [
-    {"id": "potensi",   "name": "Potensi Omzet 3M",  "weight": 50, "target": 3000000000, "basis": "potensi_total",  "unit": "Rp",    "note": "Total potensi baru / bulan"},
-    {"id": "qualified", "name": "Qualified Leads 200","weight": 30, "target": 200,        "basis": "qualified_leads","unit": "leads", "note": "Lead online baru (sumber Online, by waktu kontak) = sama dgn Monitoring Potensi"},
-    {"id": "roi",       "name": "ROI 15x",           "weight": 20, "target": 15,         "basis": "roi_ads",        "unit": "x",     "note": "Omzet new ÷ belanja iklan (isi belanja di bawah)"}
-  ],
-  "marketing_adspend": {
-    "2026-01": 15000000, "2026-02": 15000000, "2026-03": 15000000, "2026-04": 15000000,
-    "2026-05": 15000000, "2026-06": 15000000, "2026-07": 15000000, "2026-08": 15000000,
-    "2026-09": 15000000, "2026-10": 15000000, "2026-11": 15000000, "2026-12": 15000000
-  },
-
+  "_catatan_sales_gaji": "Gaji per sales PER BULAN (Rp) untuk fitur Efisiensi (Biaya vs Margin). Isi/ubah tiap bulan. Nama = sama persis dgn PIC. Bulan yang belum diisi dianggap 0.",
+  "_catatan_sales_target": "Target bulanan per sales (Rp). Nama harus sama persis dgn kolom PIC di dashboard. Edit angka/target di sini.",
+  "complain_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vR9PyErN1C52doIeuWNPzX3i7Pc8Qr_P_9Ss13ps_EMEUYDuS32ZfVJaE6T8YDPdYb032qG5B5jFXKt/pub?gid=905613565&single=true&output=csv",
   "estimator_email": "estimator@risepack.id",
   "estimator_kpi": [
-    {"id": "kecepatan", "name": "Kecepatan Perhitungan Harga 1 Hari", "weight": 60, "target": 100, "unit": "%", "note": "% perhitungan selesai ≤1 hari (submit ≥16:30 WIB → deadline besok)"},
-    {"id": "closing",   "name": "Closing Rate Deal 15%",             "weight": 40, "target": 15,  "unit": "%", "note": "deal ÷ total perhitungan pada bulan diminta"}
+    {
+      "id": "kecepatan",
+      "name": "Kecepatan Perhitungan Harga 1 Hari",
+      "note": "% perhitungan selesai ≤1 hari (submit ≥16:30 WIB → deadline besok)",
+      "target": 100,
+      "unit": "%",
+      "weight": 60
+    },
+    {
+      "id": "closing",
+      "name": "Closing Rate Deal 15%",
+      "note": "deal ÷ total perhitungan pada bulan diminta",
+      "target": 15,
+      "unit": "%",
+      "weight": 40
+    }
   ],
-
+  "financial_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQtHRz2UZuCFWKX0Z8F4hSEIfZW2AwbuLJEk7GHvGdt3wNPNXjoL7mBWvew5LtTrqYj5K5Gl9mwEEKV/pub?gid=125449772&single=true&output=csv",
+  "financial_targets": {
+    "gpm": 22,
+    "net_profit_bulanan": 326770000,
+    "npm": 13.07,
+    "revenue_bulanan": 2500000000
+  },
+  "fungsi_kpi": [
+    {
+      "basis": "omzet_sales",
+      "id": "omzet",
+      "name": "Omzet 100% Target",
+      "note": "Omzet sales / target sales per bulan",
+      "target": 100,
+      "unit": "Rp",
+      "weight": 40
+    },
+    {
+      "basis": "repeat_sales",
+      "id": "repeat",
+      "name": "Repeat Order 70%",
+      "note": "Target = 70% dari target omzet sales",
+      "target": 70,
+      "unit": "Rp",
+      "weight": 30
+    },
+    {
+      "basis": "closing_rate_new",
+      "id": "closing_new",
+      "name": "Closing Rate New 8%",
+      "note": "Deal new / qualified leads (sales ini)",
+      "target": 8,
+      "unit": "%",
+      "weight": 10
+    },
+    {
+      "basis": "gross_margin",
+      "id": "gross_margin",
+      "name": "Gross Margin 25%",
+      "note": "Rata-rata margin per bulan",
+      "target": 25,
+      "unit": "%",
+      "weight": 15
+    },
+    {
+      "basis": "umbrella_sales",
+      "id": "umbrella",
+      "name": "Umbrella Contract",
+      "note": "1 / bulan (diisi manual di bawah)",
+      "target": 1,
+      "unit": "kontrak",
+      "weight": 5
+    }
+  ],
+  "fungsi_kpi_override": {
+    "Amel": [
+      {
+        "basis": "omzet_sales",
+        "id": "omzet",
+        "name": "Omzet 100% Target",
+        "note": "Omzet sales / target sales per bulan",
+        "target": 100,
+        "unit": "Rp",
+        "weight": 70
+      },
+      {
+        "basis": "gross_margin",
+        "id": "gross_margin",
+        "name": "Gross Margin 25%",
+        "note": "Rata-rata margin per bulan",
+        "target": 25,
+        "unit": "%",
+        "weight": 30
+      }
+    ],
+    "Faisal": [
+      {
+        "basis": "omzet_sales",
+        "id": "omzet",
+        "name": "Omzet 100% Target",
+        "note": "Omzet sales / target sales per bulan",
+        "target": 100,
+        "unit": "Rp",
+        "weight": 65
+      },
+      {
+        "basis": "repeat_sales",
+        "id": "repeat",
+        "name": "Repeat Order 70%",
+        "note": "Target = 70% dari target omzet sales",
+        "target": 70,
+        "unit": "Rp",
+        "weight": 20
+      },
+      {
+        "basis": "gross_margin",
+        "id": "gross_margin",
+        "name": "Gross Margin 25%",
+        "note": "Rata-rata margin per bulan",
+        "target": 25,
+        "unit": "%",
+        "weight": 15
+      }
+    ]
+  },
+  "fungsi_omzet_target": {
+    "Amel": 300000000,
+    "Faisal": 400000000,
+    "Kiki": 500000000,
+    "Ma'ruf": 400000000
+  },
+  "fungsi_sales": [
+    "Kiki",
+    "Ma'ruf",
+    "Faisal",
+    "Amel"
+  ],
+  "fungsi_umbrella": {
+    "Amel": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 0,
+      "2026-08": 0,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Faisal": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 0,
+      "2026-08": 0,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Kiki": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 0,
+      "2026-08": 0,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Ma'ruf": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 0,
+      "2026-08": 0,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    }
+  },
   "inner_app_cutover": "2026-07-01",
-  "inner_csv_sample_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdHjdHk_kfixV1Jqe227vuNadlmQ8yRXtIuNP2LCNUuz9M0rSpUEh0en76R3scBhef0FclxdPcVhu-/pub?gid=0&single=true&output=csv",
   "inner_csv_admin_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvRVoHANeZK-0_3fR5eFKxbyabzArMxlnnw5NPW2jp1yOd4i8jv-Fr_J0w_B_c_MQTis5tkRHzayfY/pub?gid=696121217&single=true&output=csv",
-  "inner_sales": [
-    {"id": "anis",  "name": "Annisa", "admin": "Anis",  "email": "anisinner@risepack.id",  "sales": ["Ma'ruf"]},
-    {"id": "wulan", "name": "Wulan",  "admin": "Wulan", "email": "wulaninner@risepack.id", "sales": ["Management", "Manajemen", "Amel"]},
-    {"id": "fira",  "name": "Fira",   "admin": "Fira",  "email": "firainner@risepack.id",  "sales": ["Faisal", "Kiki"]}
-  ],
+  "inner_csv_sample_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdHjdHk_kfixV1Jqe227vuNadlmQ8yRXtIuNP2LCNUuz9M0rSpUEh0en76R3scBhef0FclxdPcVhu-/pub?gid=0&single=true&output=csv",
   "inner_kpi": [
-    {"id": "ontime_prod",   "name": "On-Time Pengiriman Produksi",      "weight": 50, "target": 90,  "unit": "%", "note": "SPK selesai ≤ deadline produksi (MySQL), per sales inner"},
-    {"id": "ontime_sample", "name": "Ketepatan Waktu Pembuatan Sampel", "weight": 20, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom Q · Jul+: rakit ≤ deadline (calculator)"},
-    {"id": "faw_fsa",       "name": "FAW/FSA/FPS Tepat Waktu",          "weight": 20, "target": 100, "unit": "%", "note": "request date = finish date (sheet admin), per Assign to Admin"},
-    {"id": "kepuasan",      "name": "Kepuasan Sampel",                  "weight": 10, "target": 90,  "unit": "%", "note": "Jan–Jun: sheet kolom V · Jul+: tingkat kepuasan (calculator)"}
+    {
+      "id": "ontime_prod",
+      "name": "On-Time Pengiriman Produksi",
+      "note": "SPK selesai ≤ deadline produksi (MySQL), per sales inner",
+      "target": 90,
+      "unit": "%",
+      "weight": 50
+    },
+    {
+      "id": "ontime_sample",
+      "name": "Ketepatan Waktu Pembuatan Sampel",
+      "note": "Jan–Jun: sheet kolom Q · Jul+: rakit ≤ deadline (calculator)",
+      "target": 90,
+      "unit": "%",
+      "weight": 20
+    },
+    {
+      "id": "faw_fsa",
+      "name": "FAW/FSA/FPS Tepat Waktu",
+      "note": "request date = finish date (sheet admin), per Assign to Admin",
+      "target": 100,
+      "unit": "%",
+      "weight": 20
+    },
+    {
+      "id": "kepuasan",
+      "name": "Kepuasan Sampel",
+      "note": "Jan–Jun: sheet kolom V · Jul+: tingkat kepuasan (calculator)",
+      "target": 90,
+      "unit": "%",
+      "weight": 10
+    }
   ],
-
+  "inner_sales": [
+    {
+      "admin": "Anis",
+      "email": "anisinner@risepack.id",
+      "id": "anis",
+      "name": "Annisa",
+      "sales": [
+        "Ma'ruf"
+      ]
+    },
+    {
+      "admin": "Wulan",
+      "email": "wulaninner@risepack.id",
+      "id": "wulan",
+      "name": "Wulan",
+      "sales": [
+        "Management",
+        "Manajemen",
+        "Amel"
+      ]
+    },
+    {
+      "admin": "Fira",
+      "email": "firainner@risepack.id",
+      "id": "fira",
+      "name": "Fira",
+      "sales": [
+        "Faisal",
+        "Kiki"
+      ]
+    }
+  ],
+  "kpi": [
+    {
+      "basis": "omzet_monthly",
+      "id": "omzet",
+      "name": "Omzet",
+      "note": "Target per bulan (atur di omzet_target)",
+      "target": 2500000000,
+      "unit": "Rp",
+      "weight": 40
+    },
+    {
+      "basis": "repeat_vs_target",
+      "id": "repeat",
+      "name": "Repeat Order 70%",
+      "note": "Target = 70% dari target omzet bulan",
+      "target": 70,
+      "unit": "Rp",
+      "weight": 20
+    },
+    {
+      "basis": "umbrella_manual",
+      "id": "umbrella",
+      "name": "Umbrella Contract",
+      "note": "2 / bulan (diisi manual di bawah)",
+      "target": 2,
+      "unit": "kontrak",
+      "weight": 5
+    },
+    {
+      "basis": "closing_rate_new",
+      "id": "closing_new",
+      "name": "Closing Rate New 10%",
+      "note": "Deal new / qualified leads",
+      "target": 10,
+      "unit": "%",
+      "weight": 20
+    },
+    {
+      "basis": "potensi_total",
+      "id": "potensi",
+      "name": "Potensi 3M",
+      "note": "Rp 3 M / bulan total nilai potensi",
+      "target": 3000000000,
+      "unit": "Rp",
+      "weight": 15
+    }
+  ],
+  "labels": [
+    [
+      90,
+      "Excellent"
+    ],
+    [
+      80,
+      "Good Perform"
+    ],
+    [
+      60,
+      "Average Perform"
+    ],
+    [
+      40,
+      "Below Average"
+    ],
+    [
+      0,
+      "Poor"
+    ]
+  ],
+  "marketing_adspend": {
+    "2026-01": 15000000,
+    "2026-02": 15000000,
+    "2026-03": 15000000,
+    "2026-04": 15000000,
+    "2026-05": 15000000,
+    "2026-06": 15000000,
+    "2026-07": 15000000,
+    "2026-08": 15000000,
+    "2026-09": 15000000,
+    "2026-10": 15000000,
+    "2026-11": 15000000,
+    "2026-12": 15000000
+  },
+  "marketing_kpi": [
+    {
+      "basis": "potensi_total",
+      "id": "potensi",
+      "name": "Potensi Omzet 3M",
+      "note": "Total potensi baru / bulan",
+      "target": 3000000000,
+      "unit": "Rp",
+      "weight": 50
+    },
+    {
+      "basis": "qualified_leads",
+      "id": "qualified",
+      "name": "Qualified Leads 200",
+      "note": "Lead online baru (sumber Online, by waktu kontak) = sama dgn Monitoring Potensi",
+      "target": 200,
+      "unit": "leads",
+      "weight": 30
+    },
+    {
+      "basis": "roi_ads",
+      "id": "roi",
+      "name": "ROI 15x",
+      "note": "Omzet new ÷ belanja iklan (isi belanja di bawah)",
+      "target": 15,
+      "unit": "x",
+      "weight": 20
+    }
+  ],
+  "omzet_target": {
+    "2026-01": 2500000000,
+    "2026-02": 2500000000,
+    "2026-03": 2500000000,
+    "2026-04": 2500000000,
+    "2026-05": 2500000000,
+    "2026-06": 2600000000,
+    "2026-07": 2500000000,
+    "2026-08": 2500000000,
+    "2026-09": 2500000000,
+    "2026-10": 2500000000,
+    "2026-11": 2500000000,
+    "2026-12": 2500000000
+  },
   "prodev_csv_final_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSdHjdHk_kfixV1Jqe227vuNadlmQ8yRXtIuNP2LCNUuz9M0rSpUEh0en76R3scBhef0FclxdPcVhu-/pub?gid=1061319745&single=true&output=csv",
-  "sample_maker_email": "kikidumy@risepack.id",
-  "prodev_layouters": [
-    {"id": "adit", "name": "Adit",      "layouter": "Adit"},
-    {"id": "fau",  "name": "Fauziyyah", "layouter": "Fauziyyah"}
-  ],
   "prodev_kpi": [
-    {"id": "deal",     "name": "50% Sampel jadi Deal",                 "weight": 50, "target": 50,  "unit": "%", "note": "Jan–Jun: sheet kolom Y (status deal); kosong=tidak deal · per PIC Layouter"},
-    {"id": "ontime",   "name": "Ketepatan Waktu Pembuatan File Sampel","weight": 30, "target": 90,  "unit": "%", "note": "sheet kolom Q (bukan 'Terlambat') · per PIC Layouter"},
-    {"id": "revisi",   "name": "Tingkat Revisi (kesalahan file/desain)","weight": 10, "target": 100, "unit": "%", "note": "sheet kolom Revisi Prodev; tanpa revisi=berhasil (ASUMSI-cek)"},
-    {"id": "kepuasan", "name": "Kepuasan Konsumen thd Sampel",          "weight": 10, "target": 100, "unit": "%", "note": "sheet kolom V; null=tidak puas · per PIC Layouter"}
+    {
+      "id": "deal",
+      "name": "50% Sampel jadi Deal",
+      "note": "Jan–Jun: sheet kolom Y (status deal); kosong=tidak deal · per PIC Layouter",
+      "target": 50,
+      "unit": "%",
+      "weight": 50
+    },
+    {
+      "id": "ontime",
+      "name": "Ketepatan Waktu Pembuatan File Sampel",
+      "note": "sheet kolom Q (bukan 'Terlambat') · per PIC Layouter",
+      "target": 90,
+      "unit": "%",
+      "weight": 30
+    },
+    {
+      "id": "revisi",
+      "name": "Tingkat Revisi (kesalahan file/desain)",
+      "note": "sheet kolom Revisi Prodev; tanpa revisi=berhasil (ASUMSI-cek)",
+      "target": 100,
+      "unit": "%",
+      "weight": 10
+    },
+    {
+      "id": "kepuasan",
+      "name": "Kepuasan Konsumen thd Sampel",
+      "note": "sheet kolom V; null=tidak puas · per PIC Layouter",
+      "target": 100,
+      "unit": "%",
+      "weight": 10
+    }
   ],
+  "prodev_layouters": [
+    {
+      "id": "adit",
+      "layouter": "Adit",
+      "name": "Adit"
+    },
+    {
+      "id": "fau",
+      "layouter": "Fauziyyah",
+      "name": "Fauziyyah"
+    }
+  ],
+  "produksi_kpi": [
+    {
+      "bands": [
+        [
+          95,
+          6
+        ],
+        [
+          80,
+          5
+        ],
+        [
+          70,
+          4
+        ],
+        [
+          50,
+          3
+        ],
+        [
+          30,
+          2
+        ],
+        [
+          10,
+          1
+        ]
+      ],
+      "id": "ontime",
+      "name": "On Time Delivery",
+      "objective": 95,
+      "src": "ontime",
+      "unit": "%",
+      "weight": 30
+    },
+    {
+      "bands": [
+        [
+          95,
+          6
+        ],
+        [
+          80,
+          5
+        ],
+        [
+          70,
+          4
+        ],
+        [
+          50,
+          3
+        ],
+        [
+          30,
+          2
+        ],
+        [
+          10,
+          1
+        ]
+      ],
+      "id": "infull",
+      "name": "In Full Delivery",
+      "objective": 95,
+      "src": "infull",
+      "unit": "%",
+      "weight": 15
+    },
+    {
+      "bands_lte": [
+        [
+          3000000,
+          6
+        ],
+        [
+          5000000,
+          5
+        ],
+        [
+          7000000,
+          4
+        ],
+        [
+          10000000,
+          3
+        ],
+        [
+          15000000,
+          2
+        ]
+      ],
+      "id": "reject_cost",
+      "name": "Reject Cost (SCM)",
+      "objective": 3000000,
+      "src": "reject_scm",
+      "unit": "Rp",
+      "weight": 20
+    },
+    {
+      "bands": [
+        [
+          100,
+          6
+        ],
+        [
+          95,
+          5
+        ],
+        [
+          85,
+          4
+        ],
+        [
+          80,
+          3
+        ],
+        [
+          70,
+          2
+        ],
+        [
+          60,
+          1
+        ]
+      ],
+      "id": "kelolosan",
+      "name": "Kelolosan Reject ke Customer",
+      "objective": 100,
+      "src": "kelolosan_pct",
+      "unit": "%",
+      "weight": 15
+    },
+    {
+      "bands": [
+        [
+          95,
+          6
+        ],
+        [
+          80,
+          5
+        ],
+        [
+          70,
+          4
+        ],
+        [
+          50,
+          3
+        ],
+        [
+          30,
+          2
+        ],
+        [
+          10,
+          1
+        ]
+      ],
+      "id": "complain",
+      "name": "Complaint Handling",
+      "objective": 90,
+      "src": "complain",
+      "unit": "%",
+      "weight": 20
+    }
+  ],
+  "produksi_labels": [
+    [
+      90,
+      "Excellent"
+    ],
+    [
+      80,
+      "Good Perform"
+    ],
+    [
+      60,
+      "Average Perform"
+    ],
+    [
+      40,
+      "Below Average"
+    ],
+    [
+      0,
+      "Poor"
+    ]
+  ],
+  "reject_csv_url": "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZgPbCPJ_jREkfZMkgNRIX1v8bw-MvQywSnXHdBrMB70IMUlbrgwCt22faCV19FD6iaQxh7oDYBm4S/pub?gid=1699073558&single=true&output=csv",
+  "ring_thresholds": {
+    "ring1": 100000000,
+    "ring2": 30000000
+  },
+  "sales_gaji": {
+    "Amel": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 2500000,
+      "2026-08": 2500000,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "CS Food": {
+      "2026-01": 6000000,
+      "2026-02": 6000000,
+      "2026-03": 6000000,
+      "2026-04": 6000000,
+      "2026-05": 6000000,
+      "2026-06": 6000000,
+      "2026-07": 6000000,
+      "2026-08": 6000000,
+      "2026-09": 6000000,
+      "2026-10": 6000000,
+      "2026-11": 6000000,
+      "2026-12": 6000000
+    },
+    "Faisal": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 4000000,
+      "2026-08": 4000000,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Kiki": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 4300000,
+      "2026-08": 4300000,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Ma'ruf": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 3050000,
+      "2026-08": 3050000,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Management": {
+      "2026-01": 0,
+      "2026-02": 0,
+      "2026-03": 0,
+      "2026-04": 0,
+      "2026-05": 0,
+      "2026-06": 0,
+      "2026-07": 24000000,
+      "2026-08": 24000000,
+      "2026-09": 0,
+      "2026-10": 0,
+      "2026-11": 0,
+      "2026-12": 0
+    },
+    "Sales Food": {
+      "2026-01": 5000000,
+      "2026-02": 5000000,
+      "2026-03": 5000000,
+      "2026-04": 5000000,
+      "2026-05": 5000000,
+      "2026-06": 5000000,
+      "2026-07": 5000000,
+      "2026-08": 5000000,
+      "2026-09": 5000000,
+      "2026-10": 5000000,
+      "2026-11": 5000000,
+      "2026-12": 5000000
+    }
+  },
+  "sales_monthly_targets": [
+    {
+      "name": "Management",
+      "target": 1000000000
+    },
+    {
+      "name": "Ma'ruf",
+      "target": 500000000
+    },
+    {
+      "name": "Kiki",
+      "target": 500000000
+    },
+    {
+      "name": "Faisal",
+      "target": 400000000
+    },
+    {
+      "name": "CS Food",
+      "target": 230000000
+    },
+    {
+      "name": "Amel",
+      "target": 100000000
+    },
+    {
+      "name": "Sales Food",
+      "target": 20000000
+    }
+  ],
+  "sales_targets": {
+    "omzet_new_bulanan": 500000000
+  },
+  "sample_maker_email": "kikidumy@risepack.id",
   "sample_maker_kpi": [
-    {"id": "kepuasan",     "name": "Kepuasan Kualitas Hasil Sampel",      "weight": 50, "target": 90,  "unit": "%", "note": "kolom V (Adit+Fau digabung)"},
-    {"id": "ontime",       "name": "Ketepatan Waktu Pembuatan Sampel",    "weight": 20, "target": 90,  "unit": "%", "note": "kolom Q (Adit+Fau digabung)"},
-    {"id": "final",        "name": "100% Pembuatan Sampel Final",         "weight": 20, "target": 100, "unit": "%", "note": "File Final kolom N; 'tersedia'=berhasil, kosong=tidak dihitung"},
-    {"id": "revisi_rakit", "name": "Tingkat Revisi (kesalahan rakit)",    "weight": 10, "target": 100, "unit": "%", "note": "File Final kolom P; kosong=berhasil, ada revisi=gagal"}
-  ]
+    {
+      "id": "kepuasan",
+      "name": "Kepuasan Kualitas Hasil Sampel",
+      "note": "kolom V (Adit+Fau digabung)",
+      "target": 90,
+      "unit": "%",
+      "weight": 50
+    },
+    {
+      "id": "ontime",
+      "name": "Ketepatan Waktu Pembuatan Sampel",
+      "note": "kolom Q (Adit+Fau digabung)",
+      "target": 90,
+      "unit": "%",
+      "weight": 20
+    },
+    {
+      "id": "final",
+      "name": "100% Pembuatan Sampel Final",
+      "note": "File Final kolom N; 'tersedia'=berhasil, kosong=tidak dihitung",
+      "target": 100,
+      "unit": "%",
+      "weight": 20
+    },
+    {
+      "id": "revisi_rakit",
+      "name": "Tingkat Revisi (kesalahan rakit)",
+      "note": "File Final kolom P; kosong=berhasil, ada revisi=gagal",
+      "target": 100,
+      "unit": "%",
+      "weight": 10
+    }
+  ],
+  "scoring_bands": [
+    [
+      95,
+      6
+    ],
+    [
+      80,
+      5
+    ],
+    [
+      60,
+      4
+    ],
+    [
+      40,
+      3
+    ],
+    [
+      20,
+      2
+    ],
+    [
+      10,
+      1
+    ]
+  ],
+  "tracking_hide_overdue_days": 60,
+  "umbrella_manual": {
+    "2026-01": 1,
+    "2026-02": 0,
+    "2026-03": 0,
+    "2026-04": 0,
+    "2026-05": 0,
+    "2026-06": 0,
+    "2026-07": 0,
+    "2026-08": 0,
+    "2026-09": 0,
+    "2026-10": 0,
+    "2026-11": 0,
+    "2026-12": 0
+  }
 }
