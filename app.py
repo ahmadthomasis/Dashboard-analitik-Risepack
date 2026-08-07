@@ -1869,7 +1869,21 @@ def api_kategori_omzet():
 @login_required
 def api_detail():
     tgl_dari, tgl_sampai, pic, divisi = get_args()
-    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    qterm = (request.args.get('q') or '').strip()
+    if qterm:
+        # Ada kata kunci: cari ke SEMUA data (abaikan rentang tanggal), tetap hormati PIC & Divisi.
+        clauses, params = [], []
+        if pic:
+            clauses.append("o.name = %s"); params.append(pic)
+        if divisi:
+            clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
+            params.append(divisi)
+        like = f"%{qterm}%"
+        clauses.append("(o.nama LIKE %s OR o.sko LIKE %s OR o.jenis_bahan LIKE %s OR o.nama_brand LIKE %s)")
+        params += [like, like, like, like]
+        cond = (' AND ' + ' AND '.join(clauses)) if clauses else ''
+    else:
+        cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
     sql = f"""
         SELECT o.sko, o.sko_key, o.jenis_bahan, o.nama, o.sumber,
                TRIM(CONCAT(COALESCE(o.jenis_bahan,''),' ',COALESCE(o.nama_brand,''))) AS nama_produk,

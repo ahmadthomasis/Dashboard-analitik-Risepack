@@ -1560,7 +1560,7 @@ function renderCmpTable(){
 }
 
 // ── Detail Order ──
-const DETAIL = { rows:[], term:'', key:'tanggal', dir:'desc' };
+const DETAIL = { rows:[], term:'', key:'tanggal', dir:'desc', baseQ:'', timer:null };
 const DCOLS = [
   ['nama','Customer','str'],['sko','SKO','str'],['sumber','Sumber','str'],
   ['vendor','Vendor','str'],['status','Status','str'],['bayar','Bayar','str'],['top','TOP','str'],
@@ -1584,8 +1584,16 @@ function topPill(r){
   return pill('Aman','#e6f5ee','#2f7a4f');
 }
 function esc(s,attr){ s=(s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); return attr?s.replace(/"/g,'&quot;'):s; }
-async function loadDetail(q){ DETAIL.rows = await fetchJSON('/api/detail?'+q); renderDetail(); }
-function onDetailSearch(v){ DETAIL.term = v.trim().toLowerCase(); renderDetail(); }
+async function loadDetail(q){ DETAIL.baseQ = q||''; DETAIL.rows = await fetchJSON('/api/detail?'+DETAIL.baseQ + (DETAIL.term?'&q='+encodeURIComponent(DETAIL.term):'')); renderDetail(); }
+function onDetailSearch(v){
+  DETAIL.term = v.trim().toLowerCase();
+  renderDetail(); // narrowing instan pada data yg sudah ada
+  clearTimeout(DETAIL.timer);
+  DETAIL.timer = setTimeout(async ()=>{ // lalu ambil ulang dari server (lintas tanggal bila ada kata kunci)
+    DETAIL.rows = await fetchJSON('/api/detail?'+DETAIL.baseQ + (DETAIL.term?'&q='+encodeURIComponent(DETAIL.term):''));
+    renderDetail();
+  }, 350);
+}
 function setSort(k){ if(DETAIL.key===k) DETAIL.dir = DETAIL.dir==='asc'?'desc':'asc'; else { DETAIL.key=k; DETAIL.dir='asc'; } renderDetail(); }
 function detailFiltered(){
   let rows = DETAIL.rows.slice();
