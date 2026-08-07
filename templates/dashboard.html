@@ -1697,13 +1697,19 @@ function renderMonPIC(){
   });
   const arr = Object.entries(map).map(([pic,v])=>({pic,...v,pct:v.total?Math.round(v.belum/v.total*100):0}))
                     .sort((a,b)=>b.belum-a.belum);
-  document.getElementById('mon-pic').innerHTML = `<table>
-    <thead><tr><th>PIC / Sales</th><th class="num">Total Customer</th><th class="num">Belum Diisi</th><th class="num">% Belum</th></tr></thead>
+  document.getElementById('mon-pic').innerHTML = `<style>
+    #mon-pic table{table-layout:fixed;width:100%;max-width:640px}
+    #mon-pic th,#mon-pic td{text-align:center;vertical-align:middle}
+    #mon-pic th:first-child,#mon-pic td:first-child{text-align:left}
+  </style><table><colgroup>
+    <col style="width:32%"><col style="width:26%"><col style="width:22%"><col style="width:20%">
+  </colgroup>
+    <thead><tr><th>PIC / Sales</th><th>Total Customer</th><th>Belum Diisi</th><th>% Belum</th></tr></thead>
     <tbody>${arr.map(r=>`<tr>
       <td style="font-weight:500">${esc(r.pic)}</td>
-      <td class="num">${fmtInt(r.total)}</td>
-      <td class="num" style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
-      <td class="num">${r.pct}%</td>
+      <td>${fmtInt(r.total)}</td>
+      <td style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
+      <td>${r.pct}%</td>
     </tr>`).join('')||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 const _dealNorm = r => (r.status_deal||'').trim().toLowerCase();
@@ -2182,22 +2188,29 @@ async function loadSalesEfisiensi(q){
   const body=rows.map((r,i)=>{
     const w=Math.min((r.ratio||0)/10*100,100);
     return `<tr>
-      <td class="num">${i+1}</td>
+      <td>${i+1}</td>
       <td style="font-weight:500">${esc(r.nama)}</td>
-      <td class="num">${formatRp(r.gaji)}</td>
-      <td class="num">${formatRp(r.bonus)}</td>
-      <td class="num" style="font-weight:600">${formatRp(r.biaya)}</td>
-      <td class="num" style="font-weight:600">${formatRp(r.margin)}</td>
-      <td><div style="display:flex;align-items:center;gap:7px;justify-content:flex-end">
-        <div style="flex:1;height:6px;background:#efe9e1;border-radius:999px;overflow:hidden;max-width:70px"><div style="width:${w}%;height:100%;background:${bc(r.ratio)}"></div></div>
-        <span style="font-weight:700;color:${rc(r.ratio)};min-width:40px;text-align:right">${(r.ratio||0).toLocaleString('id-ID')}×</span>
+      <td>${formatRp(r.gaji)}</td>
+      <td>${formatRp(r.bonus)}</td>
+      <td style="font-weight:600">${formatRp(r.biaya)}</td>
+      <td>${formatRp(r.omzet)}</td>
+      <td style="font-weight:600">${formatRp(r.margin)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;justify-content:center">
+        <div style="flex:0 1 70px;height:6px;background:#efe9e1;border-radius:999px;overflow:hidden"><div style="width:${w}%;height:100%;background:${bc(r.ratio)}"></div></div>
+        <span style="font-weight:700;color:${rc(r.ratio)};min-width:46px;text-align:left">${(r.ratio||0).toLocaleString('id-ID')}×</span>
       </div></td>
-      <td class="num" style="font-weight:700;color:${r.net>=0?'var(--green)':'var(--red)'}">${r.net>=0?'+':''}${formatRp(r.net)}</td>
+      <td style="font-weight:700;color:${r.net>=0?'var(--green)':'var(--red)'}">${r.net>=0?'+':''}${formatRp(r.net)}</td>
     </tr>`;}).join('');
-  document.getElementById('eff-table').innerHTML=`<table style="min-width:900px"><thead><tr>
-    <th class="num">#</th><th>Sales</th><th class="num">Gaji</th><th class="num">Bonus</th><th class="num">Total Biaya</th>
-    <th class="num">Gross Margin</th><th style="text-align:center">Rasio</th><th class="num">Net Kontribusi</th>
-  </tr></thead><tbody>${body||'<tr><td colspan="8" class="loading">Belum ada gaji sales di kpi_config.json (sales_gaji)</td></tr>'}</tbody></table>`;
+  document.getElementById('eff-table').innerHTML=`<style>
+    #eff-table table{table-layout:fixed;width:100%;min-width:900px}
+    #eff-table th,#eff-table td{text-align:center;vertical-align:middle}
+    #eff-table th:nth-child(2),#eff-table td:nth-child(2){text-align:left}
+  </style><table><colgroup>
+    <col style="width:4%"><col style="width:14%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:11%">
+  </colgroup><thead><tr>
+    <th>#</th><th>Sales</th><th>Gaji</th><th>Bonus</th><th>Total Biaya</th>
+    <th>Total Omzet</th><th>Gross Margin</th><th>Rasio</th><th>Net Kontribusi</th>
+  </tr></thead><tbody>${body||'<tr><td colspan="9" class="loading">Belum ada gaji sales di kpi_config.json (sales_gaji)</td></tr>'}</tbody></table>`;
 }
 async function loadBonus(q){ BON.rows=await fetchJSON('/api/bonus?'+q); renderBon(); }
 function onBonSearch(v){ BON.term=v.trim().toLowerCase(); renderBon(); }

@@ -1451,9 +1451,10 @@ def api_sales_efisiensi():
     if divisi:
         clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         params.append(divisi)
-    mg = query(f"SELECT o.name AS pic, SUM(o.total_harga - o.modal_sales) AS margin "
+    mg = query(f"SELECT o.name AS pic, SUM(o.total_harga) AS omzet, SUM(o.total_harga - o.modal_sales) AS margin "
                f"FROM order_risepack o WHERE {' AND '.join(clauses)} GROUP BY o.name", params)
     margin_map = {(r['pic'] or '').strip().lower(): float(r['margin'] or 0) for r in mg}
+    omzet_map = {(r['pic'] or '').strip().lower(): float(r['omzet'] or 0) for r in mg}
 
     bonus_map = bonus_net_by_pic(tgl_dari, tgl_sampai, divisi)
 
@@ -1480,15 +1481,16 @@ def api_sales_efisiensi():
         gaji = sum_months(gmap, d1, d2, nmonths, 0)
         bonus = bonus_map.get(nm.lower(), 0.0)
         margin = margin_map.get(nm.lower(), 0.0)
+        omzet = omzet_map.get(nm.lower(), 0.0)
         biaya = gaji + bonus
         ratio = round(margin / biaya, 2) if biaya > 0 else 0
         rows.append({'nama': nm, 'gaji': round(gaji), 'bonus': round(bonus),
-                     'biaya': round(biaya), 'margin': round(margin),
+                     'biaya': round(biaya), 'omzet': round(omzet), 'margin': round(margin),
                      'ratio': ratio, 'net': round(margin - biaya)})
     rows.sort(key=lambda r: -r['ratio'])
-    tb = sum(r['biaya'] for r in rows); tm = sum(r['margin'] for r in rows)
+    tb = sum(r['biaya'] for r in rows); tm = sum(r['margin'] for r in rows); to = sum(r['omzet'] for r in rows)
     return jsonify({'rows': rows, 'summary': {
-        'biaya': tb, 'margin': tm,
+        'biaya': tb, 'margin': tm, 'omzet': to,
         'ratio': (round(tm / tb, 2) if tb > 0 else 0), 'net': tm - tb}})
 
 @app.route('/api/sales-by-sumber')
