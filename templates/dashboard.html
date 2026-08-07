@@ -2193,6 +2193,7 @@ async function loadSalesEfisiensi(q){
       <td>${formatRp(r.gaji)}</td>
       <td>${formatRp(r.bonus)}</td>
       <td style="font-weight:600">${formatRp(r.biaya)}</td>
+      <td>${formatRp(r.omzet)}</td>
       <td style="font-weight:600">${formatRp(r.margin)}</td>
       <td><div style="display:flex;align-items:center;gap:8px;justify-content:center">
         <div style="flex:0 1 70px;height:6px;background:#efe9e1;border-radius:999px;overflow:hidden"><div style="width:${w}%;height:100%;background:${bc(r.ratio)}"></div></div>
@@ -2201,15 +2202,15 @@ async function loadSalesEfisiensi(q){
       <td style="font-weight:700;color:${r.net>=0?'var(--green)':'var(--red)'}">${r.net>=0?'+':''}${formatRp(r.net)}</td>
     </tr>`;}).join('');
   document.getElementById('eff-table').innerHTML=`<style>
-    #eff-table table{table-layout:fixed;width:100%;min-width:820px}
+    #eff-table table{table-layout:fixed;width:100%;min-width:900px}
     #eff-table th,#eff-table td{text-align:center;vertical-align:middle}
     #eff-table th:nth-child(2),#eff-table td:nth-child(2){text-align:left}
   </style><table><colgroup>
-    <col style="width:5%"><col style="width:16%"><col style="width:12%"><col style="width:12%"><col style="width:13%"><col style="width:13%"><col style="width:15%"><col style="width:14%">
+    <col style="width:4%"><col style="width:14%"><col style="width:10%"><col style="width:10%"><col style="width:12%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:11%">
   </colgroup><thead><tr>
     <th>#</th><th>Sales</th><th>Gaji</th><th>Bonus</th><th>Total Biaya</th>
-    <th>Gross Margin</th><th>Rasio</th><th>Net Kontribusi</th>
-  </tr></thead><tbody>${body||'<tr><td colspan="8" class="loading">Belum ada gaji sales di kpi_config.json (sales_gaji)</td></tr>'}</tbody></table>`;
+    <th>Total Omzet</th><th>Gross Margin</th><th>Rasio</th><th>Net Kontribusi</th>
+  </tr></thead><tbody>${body||'<tr><td colspan="9" class="loading">Belum ada gaji sales di kpi_config.json (sales_gaji)</td></tr>'}</tbody></table>`;
 }
 async function loadBonus(q){ BON.rows=await fetchJSON('/api/bonus?'+q); renderBon(); }
 function onBonSearch(v){ BON.term=v.trim().toLowerCase(); renderBon(); }
