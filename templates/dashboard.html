@@ -2117,7 +2117,34 @@ function renderSetupForms(){
       <h3 style="margin-top:16px">Target Omzet per Sales</h3><div class="ch-sub">KPI Fungsi Sales (per bulan)</div><div style="margin-top:10px">
       ${Object.keys(c.fungsi_omzet_target||{}).map(nm=>setupNumRow('fungsi_omzet_target',nm,nm)).join('')||'<span class="muted">—</span>'}</div></div>`;
   h+='</div>';
+  h+=renderGajiCard();
   document.getElementById('setup-forms').innerHTML=h;
+}
+function renderGajiInputs(){
+  const c=SETUP.cfg||{}, nm=SETUP.gajiSel, gm=(c.sales_gaji||{})[nm]||{};
+  return '<div class="grid-2" style="gap:2px 24px">'+MONTHS_NUM.map((m,i)=>{
+    const key='2026-'+m, v=(gm[key]!=null)?gm[key]:'';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <label style="flex:0 0 90px;font-size:12.5px;color:var(--ink-3)">${BULAN_ID[i]}</label>
+      <input type="number" value="${v}" oninput="setupSetGaji('${key}',this.value)" style="flex:1;min-width:0;padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;font-size:13px;font-family:inherit"></div>`;
+  }).join('')+'</div>';
+}
+function renderGajiCard(){
+  const c=SETUP.cfg||{}, names=Object.keys(c.sales_gaji||{});
+  if(!SETUP.gajiSel||!names.includes(SETUP.gajiSel)) SETUP.gajiSel=names[0]||'';
+  const opts=names.map(n=>`<option ${n===SETUP.gajiSel?'selected':''}>${esc(n)}</option>`).join('');
+  return `<div class="card" style="margin-top:14px"><h3>Gaji Sales / bulan</h3>
+    <div class="ch-sub">Untuk fitur Efisiensi (Biaya vs Margin). Pilih sales lalu isi gaji tiap bulan (Rp).</div>
+    <div style="margin:10px 0 12px"><select onchange="onGajiSel(this.value)" style="padding:8px 12px;border:1px solid var(--border-strong);border-radius:8px;font-size:13px;font-family:inherit">${opts||'<option>—</option>'}</select></div>
+    <div id="gaji-inputs">${renderGajiInputs()}</div></div>`;
+}
+function onGajiSel(name){ SETUP.gajiSel=name; const el=document.getElementById('gaji-inputs'); if(el) el.innerHTML=renderGajiInputs(); }
+function setupSetGaji(month,val){
+  const nm=SETUP.gajiSel; if(!nm) return;
+  if(!SETUP.cfg.sales_gaji) SETUP.cfg.sales_gaji={};
+  if(!SETUP.cfg.sales_gaji[nm]) SETUP.cfg.sales_gaji[nm]={};
+  const n=Number(val); SETUP.cfg.sales_gaji[nm][month]=(val===''||isNaN(n))?0:n;
+  setupRebuild();
 }
 function setupSet(section,key,val){
   if(!SETUP.cfg[section]) SETUP.cfg[section]={};
