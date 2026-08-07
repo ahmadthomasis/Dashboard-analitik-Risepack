@@ -1697,13 +1697,19 @@ function renderMonPIC(){
   });
   const arr = Object.entries(map).map(([pic,v])=>({pic,...v,pct:v.total?Math.round(v.belum/v.total*100):0}))
                     .sort((a,b)=>b.belum-a.belum);
-  document.getElementById('mon-pic').innerHTML = `<table>
-    <thead><tr><th>PIC / Sales</th><th class="num">Total Customer</th><th class="num">Belum Diisi</th><th class="num">% Belum</th></tr></thead>
+  document.getElementById('mon-pic').innerHTML = `<style>
+    #mon-pic table{table-layout:fixed;width:100%;max-width:640px}
+    #mon-pic th,#mon-pic td{text-align:center;vertical-align:middle}
+    #mon-pic th:first-child,#mon-pic td:first-child{text-align:left}
+  </style><table><colgroup>
+    <col style="width:32%"><col style="width:26%"><col style="width:22%"><col style="width:20%">
+  </colgroup>
+    <thead><tr><th>PIC / Sales</th><th>Total Customer</th><th>Belum Diisi</th><th>% Belum</th></tr></thead>
     <tbody>${arr.map(r=>`<tr>
       <td style="font-weight:500">${esc(r.pic)}</td>
-      <td class="num">${fmtInt(r.total)}</td>
-      <td class="num" style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
-      <td class="num">${r.pct}%</td>
+      <td>${fmtInt(r.total)}</td>
+      <td style="font-weight:600;color:${r.belum>0?'var(--red)':'var(--ink-3)'}">${fmtInt(r.belum)}</td>
+      <td>${r.pct}%</td>
     </tr>`).join('')||'<tr><td colspan="4" class="loading">Tidak ada data</td></tr>'}</tbody></table>`;
 }
 const _dealNorm = r => (r.status_deal||'').trim().toLowerCase();
