@@ -1406,7 +1406,7 @@ def bonus_net_by_pic(tgl_dari, tgl_sampai, divisi):
                MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON o.sko = idt.kode_order
+        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {' AND '.join(clauses)}
         GROUP BY o.sko_key, o.sko
@@ -2037,12 +2037,19 @@ def api_monitoring_potensi():
     Difilter berdasarkan tgl_order (saat lead masuk), bukan tgl omzet,
     agar lead yang belum dihargai tetap muncul."""
     tgl_dari, tgl_sampai, pic, divisi = get_args()
+    qterm = (request.args.get('q') or '').strip()
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
     params = []
-    if tgl_dari:
-        clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
-    if tgl_sampai:
-        clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
+    if qterm:
+        # Ada kata kunci: cari ke SEMUA data (abaikan rentang tanggal), tetap hormati PIC & Divisi.
+        like = f"%{qterm}%"
+        clauses.append("(o.nama LIKE %s OR o.nama_instansi LIKE %s OR o.name LIKE %s)")
+        params += [like, like, like]
+    else:
+        if tgl_dari:
+            clauses.append("o.waktu_kontak >= %s"); params.append(tgl_dari)
+        if tgl_sampai:
+            clauses.append("o.waktu_kontak <= %s"); params.append(tgl_sampai + ' 23:59:59')
     if pic:
         clauses.append("o.name = %s"); params.append(pic)
     if divisi:
@@ -2248,7 +2255,7 @@ def api_bonus():
                DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON o.sko = idt.kode_order
+        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {where}
         GROUP BY o.sko_key, o.sko
