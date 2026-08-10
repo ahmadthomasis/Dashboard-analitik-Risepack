@@ -1406,7 +1406,7 @@ def bonus_net_by_pic(tgl_dari, tgl_sampai, divisi):
                MAX(o.total_harga) AS total_harga, MAX(o.modal_sales) AS modal_sales,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
+        JOIN invoice_details idt ON o.sko = idt.kode_order
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {' AND '.join(clauses)}
         GROUP BY o.sko_key, o.sko
@@ -2255,7 +2255,7 @@ def api_bonus():
                DATE_FORMAT(MAX(inv.tanggal_jatuh_tempo),'%Y-%m-%d') AS tgl_jatuh_tempo,
                DATEDIFF(MAX(inv.tanggal_pelunasan), MAX(inv.tanggal_jatuh_tempo)) AS hari_telat
         FROM order_risepack o
-        JOIN invoice_details idt ON (o.sko = idt.kode_order OR o.sko LIKE CONCAT(idt.kode_order, '-%'))
+        JOIN invoice_details idt ON o.sko = idt.kode_order
         JOIN invoices inv ON idt.invoice_key = inv.invoice_key
         WHERE {where}
         GROUP BY o.sko_key, o.sko
