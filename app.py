@@ -68,9 +68,14 @@ def query_pg(sql, params=None):
         try: conn.close()
         except: pass
 
+# Akun: manager = akses penuh. visitor = akses terbatas (hanya aktif bila VISITOR_PASSWORD diset).
 USERS = {
-    os.getenv('MANAGER_EMAIL', 'manager@risepack.id'): os.getenv('MANAGER_PASSWORD', 'risepack2025')
+    os.getenv('MANAGER_EMAIL', 'manager@risepack.id'): {
+        'password': os.getenv('MANAGER_PASSWORD', 'risepack2025'), 'role': 'manager'},
 }
+if os.getenv('VISITOR_PASSWORD'):
+    USERS[os.getenv('VISITOR_EMAIL', 'visitor@risepack.id')] = {
+        'password': os.getenv('VISITOR_PASSWORD'), 'role': 'visitor'}
 
 def login_required(f):
     @wraps(f)
@@ -80,17 +85,35 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
+def manager_only(f):
+    """Endpoint hanya untuk role manager. Visitor -> 403."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        if session.get('role', 'manager') != 'manager':
+            return jsonify({'error': 'Akses ditolak untuk akun visitor.'}), 403
+        return f(*args, **kwargs)
+    return decorated
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     error = None
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        if USERS.get(email) == password:
+        u = USERS.get(email)
+        if u and u['password'] == password:
             session['user'] = email
+            session['role'] = u['role']
             return redirect(url_for('index'))
         error = 'Email atau password salah.'
     return render_template('login.html', error=error)
+
+@app.route('/api/me')
+@login_required
+def api_me():
+    return jsonify({'email': session.get('user'), 'role': session.get('role', 'manager')})
 
 @app.route('/logout')
 def logout():
@@ -1426,7 +1449,7 @@ def bonus_net_by_pic(tgl_dari, tgl_sampai, divisi):
     return m
 
 @app.route('/api/sales-efisiensi')
-@login_required
+@manager_only
 def api_sales_efisiensi():
     """Efisiensi sales: Biaya (Gaji config + Net Bonus) vs Gross Margin (omzet-modal deal).
        Rasio = Margin ÷ Biaya. Net = Margin − Biaya. Gaji per bulan dari config sales_gaji."""
@@ -2730,8 +2753,12 @@ def api_pres_months():
 @app.route('/api/kpi-config')
 @login_required
 def api_kpi_config():
-    """Baca config KPI (read-only) untuk dipakai front-end (KPI Divisi Produksi & Setup)."""
-    return jsonify(load_kpi_config())
+    """Baca config KPI (read-only) untuk dipakai front-end (KPI Divisi Produksi & Setup).
+       Visitor: data gaji (sales_gaji) dibuang."""
+    cfg = load_kpi_config()
+    if session.get('role', 'manager') != 'manager':
+        cfg = {k: v for k, v in cfg.items() if k != 'sales_gaji'}
+    return jsonify(cfg)
 
 @app.route('/api/delivery')
 @login_required
@@ -3486,7 +3513,7 @@ def _fetch_csv_grid(url):
     return rows
 
 @app.route('/api/financial')
-@login_required
+@manager_only
 def api_financial():
     cfg = load_kpi_config()
     url = cfg.get('financial_csv_url')
