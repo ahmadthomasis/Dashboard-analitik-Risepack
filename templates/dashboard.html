@@ -834,7 +834,19 @@ function setTitle(){
   document.getElementById('page-title').firstChild.textContent = t;
   document.getElementById('page-sub').textContent = state.view==='sales' ? ('Sales · '+SUBLABEL[state.subtab]) : s;
 }
+// ── Role / hak akses ──
+let ROLE='manager';
+const VISITOR_HIDE_VIEWS=['financial','setup'];   // menu yg disembunyikan utk visitor
+const VISITOR_HIDE_SUBS=['efisiensi'];            // subtab Sales yg disembunyikan
+async function applyRolePermissions(){
+  try{ const me=await fetchJSON('/api/me'); ROLE=(me&&me.role)||'manager'; }catch(e){ ROLE='manager'; }
+  if(ROLE==='manager') return;
+  VISITOR_HIDE_VIEWS.forEach(v=>{ const b=document.querySelector('.nav-item[data-view="'+v+'"]'); if(b) b.style.display='none'; });
+  VISITOR_HIDE_SUBS.forEach(s=>{ const b=document.querySelector('.subtab[data-sub="'+s+'"]'); if(b) b.style.display='none'; });
+  if(VISITOR_HIDE_VIEWS.includes(state.view)) showView('ringkasan');
+}
 function showView(view){
+  if(ROLE!=='manager' && VISITOR_HIDE_VIEWS.includes(view)) return; // visitor tidak boleh
   state.view = view;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active', n.dataset.view===view));
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -844,6 +856,7 @@ function showView(view){
   renderView();
 }
 function showSub(sub){
+  if(ROLE!=='manager' && VISITOR_HIDE_SUBS.includes(sub)) return; // visitor tidak boleh
   state.subtab = sub;
   syncSub();
   setTitle();
@@ -857,6 +870,7 @@ function syncSub(){
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', async () => {
+  await applyRolePermissions();
   setRange('month', false);
   const f = await fetchJSON('/api/filters');
   const picSel=document.getElementById('f-pic');
