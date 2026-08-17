@@ -762,10 +762,16 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
   <div class="pres-bar">
     <button class="pres-btn" onclick="closePresent()">✕ Tutup</button>
     <select id="pres-month" onchange="presMonthChange(this.value)"></select>
+    <div id="pres-custom-range" style="display:none;align-items:center;gap:6px">
+      <input type="month" id="pres-c1" onchange="presCustomChange()" style="padding:6px 8px;border-radius:8px;border:1px solid #3a4d43;background:#1d2a24;color:#e8e2d8;font-family:inherit;font-size:13px">
+      <span style="color:#8a7d70">s/d</span>
+      <input type="month" id="pres-c2" onchange="presCustomChange()" style="padding:6px 8px;border-radius:8px;border:1px solid #3a4d43;background:#1d2a24;color:#e8e2d8;font-family:inherit;font-size:13px">
+    </div>
     <div class="seg">
       <button id="pm-bulan" class="on" onclick="presSetMode('bulan')">Bulan</button>
       <button id="pm-quartal" onclick="presSetMode('quartal')">Quartal</button>
       <button id="pm-semester" onclick="presSetMode('semester')">Semester</button>
+      <button id="pm-custom" onclick="presSetMode('custom')">Custom</button>
     </div>
     <div class="grow"></div>
     <button class="pres-btn" onclick="presNav(-1)">◀</button>
@@ -2452,22 +2458,35 @@ function fmtInt(n){ return Number(n||0).toLocaleString('id-ID'); }
 
 // ═══════════════ PRESENTASI (Phase 1) ═══════════════
 const BULAN_ID=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-const PRES={month:'2026-06',mode:'bulan',idx:0,slides:[],charts:[],divisi:'PT BBI'};
+const PRES={month:'2026-06',mode:'bulan',idx:0,slides:[],charts:[],divisi:'PT BBI',cStart:'2026-01',cEnd:'2026-07'};
 function pPad(n){return String(n).padStart(2,'0');}
 function mStart(ym){return ym+'-01';}
 function mEnd(ym){const [y,m]=ym.split('-').map(Number);return `${y}-${pPad(m)}-${pPad(new Date(y,m,0).getDate())}`;}
+function monthsBetween(a,b){ // daftar 'YYYY-MM' dari a s/d b (lintas tahun), maksimal 36 bulan
+  let [ya,ma]=a.split('-').map(Number), [yb,mb]=b.split('-').map(Number);
+  if(yb<ya||(yb===ya&&mb<ma)){[ya,ma,yb,mb]=[yb,mb,ya,ma];}
+  const out=[]; let y=ya,m=ma;
+  while((y<yb||(y===yb&&m<=mb)) && out.length<36){ out.push(`${y}-${pPad(m)}`); m++; if(m>12){m=1;y++;} }
+  return out;
+}
+function monLabel(ym){const [y,m]=ym.split('-').map(Number);return `${BULAN_ID[m-1].slice(0,3)} ${String(y).slice(2)}`;}
+function presRangeLabel(a,b){return a===b?monLabel(a):`${monLabel(a)} – ${monLabel(b)}`;}
 function presRange(ym){return `tgl_dari=${mStart(ym)}&tgl_sampai=${mEnd(ym)}`;}
 function periodInfo(){
   const [y,m]=PRES.month.split('-').map(Number);
   const range=(a,b)=>{const months=[];for(let mm=a;mm<=b;mm++)months.push(`${y}-${pPad(mm)}`);return months;};
-  if(PRES.mode==='bulan') return {d1:mStart(PRES.month),d2:mEnd(PRES.month),months:[PRES.month],label:`${BULAN_ID[m-1]} ${y}`};
+  if(PRES.mode==='custom'){
+    const months=monthsBetween(PRES.cStart,PRES.cEnd);
+    return {mode:'custom',d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:presRangeLabel(PRES.cStart,PRES.cEnd)};
+  }
+  if(PRES.mode==='bulan') return {mode:'bulan',d1:mStart(PRES.month),d2:mEnd(PRES.month),months:[PRES.month],label:`${BULAN_ID[m-1]} ${y}`};
   if(PRES.mode==='quartal'){
     const q=Math.floor((m-1)/3), qs=q*3+1, months=range(qs,qs+2);   // quartal PENUH (mis. Q2 = Apr-Mei-Jun)
-    return {d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Quartal ${q+1} ${y}`};
+    return {mode:'quartal',d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Quartal ${q+1} ${y}`};
   }
   // semester PENUH: S1 = Jan-Jun, S2 = Jul-Des
   const s=m<=6?1:2, ss=s===1?1:7, months=range(ss,ss+5);
-  return {d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Semester ${s} ${y}`};
+  return {mode:'semester',d1:mStart(months[0]),d2:mEnd(months[months.length-1]),months,label:`Semester ${s} ${y}`};
 }
 function openPresent(){
   const ov=document.getElementById('present');
@@ -2483,7 +2502,21 @@ function buildPresBar(){
   const y=2026; for(let m=1;m<=12;m++){const o=document.createElement('option');o.value=`${y}-${pPad(m)}`;o.textContent=`${BULAN_ID[m-1]} ${y}`;sel.appendChild(o);}
   sel.value=PRES.month;
 }
-function presSetMode(mode){ PRES.mode=mode; ['bulan','quartal','semester'].forEach(x=>document.getElementById('pm-'+x).classList.toggle('on',x===mode)); loadDeck(); }
+function presSetMode(mode){
+  PRES.mode=mode;
+  ['bulan','quartal','semester','custom'].forEach(x=>document.getElementById('pm-'+x).classList.toggle('on',x===mode));
+  const isC=mode==='custom';
+  document.getElementById('pres-custom-range').style.display=isC?'flex':'none';
+  document.getElementById('pres-month').style.display=isC?'none':'';
+  if(isC){ document.getElementById('pres-c1').value=PRES.cStart; document.getElementById('pres-c2').value=PRES.cEnd; }
+  loadDeck();
+}
+function presCustomChange(){
+  let a=document.getElementById('pres-c1').value, b=document.getElementById('pres-c2').value;
+  if(!a||!b) return;
+  if(b<a){ const t=a; a=b; b=t; document.getElementById('pres-c1').value=a; document.getElementById('pres-c2').value=b; }
+  PRES.cStart=a; PRES.cEnd=b; loadDeck();
+}
 function presMonthChange(v){ PRES.month=v; loadDeck(); }
 function presNav(d){ let i=PRES.idx+d; if(i<0)i=0; if(i>=PRES.slides.length)i=PRES.slides.length-1; showSlide(i); }
 function presFull(){ const ov=document.getElementById('present'); if(!document.fullscreenElement)ov.requestFullscreen?.(); else document.exitFullscreen?.(); }
@@ -2503,7 +2536,7 @@ async function loadDeck(){
     const dv='&divisi='+encodeURIComponent(PRES.divisi);           // SALES difilter PT BBI
     const per=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`+dv;
     const perAll=`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`;             // TANPA divisi (produksi/SCM & marketing = company-wide)
-    const yq='tahun='+PRES.month.slice(0,4)+dv;
+    const yq=(P.mode==='custom') ? (`tgl_dari=${P.d1}&tgl_sampai=${P.d2}`+dv) : ('tahun='+PRES.month.slice(0,4)+dv);
     // KPI/score agregat + per bulan digabung di 1 endpoint (/api/pres-months, ada cache) → cepat.
     // Produksi (ontime/infull/reject/kelolosan/complain) = company-wide (perAll), Sales = PT BBI (per).
     const specs=[
@@ -2555,10 +2588,14 @@ function showSlide(i){
   document.getElementById('pres-count').textContent=`${i+1} / ${PRES.slides.length}`;
 }
 function presChart(el,type,data,options){ if(!el)return; PRES.charts.push(new Chart(el.getContext('2d'),{type,data,options:{responsive:true,maintainAspectRatio:false,...options}})); }
-function presLine(el,rows,key,title){
-  const M=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+function presLine(el,rows,key,title,months){
+  const useYM=Array.isArray(months)&&months.length;             // custom: sumbu pakai daftar bulan (lintas tahun)
+  const M=useYM?months.map(monLabel):['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
   const cats=[...new Set((rows||[]).map(r=>r[key]))];
-  const ds=cats.map((c,i)=>({label:c,data:M.map((_,mi)=>{const r=rows.find(r=>r[key]===c&&parseInt((r.bulan||'').slice(5))===mi+1);return r?r.omzet:0;}),
+  const ds=cats.map((c,i)=>({label:c,
+    data:useYM
+      ? months.map(ym=>{const r=rows.find(r=>r[key]===c&&r.bulan===ym);return r?r.omzet:0;})
+      : M.map((_,mi)=>{const r=rows.find(r=>r[key]===c&&parseInt((r.bulan||'').slice(5))===mi+1);return r?r.omzet:0;}),
     borderColor:PALETTE[i%PALETTE.length],backgroundColor:PALETTE[i%PALETTE.length]+'22',tension:.35,fill:false,pointRadius:2,borderWidth:2}));
   presChart(el,'line',{labels:M,datasets:ds},{plugins:{legend:{position:'bottom',labels:{boxWidth:8,font:{size:10}}},title:{display:true,text:title}},
     scales:{y:{ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
@@ -2616,7 +2653,7 @@ function buildSlides(D){
       <div class="ps-chartbox"><canvas></canvas></div>
     </div></div>`,
     init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
-      presLine(cv[0],D.trendBahan,'jenis_bahan','Monthly Trend Omzet per Produk');
+      presLine(cv[0],D.trendBahan,'jenis_bahan','Monthly Trend Omzet per Produk',P.mode==='custom'?P.months:null);
       presChart(cv[1],'doughnut',{labels:bhn.map(x=>x.jenis_bahan),datasets:[{data:bhn.map(x=>x.omzet),backgroundColor:PALETTE,borderWidth:2,borderColor:'#fff'}]},
         {plugins:{legend:{position:'bottom'},title:{display:true,text:'Sales by Produk (jenis bahan)'}}}); }});
   // 4b. DETAIL PENJUALAN (semua data penjualan)
@@ -2635,7 +2672,7 @@ function buildSlides(D){
     </div>
     <div class="ps-note">Top sales: ${tS.slice(0,3).map(t=>`${esc(t.PIC)} (${formatRp(t.total_omzet)})`).join(' · ')||'–'}.</div></div>`,
     init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
-      presLine(cv[0],D.trendOmzet,'kategori_produksi','Omzet per Kategori sepanjang Tahun');
+      presLine(cv[0],D.trendOmzet,'kategori_produksi',P.mode==='custom'?'Omzet per Kategori (rentang)':'Omzet per Kategori sepanjang Tahun',P.mode==='custom'?P.months:null);
       presChart(cv[1],'bar',{labels:kom.map(x=>x.bucket),datasets:[{data:kom.map(x=>x.orders),backgroundColor:'#7a5230',borderRadius:6,maxBarThickness:54,_omz:kom.map(x=>x.omzet)}]},
         {plugins:{legend:{display:false},title:{display:true,text:'Jumlah Order per Rentang Nilai'},tooltip:{callbacks:{label:c=>`${fmtInt(c.parsed.y)} order · ${formatRp(c.dataset._omz[c.dataIndex])}`}}},scales:{y:{ticks:{precision:0}}}}); }});
   // 5. OMZET (rich: cards + tabel + 2 grafik)
@@ -2679,8 +2716,14 @@ function buildSlides(D){
     init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
       presChart(cv[0],'bar',{labels:bm.map(x=>x.bucket),datasets:[{data:bm.map(x=>x.omzet),backgroundColor:bm.map(x=>mCol[x.bucket]||'#999'),borderRadius:6,maxBarThickness:70,_o:bm.map(x=>x.orders)}]},
         {plugins:{legend:{display:false},title:{display:true,text:'Omzet per Level Margin'},tooltip:{callbacks:{label:c=>`${formatRp(c.parsed.y)} · ${fmtInt(c.dataset._o[c.dataIndex])} order`}}},scales:{y:{ticks:{callback:v=>formatRpShort(v)}}}});
-      const M=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-      const md=M.map((_,mi)=>{const r=(D.marginBulan||[]).find(r=>parseInt((r.bulan||'').slice(5))===mi+1);return r?r.persen_margin:null;});
+      let M, md;
+      if(P.mode==='custom'){
+        M=P.months.map(monLabel);
+        md=P.months.map(ym=>{const r=(D.marginBulan||[]).find(r=>r.bulan===ym);return r?r.persen_margin:null;});
+      }else{
+        M=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+        md=M.map((_,mi)=>{const r=(D.marginBulan||[]).find(r=>parseInt((r.bulan||'').slice(5))===mi+1);return r?r.persen_margin:null;});
+      }
       presChart(cv[1],'line',{labels:M,datasets:[{label:'% Margin',data:md,borderColor:'#4e9a3f',backgroundColor:'#4e9a3f22',tension:.35,fill:true,pointRadius:2,borderWidth:2,spanGaps:true}]},
         {plugins:{legend:{display:false},title:{display:true,text:'Tren % Margin per Bulan'}},scales:{y:{ticks:{callback:v=>v+'%'}}}}); }});
   // 6. DETAIL OMZET NEW (rich) — quartal/semester: ada tabel perbandingan per bulan
