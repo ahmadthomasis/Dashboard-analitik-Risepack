@@ -2072,7 +2072,8 @@ function rejectScmSubset(rj){
   return {total_cost:total,count:rows.length,by_jenis:agg('jenis'),by_pic:agg('pic'),rows};
 }
 // hitung scorecard KPI produksi (dipakai tab KPI & slide presentasi)
-function prodKpiCompute(cfg,vals,notes){
+function prodKpiCompute(cfg,vals,notes,nmonths){
+  const nm=Math.max(1,nmonths||1);
   const defs=(cfg&&cfg.produksi_kpi)||[];
   const scorePct=(a,bands)=>{ if(a==null)return 0; for(const [thr,sc] of bands){ if(a>=thr)return sc; } return 0; };
   const scoreLte=(v,bands)=>{ if(v==null)return 0; for(const [thr,sc] of bands){ if(v<=thr)return sc; } return 1; };
@@ -2081,7 +2082,7 @@ function prodKpiCompute(cfg,vals,notes){
     const w=k.weight/100, a=vals[k.src];
     let score,ach,actualDisp,targetDisp,note=(notes&&notes[k.src])||'';
     if(k.unit==='%'){ score=scorePct(a,k.bands||[]); ach=(a!=null&&k.objective)?Math.round(a/k.objective*1000)/10:0; actualDisp=(a!=null?a+'%':'–'); targetDisp=k.objective+'%'; }
-    else if(k.unit==='Rp'){ score=scoreLte(a,k.bands_lte||[]); ach=(a>0)?Math.min(Math.round(k.objective/a*1000)/10,100):100; actualDisp=formatRp(a); targetDisp='≤ '+formatRp(k.objective); note='penanggung jawab SCM'; }
+    else if(k.unit==='Rp'){ const objEff=(k.objective||0)*nm; const bandsEff=(k.bands_lte||[]).map(b=>[b[0]*nm,b[1]]); score=scoreLte(a,bandsEff); ach=(a>0)?Math.min(Math.round(objEff/a*1000)/10,100):100; actualDisp=formatRp(a); targetDisp='≤ '+formatRp(objEff)+(nm>1?` (${formatRpShort(k.objective)}/bln×${nm})`:''); note='penanggung jawab SCM'; }
     else { score=scoreLte(a,k.bands_lte||[]); ach=Math.round(score/6*1000)/10; actualDisp=fmtInt(a||0)+' case'; targetDisp=k.objective+' case'; }
     const weighted=Math.round(score*w*100)/100;
     totW+=weighted; totAchW+=ach*w;
@@ -2105,7 +2106,9 @@ async function loadKpiProduksi(q){
   const kelPct = kl.spk ? Math.round((kl.spk-(kl.kendala||0))/kl.spk*1000)/10 : null;
   const vals={ontime:ot.pct, infull:IF.pct, reject_scm:rejectScmSubset(rj).total_cost, kelolosan_pct:kelPct, complain:cm.pct};
   const notes={kelolosan_pct:`${fmtInt(kl.kendala||0)} case dari ${fmtInt(kl.spk||0)} SPK`};
-  renderKpiProd(prodKpiCompute(cfg,vals,notes));
+  const dv=document.getElementById('f-dari').value, sv=document.getElementById('f-sampai').value;
+  let nm=1; if(dv&&sv){ const a=dv.split('-').map(Number), b=sv.split('-').map(Number); nm=Math.max(1,(b[0]-a[0])*12+(b[1]-a[1])+1); }
+  renderKpiProd(prodKpiCompute(cfg,vals,notes,nm));
 }
 function renderKpiProd(d){
   const lblClass=d.total_ach>=80?'good':(d.total_ach<60?'bad':'warn');
@@ -2681,7 +2684,7 @@ function buildSlides(D){
   S.push({html:head(`Sales Overview <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
       ${pcard('Total Omzet',formatRp(k.total_omzet),dlt(dd.total_omzet))}
-      ${pcard('Total Repeat',formatRp(k.total_repeat),dlt(dd.total_repeat))}
+      ${pcard('Omzet Repeat',formatRp(k.repeat_omzet),`${fmtInt(k.total_repeat)} order repeat`)}
       ${pcard('Total Order',fmtInt(k.total_order),dlt(dd.total_order))}
       ${pcard('Average Purchase',formatRp(k.avg_purchase),dlt(dd.avg_purchase))}
     </div>
@@ -2943,7 +2946,7 @@ function buildSlides(D){
   // 8b. KPI DIVISI PRODUKSI (scorecard, dinamis per periode)
   const _kelPct = kl.spk ? Math.round((kl.spk-(kl.kendala||0))/kl.spk*1000)/10 : null;
   const prodKpi=prodKpiCompute(D.kpiConfig||{},{ontime:ot.pct,infull:IF.pct,reject_scm:rjS.total_cost,kelolosan_pct:_kelPct,complain:cm.pct},
-    {kelolosan_pct:`${fmtInt(kl.kendala||0)} case dari ${fmtInt(kl.spk||0)} SPK`});
+    {kelolosan_pct:`${fmtInt(kl.kendala||0)} case dari ${fmtInt(kl.spk||0)} SPK`},P.months.length);
   const prodLbl=prodKpi.total_ach>=80?'ps-win':(prodKpi.total_ach<60?'ps-lose':'');
   S.push({html:head(`KPI Divisi Produksi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
@@ -2954,7 +2957,7 @@ function buildSlides(D){
     ${prodKpi.rows.length?`<table class="ps-tab"><thead><tr><th>KPI</th><th class="num">Bobot</th><th class="num">Target</th><th class="num">Aktual</th><th class="num">Ach</th><th>Skor</th></tr></thead><tbody>
       ${prodKpi.rows.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${r.target}</td><td class="num">${r.actual}</td><td class="num">${r.ach}%</td><td>${scBadge(r.score)}</td></tr>`).join('')}
       </tbody></table>`:'<div class="ps-note">Config produksi_kpi kosong.</div>'}
-    <div class="ps-note">Ontime · Infull · Reject Cost (SCM) · Kelolosan · Complaint Handling — skor otomatis dari data.</div></div>`});
+    <div class="ps-note">Total Achievement = rata-rata tertimbang Ach (Σ Ach × Bobot). Skor per-KPI dari band nilai. Target Reject Cost = 3jt/bln × ${P.months.length} bln. Ach dibatasi maks 100%.</div></div>`});
   // 9. ONTIME (cards + tren + per jenis)
   S.push({html:head(`On Time Delivery <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
@@ -2993,7 +2996,7 @@ function buildSlides(D){
       ${pcard('PIC Terbesar',esc((rjS.by_pic[0]||{}).label)||'–',rjS.by_pic[0]?formatRp(rjS.by_pic[0].cost):'')}
     </div>
     <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
-    <div class="ps-note">Khusus penanggung jawab SCM · target ≤ Rp3jt/bulan.</div></div>`,
+    <div class="ps-note">Total ${P.months.length} bulan · rata-rata <b>${formatRp(Math.round(rjS.total_cost/Math.max(P.months.length,1)))}/bulan</b> vs target ≤ Rp3jt/bulan (${(rjS.total_cost/Math.max(P.months.length,1))<=3000000?'memenuhi':'melewati'} target). Khusus penanggung jawab SCM.</div></div>`,
     init:(sl)=>{ const cv=sl.querySelectorAll('canvas'), bj=rjS.by_jenis.slice(0,6), bp=rjS.by_pic.slice(0,6);
       presChart(cv[0],'bar',{labels:bj.map(x=>x.label),datasets:[{data:bj.map(x=>x.cost),backgroundColor:'#cf4b3a',borderRadius:5,maxBarThickness:24}]},
         {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Reject Cost per Jenis'}},scales:{x:{ticks:{callback:v=>formatRpShort(v)}}}});
@@ -3119,7 +3122,8 @@ function autoConclusion(D){
   const out=[], k=D.kpi||{}, sd=D.scoreDivisi||{}, ot=D.ontime||{}, IF=(D.delivery||{}).in_full||{}, cm=D.complain||{}, kl=D.kelolosan||{}, fn=D.financial||{}, ti=fn.total_invoice||{}, ft=fn.targets||{};
   const omz=scoreRow(sd,'omzet');
   if(sd.total_ach!=null) out.push(`<b>Sales:</b> skor KPI Divisi ${sd.total_ach}% (${sd.label||'-'}). Omzet ${formatRp(k.total_omzet)}${omz.ach!=null?` (${omz.ach}% target)`:''}, margin ${k.persen_margin!=null?k.persen_margin+'%':'–'}, repeat ${k.persen_repeat_omzet!=null?k.persen_repeat_omzet+'%':'–'} omzet — ${(k.persen_repeat_omzet>70)?'ketergantungan repeat order tinggi, akuisisi customer baru perlu digenjot':'komposisi new/repeat cukup sehat'}.`);
-  out.push(`<b>SCM/Produksi:</b> OTIF — On Time ${ot.pct!=null?ot.pct+'%':'–'} & In Full ${IF.pct!=null?IF.pct+'%':'–'} ${(ot.pct>=95&&IF.pct>=95)?'memenuhi target 95%':'MASIH DI BAWAH target 95%'}; kelolosan reject ${kl.pct!=null?kl.pct+'%':'–'}, complaint handling ${cm.pct!=null?cm.pct+'%':'–'}.`);
+  const _tg=(v,t)=>v==null?'–':(v>=t?'memenuhi':'di bawah')+` target ${t}%`;
+  out.push(`<b>SCM/Produksi:</b> On Time ${ot.pct!=null?ot.pct+'%':'–'} (${_tg(ot.pct,95)}), In Full ${IF.pct!=null?IF.pct+'%':'–'} (${_tg(IF.pct,95)}); kelolosan reject ${kl.pct!=null?kl.pct+'%':'–'}, complaint handling ${cm.pct!=null?cm.pct+'%':'–'} (${_tg(cm.pct,90)}).`);
   if(ti.revenue!=null) out.push(`<b>Finance:</b> revenue ${formatRp(ti.revenue)}, net profit ${formatRp(ti.net_profit)} (NPM ${ti.npm!=null?ti.npm+'%':'–'} vs target ${ft.npm||'–'}%) — ${(ti.npm!=null&&ft.npm!=null&&ti.npm>=ft.npm)?'profitabilitas on-track':'profitabilitas di bawah target, perlu efisiensi biaya'}.`);
   out.push(`<b>Prioritas periode depan:</b> (1) genjot akuisisi customer baru & closing rate, (2) perbaiki OTIF lewat manajemen vendor, (3) tekan reject & jaga margin.`);
   return out;
