@@ -272,6 +272,13 @@ table.ps-tab td{padding:10px 12px;border:1px solid #ece5db;color:#3a3128;}
 table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
 .ps-scroll{max-height:58vh;overflow:auto;border-radius:10px;}
 .ps-scroll table.ps-tab th{position:sticky;top:0;z-index:2;}
+.ps-trgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:6px;}
+.ps-trcell{background:#faf7f2;border:1px solid #ece5db;border-radius:12px;padding:10px 12px;}
+.ps-trcap{font-size:14px;font-weight:700;color:#3a3128;margin-bottom:2px;}
+.ps-trchart{height:23vh;position:relative;}
+.ps-trlegend{display:flex;align-items:center;justify-content:center;font-size:14px;color:#6b5d4d;background:none;border:none;}
+.ps-trlegend .d1{display:inline-block;width:22px;border-top:3px solid #e9852b;margin-right:6px;}
+.ps-trlegend .d2{display:inline-block;width:22px;border-top:3px dashed #9c8b74;margin-right:6px;}
 .ps-badge{display:inline-block;padding:3px 12px;border-radius:6px;font-weight:700;font-size:13px;}
 .ps-win{background:#d7f0e2;color:#1c7a4f;} .ps-lose{background:#f9c9c2;color:#a3392a;}
 .ps-chartbox{flex:1;min-height:0;position:relative;}
@@ -2610,16 +2617,20 @@ function presLine(el,rows,key,title,months){
     scales:{y:{ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
 }
 
-function presTgtVsReal(el,months,rows,title){
-  // rows sejajar months: [{target,actual}] — garis realisasi bulanan + garis putus-putus target
+function presTgtVsReal(el,months,rows,title,unit){
+  // rows sejajar months: [{target,actual}] — garis realisasi bulanan + garis putus-putus target.
+  // unit: 'Rp'(default) | '%' | 'kontrak' | 'x' | 'leads' → format sumbu & tooltip.
+  const isPct=unit==='%', isCnt=(unit==='kontrak'||unit==='x'||unit==='leads');
+  const ax = isPct ? (v=>v+'%') : isCnt ? (v=>fmtInt(v)) : (v=>formatRpShort(v));
+  const tip = isPct ? (v=>v+'%') : isCnt ? (v=>fmtInt(v)+(unit==='kontrak'?' kontrak':unit==='x'?'x':' leads')) : (v=>formatRp(v));
   presChart(el,'line',{labels:months.map(monLabel),datasets:[
     {label:'Realisasi',data:rows.map(r=>r.actual||0),borderColor:'#e9852b',backgroundColor:'#e9852b22',
-     tension:.35,fill:false,pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#e9852b',pointBorderWidth:2,borderWidth:2.5},
+     tension:.35,fill:false,pointRadius:3,pointBackgroundColor:'#fff',pointBorderColor:'#e9852b',pointBorderWidth:2,borderWidth:2.5},
     {label:'Target',data:rows.map(r=>r.target||0),borderColor:'#9c8b74',borderDash:[8,5],
      tension:0,fill:false,pointRadius:0,borderWidth:2}
-  ]},{plugins:{legend:{position:'bottom',labels:{boxWidth:14,usePointStyle:true}},title:{display:true,text:title},
-      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${formatRp(c.parsed.y)}`}}},
-    scales:{y:{beginAtZero:true,ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
+  ]},{plugins:{legend:{display:!!title,position:'bottom',labels:{boxWidth:14,usePointStyle:true}},title:{display:!!title,text:title||''},
+      tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${tip(c.parsed.y)}`}}},
+    scales:{y:{beginAtZero:true,ticks:{callback:ax}},x:{grid:{display:false}}}});
 }
 function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
 function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
@@ -2654,11 +2665,16 @@ function buildSlides(D){
       ${sdr.map(r=>`<tr><td>${esc(r.name)}</td><td class="num">${r.weight}%</td><td class="num">${kval(r.unit,r.target)}</td><td class="num">${kval(r.unit,r.actual)}</td><td class="num">${r.ach!=null?r.ach+'%':'–'}</td><td>${scBadge(r.score)}</td></tr>`).join('')}
       </tbody></table>`:`<div class="ps-note">Data KPI divisi "${PRES.divisi}" kosong — cek apakah nama divisi persis (bisa diubah di kode: PRES.divisi).</div>`}
     <div class="ps-note">Scorecard OKR divisi sales, filter divisi ${PRES.divisi}. Ach = min(aktual÷target,100%).</div></div>`});
-  // 3b. TARGET vs REALISASI OMZET (per bulan)
-  S.push({html:head(`Target vs Realisasi Omzet <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <div class="ps-chartbox" style="flex:1"><canvas></canvas></div>
-    <div class="ps-note">Perbandingan target vs realisasi omzet per bulan · divisi ${PRES.divisi}.</div></div>`,
-    init:(sl)=>{ presTgtVsReal(sl.querySelector('canvas'),P.months,omzetRows,'Omzet: Target vs Realisasi per Bulan'); }});
+  // 3b. TARGET vs REALISASI — SEMUA KPI DIVISI SALES (per bulan)
+  const kpiTR=[['omzet','Omzet','Rp'],['repeat','Repeat Order','Rp'],['umbrella','Umbrella Contract','kontrak'],['closing_new','Closing Rate New','%'],['potensi','Potensi 3M','Rp']];
+  S.push({html:head(`Target vs Realisasi — Semua KPI <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-trgrid">
+      ${kpiTR.map(kt=>`<div class="ps-trcell"><div class="ps-trcap">${esc(kt[1])}</div><div class="ps-trchart"><canvas></canvas></div></div>`).join('')}
+      <div class="ps-trcell ps-trlegend"><span class="d1"></span> Realisasi (bulanan) &nbsp;&nbsp; <span class="d2"></span> Target</div>
+    </div>
+    <div class="ps-note">Garis = realisasi tiap bulan · garis putus-putus = target · divisi ${PRES.divisi}.</div></div>`,
+    init:(sl)=>{ const cvs=sl.querySelectorAll('.ps-trchart canvas');
+      kpiTR.forEach((kt,i)=>{ const rows=P.months.map(ym=>scoreRow(D.scoreMap[ym],kt[0])); presTgtVsReal(cvs[i],P.months,rows,'',kt[2]); }); }});
   const k=D.kpi||{}, dd=k.delta||{}, bhn=(D.bahan||[]);
   S.push({html:head(`Sales Overview <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
