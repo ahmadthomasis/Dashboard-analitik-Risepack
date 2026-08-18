@@ -2793,7 +2793,7 @@ function buildSlides(D){
       <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Omzet New</th><th class="num">New Cust</th><th class="num">Qualified</th><th class="num">Closing %</th></tr></thead><tbody>
       ${onMonths.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${formatRp(r.mk.omzet_new)}</td><td class="num">${fmtInt(r.mk.new_cust)}</td><td class="num">${fmtInt(r.mk.qleads_new)}</td><td class="num">${r.mk.closing_rate_new!=null?r.mk.closing_rate_new+'%':'–'}</td></tr>`).join('')}
       </tbody></table>
-      <div class="ps-note">Closing % = New Cust ÷ Qualified. <b>New Cust</b> = customer baru (semua sumber non-Repeat, by tanggal order) · <b>Qualified</b> = leads "Bukan Sampah" (semua sumber, by waktu kontak).</div>
+      <div class="ps-note">Closing % = New Cust ÷ Qualified. <b>New Cust</b> = customer baru (semua sumber non-Repeat, by tanggal order) · <b>Qualified</b> = leads "Bukan Sampah" (semua sumber, by waktu kontak).<br>Kartu total New Customer = jumlah <b>unik</b> sepanjang periode; kolom bulanan bisa menjumlah sedikit lebih besar karena customer yang deal di &gt;1 bulan dihitung tiap bulan.</div>
       <div class="ps-chartbox"><canvas></canvas></div></div>`,
       init:(sl)=>{ presChart(sl.querySelector('canvas'),'bar',
         {labels:onMonths.map(r=>BULAN_ID[+r.ym.split('-')[1]-1]),datasets:[{label:'Omzet New',data:onMonths.map(r=>r.mk.omzet_new||0),backgroundColor:'#3b6fb0',borderRadius:6,maxBarThickness:60}]},
@@ -2846,7 +2846,7 @@ function buildSlides(D){
   S.push({html:head(`Customer Follow Up <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
       ${pcard('Customer Pipeline',fmtInt((D.journey||[]).length),'belum order')}
-      ${pcard('Total Potensi',formatRp(totPot),'nilai pipeline')}
+      ${pcard('Nilai Pipeline',formatRp(totPot),'Follow Up saja · belum order')}
       ${pcard('Potensi Terbesar',esc((jr[0]||{}).nama)||'–',jr[0]?formatRp(jr[0].potensi):'')}
     </div>
     <table class="ps-tab"><thead><tr><th>Customer</th><th>PIC</th><th class="num">Order</th><th class="num">Potensi</th></tr></thead><tbody>
@@ -2869,7 +2869,7 @@ function buildSlides(D){
   const mk=D.marketing||{}, mkr=mk.rows||[], po=scoreRow(mk,'potensi');
   S.push({html:head(`Potensi 3M <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
-      ${pcard('Total Potensi',formatRp(po.actual),'nilai potensi baru')}
+      ${pcard('Total Potensi',formatRp(po.actual),'semua lead: Deal + Follow Up + Lost')}
       ${pcard('Target',formatRp(po.target),'3M / bulan')}
       ${pcard('% Achievement',(po.ach!=null?po.ach+'%':'–'),'vs target')}
       ${pcard('Skor',(po.score!=null?po.score+' / 6':'–'),'bobot potensi')}
@@ -2879,12 +2879,21 @@ function buildSlides(D){
       <tr style="font-weight:700"><td>TOTAL</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${mk.total_ach!=null?mk.total_ach+'%':'–'}</td><td>${mk.label||''}</td></tr>
       </tbody></table>`:'<div class="ps-note">Data KPI marketing kosong untuk periode ini.</div>'}
     <div class="ps-note">Scorecard marketing: potensi omzet, qualified leads, ROI iklan.</div></div>`});
-  // 9a. POTENSI: TARGET vs REALISASI (per bulan)
-  const potRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'potensi');return {ym,target:r.target,actual:r.actual};});
-  S.push({html:head(`Potensi: Target vs Realisasi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <div class="ps-chartbox" style="flex:1"><canvas></canvas></div>
-    <div class="ps-note">Perbandingan target vs realisasi nilai potensi per bulan · target Rp 3M / bulan.</div></div>`,
-    init:(sl)=>{ presTgtVsReal(sl.querySelector('canvas'),P.months,potRows,'Potensi: Target vs Realisasi per Bulan'); }});
+  // 9a. MARKETING: TARGET vs REALISASI (Potensi · Qualified · ROI, per bulan)
+  const _mkDefs=((D.kpiConfig||{}).marketing_kpi)||[];
+  const _mkTgt=id=>{const kk=_mkDefs.find(x=>x.id===id);return kk?kk.target:null;};
+  const _adsp=(D.kpiConfig||{}).marketing_adspend||{};
+  const _tPot=_mkTgt('potensi')||3000000000, _tQual=_mkTgt('qualified')||200, _tRoi=_mkTgt('roi')||15;
+  const rowsPot=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'potensi');return {target:(r.target!=null?r.target:_tPot),actual:r.actual||0};});
+  const rowsQual=P.months.map(ym=>({target:_tQual,actual:((D.monthKpi[ym]||{}).qualified_new)||0}));
+  const rowsRoi=P.months.map(ym=>{const om=((D.monthKpi[ym]||{}).omzet_new)||0, ad=_adsp[ym]||0; return {target:_tRoi,actual:(ad>0?Math.round(om/ad*10)/10:0)};});
+  const mkTR=[['Potensi Omzet 3M',rowsPot,'Rp'],['Qualified Leads',rowsQual,'leads'],['ROI Iklan',rowsRoi,'x']];
+  S.push({html:head(`Marketing: Target vs Realisasi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-trgrid" style="grid-template-columns:repeat(3,1fr)">
+      ${mkTR.map(m=>`<div class="ps-trcell"><div class="ps-trcap">${esc(m[0])}</div><div class="ps-trchart"><canvas></canvas></div></div>`).join('')}
+    </div>
+    <div class="ps-note">Garis = realisasi bulanan · garis putus-putus = target · Potensi 3M/bln · Qualified ${_tQual} lead/bln · ROI ${_tRoi}x.</div></div>`,
+    init:(sl)=>{ const cvs=sl.querySelectorAll('.ps-trchart canvas'); mkTR.forEach((m,i)=>presTgtVsReal(cvs[i],P.months,m[1],'',m[2])); }});
   // 9b. DETAIL POTENSI 3M (per sales, dari monitoring potensi)
   const mpRows=D.monitoring||[];
   const mpLead=mpRows.length, mpPot=mpRows.reduce((s,r)=>s+(r.potensi||0),0);
