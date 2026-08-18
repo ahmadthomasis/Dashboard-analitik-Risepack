@@ -2846,7 +2846,7 @@ function buildSlides(D){
   S.push({html:head(`Customer Follow Up <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
       ${pcard('Customer Pipeline',fmtInt((D.journey||[]).length),'belum order')}
-      ${pcard('Total Potensi',formatRp(totPot),'nilai pipeline')}
+      ${pcard('Nilai Pipeline',formatRp(totPot),'Follow Up saja · belum order')}
       ${pcard('Potensi Terbesar',esc((jr[0]||{}).nama)||'–',jr[0]?formatRp(jr[0].potensi):'')}
     </div>
     <table class="ps-tab"><thead><tr><th>Customer</th><th>PIC</th><th class="num">Order</th><th class="num">Potensi</th></tr></thead><tbody>
@@ -2869,7 +2869,7 @@ function buildSlides(D){
   const mk=D.marketing||{}, mkr=mk.rows||[], po=scoreRow(mk,'potensi');
   S.push({html:head(`Potensi 3M <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
-      ${pcard('Total Potensi',formatRp(po.actual),'nilai potensi baru')}
+      ${pcard('Total Potensi',formatRp(po.actual),'semua lead: Deal + Follow Up + Lost')}
       ${pcard('Target',formatRp(po.target),'3M / bulan')}
       ${pcard('% Achievement',(po.ach!=null?po.ach+'%':'–'),'vs target')}
       ${pcard('Skor',(po.score!=null?po.score+' / 6':'–'),'bobot potensi')}
