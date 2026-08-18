@@ -2793,7 +2793,7 @@ function buildSlides(D){
       <table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Omzet New</th><th class="num">New Cust</th><th class="num">Qualified</th><th class="num">Closing %</th></tr></thead><tbody>
       ${onMonths.map(r=>`<tr><td>${BULAN_ID[+r.ym.split('-')[1]-1]}</td><td class="num">${formatRp(r.mk.omzet_new)}</td><td class="num">${fmtInt(r.mk.new_cust)}</td><td class="num">${fmtInt(r.mk.qleads_new)}</td><td class="num">${r.mk.closing_rate_new!=null?r.mk.closing_rate_new+'%':'–'}</td></tr>`).join('')}
       </tbody></table>
-      <div class="ps-note">Closing % = New Cust ÷ Qualified. <b>New Cust</b> = customer baru (semua sumber non-Repeat, by tanggal order) · <b>Qualified</b> = leads "Bukan Sampah" (semua sumber, by waktu kontak).</div>
+      <div class="ps-note">Closing % = New Cust ÷ Qualified. <b>New Cust</b> = customer baru (semua sumber non-Repeat, by tanggal order) · <b>Qualified</b> = leads "Bukan Sampah" (semua sumber, by waktu kontak).<br>Kartu total New Customer = jumlah <b>unik</b> sepanjang periode; kolom bulanan bisa menjumlah sedikit lebih besar karena customer yang deal di &gt;1 bulan dihitung tiap bulan.</div>
       <div class="ps-chartbox"><canvas></canvas></div></div>`,
       init:(sl)=>{ presChart(sl.querySelector('canvas'),'bar',
         {labels:onMonths.map(r=>BULAN_ID[+r.ym.split('-')[1]-1]),datasets:[{label:'Omzet New',data:onMonths.map(r=>r.mk.omzet_new||0),backgroundColor:'#3b6fb0',borderRadius:6,maxBarThickness:60}]},
