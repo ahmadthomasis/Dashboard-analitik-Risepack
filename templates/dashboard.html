@@ -2879,12 +2879,21 @@ function buildSlides(D){
       <tr style="font-weight:700"><td>TOTAL</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num">${mk.total_ach!=null?mk.total_ach+'%':'–'}</td><td>${mk.label||''}</td></tr>
       </tbody></table>`:'<div class="ps-note">Data KPI marketing kosong untuk periode ini.</div>'}
     <div class="ps-note">Scorecard marketing: potensi omzet, qualified leads, ROI iklan.</div></div>`});
-  // 9a. POTENSI: TARGET vs REALISASI (per bulan)
-  const potRows=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'potensi');return {ym,target:r.target,actual:r.actual};});
-  S.push({html:head(`Potensi: Target vs Realisasi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
-    <div class="ps-chartbox" style="flex:1"><canvas></canvas></div>
-    <div class="ps-note">Perbandingan target vs realisasi nilai potensi per bulan · target Rp 3M / bulan.</div></div>`,
-    init:(sl)=>{ presTgtVsReal(sl.querySelector('canvas'),P.months,potRows,'Potensi: Target vs Realisasi per Bulan'); }});
+  // 9a. MARKETING: TARGET vs REALISASI (Potensi · Qualified · ROI, per bulan)
+  const _mkDefs=((D.kpiConfig||{}).marketing_kpi)||[];
+  const _mkTgt=id=>{const kk=_mkDefs.find(x=>x.id===id);return kk?kk.target:null;};
+  const _adsp=(D.kpiConfig||{}).marketing_adspend||{};
+  const _tPot=_mkTgt('potensi')||3000000000, _tQual=_mkTgt('qualified')||200, _tRoi=_mkTgt('roi')||15;
+  const rowsPot=P.months.map(ym=>{const r=scoreRow(D.scoreMap[ym],'potensi');return {target:(r.target!=null?r.target:_tPot),actual:r.actual||0};});
+  const rowsQual=P.months.map(ym=>({target:_tQual,actual:((D.monthKpi[ym]||{}).qualified_new)||0}));
+  const rowsRoi=P.months.map(ym=>{const om=((D.monthKpi[ym]||{}).omzet_new)||0, ad=_adsp[ym]||0; return {target:_tRoi,actual:(ad>0?Math.round(om/ad*10)/10:0)};});
+  const mkTR=[['Potensi Omzet 3M',rowsPot,'Rp'],['Qualified Leads',rowsQual,'leads'],['ROI Iklan',rowsRoi,'x']];
+  S.push({html:head(`Marketing: Target vs Realisasi <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-trgrid" style="grid-template-columns:repeat(3,1fr)">
+      ${mkTR.map(m=>`<div class="ps-trcell"><div class="ps-trcap">${esc(m[0])}</div><div class="ps-trchart"><canvas></canvas></div></div>`).join('')}
+    </div>
+    <div class="ps-note">Garis = realisasi bulanan · garis putus-putus = target · Potensi 3M/bln · Qualified ${_tQual} lead/bln · ROI ${_tRoi}x.</div></div>`,
+    init:(sl)=>{ const cvs=sl.querySelectorAll('.ps-trchart canvas'); mkTR.forEach((m,i)=>presTgtVsReal(cvs[i],P.months,m[1],'',m[2])); }});
   // 9b. DETAIL POTENSI 3M (per sales, dari monitoring potensi)
   const mpRows=D.monitoring||[];
   const mpLead=mpRows.length, mpPot=mpRows.reduce((s,r)=>s+(r.potensi||0),0);
