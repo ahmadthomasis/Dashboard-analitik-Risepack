@@ -2169,6 +2169,38 @@ def api_deal_new_repeat():
         'omzet_repeat': float(r['omzet_repeat'] or 0),
     } for r in rows])
 
+@app.route('/api/pres-customers')
+@login_required
+def api_pres_customers():
+    """Top customer (deal) urut omzet terbesar + PIC & sumber dari order TERBESAR + daftar jenis produk."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    cond, params = build_where(tgl_dari, tgl_sampai, pic, divisi)
+    agg = query(f"""
+        SELECT o.id_customer AS cid, MAX(o.nama) AS nama, MAX(o.nama_instansi) AS instansi,
+               SUM(o.total_harga) AS omzet,
+               GROUP_CONCAT(DISTINCT NULLIF(TRIM(o.jenis_bahan),'') ORDER BY o.jenis_bahan SEPARATOR ', ') AS produk
+        {BASE} AND o.status_deal='Deal' AND o.id_customer IS NOT NULL {cond}
+        GROUP BY o.id_customer ORDER BY omzet DESC LIMIT 300
+    """, params)
+    ids = [r['cid'] for r in agg if r['cid'] is not None]
+    pic_map = {}
+    if ids:
+        ph = ','.join(['%s'] * len(ids))
+        # PIC & sumber dari order terbesar: urut ASC → nilai terakhir per customer = terbesar
+        for r in query(f"""
+            SELECT o.id_customer AS cid, o.name AS pic, o.sumber
+            {BASE} AND o.status_deal='Deal' AND o.id_customer IN ({ph}) {cond}
+            ORDER BY o.total_harga ASC
+        """, ids + params):
+            pic_map[r['cid']] = {'pic': r['pic'], 'sumber': r['sumber']}
+    out = []
+    for r in agg:
+        pm = pic_map.get(r['cid'], {})
+        out.append({'nama': r['nama'], 'instansi': r['instansi'],
+                    'omzet': float(r['omzet'] or 0), 'produk': r['produk'] or '',
+                    'pic': pm.get('pic'), 'sumber': pm.get('sumber')})
+    return jsonify(out)
+
 # ─── Customer: Journey (grading) per customer ────────────────────
 @app.route('/api/journey')
 @login_required
