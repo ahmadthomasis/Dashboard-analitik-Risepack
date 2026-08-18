@@ -2611,13 +2611,15 @@ function presLine(el,rows,key,title,months){
 }
 
 function presTgtVsReal(el,months,rows,title){
-  // rows sejajar months: [{target,actual}] — grafik batang berpasangan Target vs Realisasi per bulan
-  presChart(el,'bar',{labels:months.map(monLabel),datasets:[
-    {label:'Target',data:rows.map(r=>r.target||0),backgroundColor:'#c9b8a3',borderRadius:5,maxBarThickness:30},
-    {label:'Realisasi',data:rows.map(r=>r.actual||0),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:30}
-  ]},{plugins:{legend:{position:'bottom',labels:{boxWidth:10}},title:{display:true,text:title},
+  // rows sejajar months: [{target,actual}] — garis realisasi bulanan + garis putus-putus target
+  presChart(el,'line',{labels:months.map(monLabel),datasets:[
+    {label:'Realisasi',data:rows.map(r=>r.actual||0),borderColor:'#e9852b',backgroundColor:'#e9852b22',
+     tension:.35,fill:false,pointRadius:4,pointBackgroundColor:'#fff',pointBorderColor:'#e9852b',pointBorderWidth:2,borderWidth:2.5},
+    {label:'Target',data:rows.map(r=>r.target||0),borderColor:'#9c8b74',borderDash:[8,5],
+     tension:0,fill:false,pointRadius:0,borderWidth:2}
+  ]},{plugins:{legend:{position:'bottom',labels:{boxWidth:14,usePointStyle:true}},title:{display:true,text:title},
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${formatRp(c.parsed.y)}`}}},
-    scales:{y:{ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
+    scales:{y:{beginAtZero:true,ticks:{callback:v=>formatRpShort(v)}},x:{grid:{display:false}}}});
 }
 function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
 function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
