@@ -2912,6 +2912,8 @@ function buildSlides(D){
     ${mpList.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num">${fmtInt(r.total)}</td><td class="num" style="font-weight:600">${formatRp(r.potensi)}</td><td class="num" style="color:${r.belum?'#a3392a':'inherit'}">${fmtInt(r.belum)}</td><td class="num">${r.total?Math.round(r.belum/r.total*100):0}%</td></tr>`).join('')||'<tr><td colspan="5">Tidak ada lead online periode ini</td></tr>'}
     </tbody></table>
     <div class="ps-note">Potensi customer baru (lead Online) per sales · diurut nilai potensi tertinggi · "Belum Diisi" = potensi belum dihargai.</div></div>`});
+  // 9c. DIVIDER: OKR MARKETING & SALES PT BBI
+  S.push({cls:'ps-div',html:`<div class="corner"></div><h2>OKR Marketing<br>& Sales</h2><div class="sub" style="margin-top:10px;font-size:20px;color:#cbbfa9;font-weight:600">PT BBI</div>`});
   // 10. SKO 10x ACHIEVEMENT (repeat order — customer capai 10 SKO)
   const skoRaw=(D.sko||[]).map(r=>({nama:r.nama,jml:r.jml||0,pct:Math.min(Math.round((r.jml||0)/10*100),100)}));
   const skoN=skoRaw.length, skoDone=skoRaw.filter(r=>r.jml>=10).length;
