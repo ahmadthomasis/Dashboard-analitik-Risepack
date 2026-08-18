@@ -2494,8 +2494,8 @@ def potensi_total(tgl_dari, tgl_sampai, pic, divisi):
     return float(query(sql, params)[0]['v'] or 0)
 
 def qualified_leads_count(tgl_dari, tgl_sampai, divisi):
-    """Qualified leads = Lead Online Baru (SAMA persis dgn kartu Monitoring Potensi):
-       sumber='Online', by waktu_kontak, COUNT(*)."""
+    """Qualified leads = Lead Online Baru: sumber='Online', by waktu_kontak,
+       COUNT(DISTINCT sko_key) (1 SKO = 1 lead) — konsisten dgn corong Sales (418)."""
     clauses = ["(o.flag_dummy != 'dummy' OR o.flag_dummy IS NULL)", "o.sumber = 'Online'"]
     params = []
     if tgl_dari:
@@ -2505,7 +2505,7 @@ def qualified_leads_count(tgl_dari, tgl_sampai, divisi):
     if divisi:
         clauses.append("o.order_key IN (SELECT DISTINCT order_key FROM tb_orders WHERE sub_division = %s)")
         params.append(divisi)
-    sql = f"SELECT COUNT(*) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
+    sql = f"SELECT COUNT(DISTINCT o.sko_key) v FROM order_risepack o WHERE {' AND '.join(clauses)}"
     return int(query(sql, params)[0]['v'] or 0)
 
 @app.route('/api/kpi-score')
