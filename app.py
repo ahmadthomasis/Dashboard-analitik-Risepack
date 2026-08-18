@@ -1279,20 +1279,25 @@ def api_kpi():
 @login_required
 def api_trend_omzet():
     tahun  = request.args.get('tahun', str(datetime.now().year))
+    d1 = request.args.get('tgl_dari'); d2 = request.args.get('tgl_sampai')
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     cond, params = build_where(None, None, pic, divisi)
+    if d1 and d2:
+        date_cond, date_params = "DATE(o.tgl_omzet_realtime) BETWEEN %s AND %s", [d1, d2]
+    else:
+        date_cond, date_params = "YEAR(o.tgl_omzet_realtime) = %s", [tahun]
 
     sql = f"""
         SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
                o.kategori_produksi, SUM(o.total_harga) AS omzet
         {BASE}
         AND o.status_deal='Deal'
-        AND YEAR(o.tgl_omzet_realtime) = %s
+        AND {date_cond}
         {cond}
         GROUP BY bulan, o.kategori_produksi ORDER BY bulan
     """
-    rows = query(sql, [tahun] + params)
+    rows = query(sql, date_params + params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 @app.route('/api/top-sales')
@@ -1806,19 +1811,24 @@ def api_sales_by_bahan():
 @login_required
 def api_trend_bahan():
     tahun  = request.args.get('tahun', str(datetime.now().year))
+    d1 = request.args.get('tgl_dari'); d2 = request.args.get('tgl_sampai')
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     cond, params = build_where(None, None, pic, divisi)
+    if d1 and d2:
+        date_cond, date_params = "DATE(o.tgl_omzet_realtime) BETWEEN %s AND %s", [d1, d2]
+    else:
+        date_cond, date_params = "YEAR(o.tgl_omzet_realtime) = %s", [tahun]
     sql = f"""
         SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
                o.jenis_bahan, SUM(o.total_harga) AS omzet
         {BASE}
         AND o.status_deal='Deal' AND o.jenis_bahan IS NOT NULL AND o.jenis_bahan!=''
-        AND YEAR(o.tgl_omzet_realtime) = %s
+        AND {date_cond}
         {cond}
         GROUP BY bulan, o.jenis_bahan ORDER BY bulan
     """
-    rows = query(sql, [tahun] + params)
+    rows = query(sql, date_params + params)
     return jsonify([{**r, 'omzet': float(r['omzet'] or 0)} for r in rows])
 
 # ─── Grafik: Sales by Margin (bucket margin %) ───────────────────
@@ -1855,20 +1865,25 @@ def api_sales_by_margin():
 @login_required
 def api_margin_bulanan():
     tahun  = request.args.get('tahun', str(datetime.now().year))
+    d1 = request.args.get('tgl_dari'); d2 = request.args.get('tgl_sampai')
     pic    = request.args.get('pic')
     divisi = request.args.get('divisi')
     cond, params = build_where(None, None, pic, divisi)
+    if d1 and d2:
+        date_cond, date_params = "DATE(o.tgl_omzet_realtime) BETWEEN %s AND %s", [d1, d2]
+    else:
+        date_cond, date_params = "YEAR(o.tgl_omzet_realtime) = %s", [tahun]
     sql = f"""
         SELECT DATE_FORMAT(o.tgl_omzet_realtime,'%Y-%m') AS bulan,
                SUM(o.total_harga) AS omzet,
                SUM(o.total_harga - o.modal_sales) AS margin
         {BASE}
         AND o.status_deal='Deal'
-        AND YEAR(o.tgl_omzet_realtime) = %s
+        AND {date_cond}
         {cond}
         GROUP BY bulan ORDER BY bulan
     """
-    rows = query(sql, [tahun] + params)
+    rows = query(sql, date_params + params)
     out = []
     for r in rows:
         omzet = float(r['omzet'] or 0)
