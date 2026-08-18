@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Risepack Analytics</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -788,7 +790,7 @@ table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
     <button class="pres-btn" onclick="presNav(1)">▶</button>
     <div class="grow"></div>
     <button class="pres-btn" onclick="presFull()">⛶ Layar penuh</button>
-    <button class="pres-btn" onclick="presPrint()">🖨️ PDF</button>
+    <button class="pres-btn" id="pres-pdf-btn" onclick="presPrint()">🖨️ PDF</button>
   </div>
   <div class="pres-stage-wrap"><div id="pres-stage"></div></div>
 </div>
@@ -2603,7 +2605,7 @@ function showSlide(i){
   PRES.slides[i].init&&PRES.slides[i].init(slide);
   document.getElementById('pres-count').textContent=`${i+1} / ${PRES.slides.length}`;
 }
-function presChart(el,type,data,options){ if(!el)return; PRES.charts.push(new Chart(el.getContext('2d'),{type,data,options:{responsive:true,maintainAspectRatio:false,...options}})); }
+function presChart(el,type,data,options){ if(!el)return; PRES.charts.push(new Chart(el.getContext('2d'),{type,data,options:{responsive:true,maintainAspectRatio:false,animation:PRES.printing?false:undefined,...options}})); }
 function presLine(el,rows,key,title,months){
   const useYM=Array.isArray(months)&&months.length;             // custom: sumbu pakai daftar bulan (lintas tahun)
   const M=useYM?months.map(monLabel):['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
@@ -3133,12 +3135,36 @@ function finAnalysis(D,nMonths){
   return out;
 }
 
-function printDeck(){
-  const stage=document.getElementById('pres-stage'); const keep=PRES.idx; destroyPresCharts();
-  stage.innerHTML='';
-  const els=PRES.slides.map(s=>{ const d=document.createElement('div'); d.className='pres-slide'+(s.cls?(' '+s.cls):''); d.style.marginBottom='16px'; d.innerHTML=s.html; stage.appendChild(d); return d; });
-  PRES.slides.forEach((s,i)=>{ if(s.init){ try{ s.init(els[i]); }catch(e){} } });
-  setTimeout(()=>{ window.print(); setTimeout(()=>{ destroyPresCharts(); showSlide(keep); },400); },500);
+async function printDeck(){
+  const jsPDFctor = window.jspdf && window.jspdf.jsPDF;
+  if(!window.html2canvas || !jsPDFctor){ alert('Pustaka PDF belum termuat. Tunggu beberapa detik (koneksi), lalu coba lagi.'); return; }
+  const btn=document.getElementById('pres-pdf-btn'); const oldLabel=btn?btn.textContent:'';
+  const stage=document.getElementById('pres-stage'); const keep=PRES.idx;
+  destroyPresCharts(); PRES.printing=true;
+  const W=1280, H=720;
+  const pdf=new jsPDFctor({orientation:'landscape',unit:'px',format:[W,H],compress:true});
+  try{
+    for(let i=0;i<PRES.slides.length;i++){
+      if(btn) btn.textContent=`⏳ ${i+1}/${PRES.slides.length}`;
+      stage.innerHTML='';
+      const d=document.createElement('div');
+      d.className='pres-slide'+(PRES.slides[i].cls?(' '+PRES.slides[i].cls):'');
+      d.style.width=W+'px'; d.style.maxWidth='none'; d.style.height=H+'px'; d.style.aspectRatio='auto'; d.style.boxShadow='none';
+      d.innerHTML=PRES.slides[i].html; stage.appendChild(d);
+      if(PRES.slides[i].init){ try{ PRES.slides[i].init(d); }catch(e){} }
+      await new Promise(r=>setTimeout(r,350));
+      let canvas;
+      try{ canvas=await html2canvas(d,{scale:2,backgroundColor:'#ffffff',logging:false,windowWidth:W,windowHeight:H,scrollX:0,scrollY:0}); }
+      catch(e){ console.error('html2canvas',e); destroyPresCharts(); continue; }
+      const img=canvas.toDataURL('image/jpeg',0.92);
+      if(i>0) pdf.addPage([W,H],'landscape');
+      pdf.addImage(img,'JPEG',0,0,W,H);
+      destroyPresCharts();
+    }
+    const lbl=(periodInfo().label||'deck').replace(/[^\w]+/g,'-');
+    pdf.save('Evaluasi-'+lbl+'.pdf');
+  }catch(e){ console.error(e); alert('Gagal membuat PDF. Cek console (F12).'); }
+  finally{ PRES.printing=false; if(btn) btn.textContent=oldLabel; showSlide(keep); }
 }
 </script>
 </body>
