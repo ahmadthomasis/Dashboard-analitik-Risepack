@@ -2565,10 +2565,15 @@ async function loadDeck(){
       ['trendBahan','/api/trend-bahan?'+yq,[]],['trendOmzet','/api/trend-omzet?'+yq,[]],['marginBulan','/api/margin-bulanan?'+yq,[]],
       ['monitoring','/api/monitoring-potensi?'+perAll,[]],['kpiConfig','/api/kpi-config',{}],
       ['marketingAll','/api/kpi-marketing?'+perAll,{rows:[]}],['sko','/api/sko-achievement?'+per,[]],
+      ['skoSales','/api/sko-by-sales?'+per,[]],
     ];
     const res=await Promise.all(specs.map(s=>fetchJSON(s[1]).catch(()=>s[2])));
     const D={P,per,scoreMap:{},monthKpi:{}};
     specs.forEach((s,i)=>D[s[0]]=res[i]);
+    // Reject dari Google Sheet kadang gagal saat load paralel (cache dingin) → retry sekali agar SCM tidak 0.
+    if(!(D.reject && Array.isArray(D.reject.rows) && D.reject.rows.length)){
+      for(let a=0;a<2;a++){ try{ const rj=await fetchJSON('/api/reject?'+perAll); if(rj && Array.isArray(rj.rows) && rj.rows.length){ D.reject=rj; break; } }catch(e){} await new Promise(r=>setTimeout(r,400)); }
+    }
     const pm=D.presmonths;
     if(pm && pm.agg && pm.agg.kpi){
       // endpoint cepat tersedia
@@ -2912,6 +2917,8 @@ function buildSlides(D){
     ${mpList.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num">${fmtInt(r.total)}</td><td class="num" style="font-weight:600">${formatRp(r.potensi)}</td><td class="num" style="color:${r.belum?'#a3392a':'inherit'}">${fmtInt(r.belum)}</td><td class="num">${r.total?Math.round(r.belum/r.total*100):0}%</td></tr>`).join('')||'<tr><td colspan="5">Tidak ada lead online periode ini</td></tr>'}
     </tbody></table>
     <div class="ps-note">Potensi customer baru (lead Online) per sales · diurut nilai potensi tertinggi · "Belum Diisi" = potensi belum dihargai.</div></div>`});
+  // 9c. DIVIDER: OKR MARKETING & SALES PT BBI
+  S.push({cls:'ps-div',html:`<div class="corner"></div><h2>OKR Marketing<br>& Sales</h2><div class="sub" style="margin-top:10px;font-size:20px;color:#cbbfa9;font-weight:600">PT BBI</div>`});
   // 10. SKO 10x ACHIEVEMENT (repeat order — customer capai 10 SKO)
   const skoRaw=(D.sko||[]).map(r=>({nama:r.nama,jml:r.jml||0,pct:Math.min(Math.round((r.jml||0)/10*100),100)}));
   const skoN=skoRaw.length, skoDone=skoRaw.filter(r=>r.jml>=10).length;
@@ -2927,9 +2934,27 @@ function buildSlides(D){
       ${pcard('Customer Teratas',esc((skoTop[0]||{}).nama)||'–',skoTop[0]?fmtInt(skoTop[0].jml)+' SKO':'')}
     </div>
     <table class="ps-tab"><thead><tr><th>Customer</th><th class="num">Jumlah SKO</th><th class="num">Achievement (target 10x)</th></tr></thead><tbody>
-    ${skoTop.slice(0,9).map(r=>`<tr><td>${esc(r.nama)}</td><td class="num">${fmtInt(r.jml)}</td><td class="num" style="font-weight:600;color:${r.pct>=100?'#1c7a4f':(r.pct>=70?'#9c7a4a':'#a3392a')}">${r.pct}%</td></tr>`).join('')||'<tr><td colspan="3">Tidak ada data</td></tr>'}
+    ${skoTop.map(r=>`<tr><td>${esc(r.nama)}</td><td class="num">${fmtInt(r.jml)}</td><td class="num" style="font-weight:600;color:${r.pct>=100?'#1c7a4f':(r.pct>=70?'#9c7a4a':'#a3392a')}">${r.pct}%</td></tr>`).join('')||'<tr><td colspan="3">Tidak ada data</td></tr>'}
     </tbody></table>
     <div class="ps-note">SKO 10x = target <b>tahunan</b> (akumulasi 1 tahun ${skoYear}). ${skoN?`<b>Kritis:</b> baru ${skoDone} dari ${skoN} customer (${skoDonePct}%) mencapai 10 SKO; rata-rata ${skoAvg}%. ${skoDonePct<50?'Mayoritas customer belum loyal — perlu program repeat order & follow-up terjadwal.':'Loyalitas cukup baik, dorong yang mendekati 10x.'}`:'Belum ada data SKO.'}</div></div>`});
+  // 10a2. SKO PER SALES (jumlah SKO per PIC, tahunan)
+  const skoSales=(D.skoSales||[]).slice().sort((a,b)=>(b.jml||0)-(a.jml||0));
+  const skoSalesTot=skoSales.reduce((s,r)=>s+(r.jml||0),0);
+  S.push({html:head(`SKO per Sales <span class="yr">Tahun ${skoYear}</span>`)+`<div class="ps-body">
+    <div class="ps-cards c3">
+      ${pcard('Total SKO',fmtInt(skoSalesTot),`${fmtInt(skoSales.length)} sales`)}
+      ${pcard('Sales Teratas',esc((skoSales[0]||{}).pic)||'–',skoSales[0]?fmtInt(skoSales[0].jml)+' SKO':'')}
+      ${pcard('Rata-rata / Sales',fmtInt(skoSales.length?Math.round(skoSalesTot/skoSales.length):0),'SKO per sales')}
+    </div>
+    <div class="ps-two" style="grid-template-columns:1.1fr 1fr">
+      <table class="ps-tab"><thead><tr><th>Sales (PIC)</th><th class="num">Jumlah SKO</th><th class="num">Customer</th><th class="num">Omzet</th></tr></thead><tbody>
+      ${skoSales.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num" style="font-weight:600">${fmtInt(r.jml)}</td><td class="num">${fmtInt(r.customer)}</td><td class="num">${formatRp(r.omzet)}</td></tr>`).join('')||'<tr><td colspan="4">Tidak ada data</td></tr>'}
+      </tbody></table>
+      <div class="ps-chartbox"><canvas></canvas></div>
+    </div>
+    <div class="ps-note">Jumlah SKO (order unik) yang ditangani tiap sales sepanjang tahun ${skoYear}.</div></div>`,
+    init:(sl)=>{ presChart(sl.querySelector('canvas'),'bar',{labels:skoSales.map(r=>r.pic),datasets:[{data:skoSales.map(r=>r.jml),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:26}]},
+      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Jumlah SKO per Sales'}},scales:{x:{ticks:{precision:0}}}}); }});
   // 10b. OKR OMZET NEW (target 500 juta / bulan)
   const onTgtBln=((D.kpiConfig||{}).sales_targets||{}).omzet_new_bulanan||500000000;
   const onTgt=onTgtBln*P.months.length, onAct=(D.kpi||{}).omzet_new||0;
@@ -2997,6 +3022,16 @@ function buildSlides(D){
         {plugins:{legend:{display:false},title:{display:true,text:'Tren % In Full per bulan'}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
       presChart(cv[1],'bar',{labels:bt.map(t=>t.jenis),datasets:[{label:'In Full',data:bt.map(t=>t.in_full),backgroundColor:'#2f9e6f',stack:'s'},{label:'Kurang',data:bt.map(t=>t.kurang),backgroundColor:'#e9852b',stack:'s'}]},
         {plugins:{legend:{position:'bottom'},title:{display:true,text:'In Full vs Kurang per Jenis Produk'}},scales:{x:{stacked:true},y:{stacked:true,ticks:{precision:0}}}}); }});
+  // 10d. VENDOR: ON TIME & IN FULL (per vendor)
+  const otv=((D.ontime||{}).by_vendor||[]).slice(0,12), ifv=((D.delivery||{}).by_vendor||[]).slice(0,12);
+  S.push({html:head(`Vendor: On Time & In Full <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-two"><div class="ps-chartbox"><canvas></canvas></div><div class="ps-chartbox"><canvas></canvas></div></div>
+    <div class="ps-note">Kinerja tiap vendor: On Time vs Telat (kiri) & In Full vs Kurang (kanan) · hijau = baik · maks 12 vendor teratas.</div></div>`,
+    init:(sl)=>{ const cv=sl.querySelectorAll('canvas');
+      presChart(cv[0],'bar',{labels:otv.map(v=>v.vendor),datasets:[{label:'On Time',data:otv.map(v=>v.ontime),backgroundColor:'#2f9e6f',stack:'s'},{label:'Telat',data:otv.map(v=>v.telat),backgroundColor:'#e9852b',stack:'s'}]},
+        {indexAxis:'y',plugins:{legend:{position:'bottom'},title:{display:true,text:'On Time vs Telat per Vendor'}},scales:{x:{stacked:true,ticks:{precision:0}},y:{stacked:true}}});
+      presChart(cv[1],'bar',{labels:ifv.map(v=>v.vendor),datasets:[{label:'In Full',data:ifv.map(v=>v.in_full),backgroundColor:'#2f9e6f',stack:'s'},{label:'Kurang',data:ifv.map(v=>v.kurang),backgroundColor:'#e9852b',stack:'s'}]},
+        {indexAxis:'y',plugins:{legend:{position:'bottom'},title:{display:true,text:'In Full vs Kurang per Vendor'}},scales:{x:{stacked:true,ticks:{precision:0}},y:{stacked:true}}}); }});
   // 11. REJECT COST — SELALU FILTER SCM
   S.push({html:head(`Reject Cost (SCM) <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards c3">
