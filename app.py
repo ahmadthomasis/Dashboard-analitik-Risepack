@@ -3667,9 +3667,49 @@ def api_financial():
         t['npm'] = round(t['net_profit'] / t['revenue'] * 100, 1) if t['revenue'] else None
         return t
 
+    # ── Budget Planning: target (Q1 Budgetting) vs realita (Invoice) per bulan ──
+    def pnum(s):
+        s = str(s or '').replace('Rp', '').replace('%', '').replace(',', '').replace(' ', '').strip()
+        try:
+            return float(s) if s else 0.0
+        except Exception:
+            return 0.0
+    budget = []
+    bstart = None
+    for i, r in enumerate(grid):
+        if any('budget planning' in str(c).strip().lower() for c in r):
+            bstart = i; break
+    if bstart is not None and bstart + 2 < len(grid):
+        hdrb = grid[bstart]
+        ab_list = [m[1] for m in MONTHS]
+        bmonths = []  # (col, ab) — kolom header bulan = kolom Invoice
+        for c in range(len(hdrb)):
+            cvs = cell(hdrb, c)
+            for en, ab in MONTHS:
+                if cvs.startswith(en + ' 2026'):
+                    idx = ab_list.index(ab) + 1
+                    ms2 = datetime(2026, idx, 1).date()
+                    me2 = datetime(2026, idx, calendar.monthrange(2026, idx)[1]).date()
+                    if not ((d1 and me2 < d1) or (d2 and ms2 > d2)):
+                        bmonths.append((c, ab))
+                    break
+        LBL = ['Omzet', '%GM', 'Gross Margin', 'Gaji', 'Listrik&Wifi', 'Sewa Bangunan', 'Marketing',
+               'Operasional', 'Bonus', 'Deviasi(5%)', 'Opex Bulanan', '%Opex', 'NPM', '%NPM']
+        for i in range(bstart + 2, min(bstart + 40, len(grid))):
+            lab = cell(grid[i], 0)
+            if lab not in LBL:
+                continue
+            budget.append({
+                'label': lab,
+                'unit': '%' if lab.startswith('%') else 'Rp',
+                'target': pnum(cell(grid[i], 1)),
+                'actual': [{'bulan': ab, 'v': pnum(cell(grid[i], c))} for (c, ab) in bmonths],
+            })
+
     return jsonify({'months': months,
                     'total_invoice': totals('invoice'),
                     'total_po': totals('po'),
+                    'budget': budget,
                     'targets': cfg.get('financial_targets', {})})
 
 @app.route('/api/financial-debug')

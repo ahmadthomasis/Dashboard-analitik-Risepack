@@ -2645,6 +2645,16 @@ function presTgtVsReal(el,months,rows,title,unit){
       tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${tip(c.parsed.y)}`}}},
     scales:{y:{beginAtZero:true,ticks:{callback:ax}},x:{grid:{display:false}}}});
 }
+function presBudgetChart(el,labels,target,actuals,unit){
+  // garis realita (Invoice) bulanan + garis putus-putus target (budget/bulan). unit 'Rp' | '%'.
+  const isPct=unit==='%';
+  const ax=isPct?(v=>v+'%'):(v=>formatRpShort(v)), tip=isPct?(v=>v+'%'):(v=>formatRp(v));
+  presChart(el,'line',{labels:labels,datasets:[
+    {label:'Realita',data:actuals,borderColor:'#e9852b',backgroundColor:'#e9852b22',tension:.3,fill:false,pointRadius:3,pointBackgroundColor:'#fff',pointBorderColor:'#e9852b',pointBorderWidth:2,borderWidth:2.5},
+    {label:'Target',data:labels.map(()=>target),borderColor:'#9c8b74',borderDash:[8,5],pointRadius:0,borderWidth:2}
+  ]},{plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${tip(c.parsed.y)}`}}},
+     scales:{y:{beginAtZero:true,ticks:{callback:ax}},x:{grid:{display:false}}}});
+}
 function scoreRow(sc,id){ return ((sc&&sc.rows)||[]).find(r=>r.id===id)||{}; }
 function achBadge(pct,target){ const win=pct!=null&&pct>=target; return `<span class="ps-badge ${win?'ps-win':'ps-lose'}">${win?'win':'lose'}</span>`; }
 function pcard(l,v,d){ return `<div class="ps-card"><div class="l">${l}</div><div class="v">${v}</div>${d?`<div class="d">${d}</div>`:''}</div>`; }
@@ -3132,6 +3142,20 @@ function buildSlides(D){
         {label:'Tgt GPM',data:ms.map(()=>ft.gpm),borderColor:'#2f9e6f',borderDash:[5,4],pointRadius:0,borderWidth:1},
         {label:'Tgt NPM',data:ms.map(()=>ft.npm),borderColor:'#e9852b',borderDash:[5,4],pointRadius:0,borderWidth:1},
       ]},{plugins:{legend:{position:'bottom',labels:{boxWidth:8,font:{size:10}}},title:{display:true,text:'Tren Margin GPM & NPM (basis Invoice) vs Target'}},scales:{y:{ticks:{callback:v=>v+'%'}}}}); }});
+  // 16c. BUDGET PLANNING — TARGET vs REALITA (opex & P&L, basis Invoice)
+  const bud=((D.financial||{}).budget)||[];
+  const budGet=(labs)=>bud.filter(b=>labs.includes(b.label)).sort((a,b)=>labs.indexOf(a.label)-labs.indexOf(b.label));
+  const budOpex=budGet(['Gaji','Listrik&Wifi','Sewa Bangunan','Marketing','Operasional','Bonus','Deviasi(5%)','Opex Bulanan']);
+  const budPnl=budGet(['Omzet','Gross Margin','%GM','NPM','%NPM','%Opex']);
+  const budSlide=(title,items,note)=>({html:head(`${title} <span class="yr">${P.label}</span>`)+`<div class="ps-body">
+    <div class="ps-trgrid" style="grid-template-columns:repeat(4,1fr)">
+      ${items.map(b=>`<div class="ps-trcell"><div class="ps-trcap">${esc(b.label)}${b.unit==='%'?'':' <span style="font-weight:500;color:#8a7d70;font-size:12px">Rp</span>'}</div><div class="ps-trchart" style="height:18vh"><canvas></canvas></div></div>`).join('')}
+      <div class="ps-trcell ps-trlegend"><span class="d1"></span> Realita (Invoice) &nbsp;&nbsp; <span class="d2"></span> Target (budget)</div>
+    </div>
+    <div class="ps-note">${note}</div></div>`,
+    init:(sl)=>{ const cvs=sl.querySelectorAll('.ps-trchart canvas'); items.forEach((b,i)=>presBudgetChart(cvs[i],b.actual.map(a=>a.bulan),b.target,b.actual.map(a=>a.v),b.unit)); }});
+  if(budOpex.length) S.push(budSlide('Budget vs Realita — Biaya Operasional (Opex)',budOpex,'Garis = realita (Invoice) tiap bulan · garis putus-putus = target budget/bulan (Q1 Budgetting). Basis Invoice.'));
+  if(budPnl.length) S.push(budSlide('Budget vs Realita — Pendapatan, Margin & NPM',budPnl,'Target = Q1 Budgetting/bulan · realita = Invoice. Omzet/Gross Margin/NPM dalam Rp; %GM/%NPM/%Opex dalam persen.'));
   // 17. TOP PROBLEM & EVALUASI (editable)
   const pbKey='problem-'+P.label;
   S.push({html:head('Top Problem & Evaluasi')+`<div class="ps-body">
