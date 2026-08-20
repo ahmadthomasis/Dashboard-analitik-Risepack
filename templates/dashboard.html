@@ -272,6 +272,8 @@ table.ps-tab{width:100%;border-collapse:collapse;font-size:15px;}
 table.ps-tab th{background:#f5a623;color:#2a211b;font-weight:700;padding:11px 12px;text-align:left;border:1px solid #fff;}
 table.ps-tab td{padding:10px 12px;border:1px solid #ece5db;color:#3a3128;}
 table.ps-tab td.num{text-align:right;font-variant-numeric:tabular-nums;}
+table.ps-tab th, table.ps-tab td, table.ps-tab td.num{text-align:center;}
+table.ps-tab th{text-align:center;}
 .ps-scroll{max-height:58vh;overflow:auto;border-radius:10px;}
 .ps-scroll table.ps-tab th{position:sticky;top:0;z-index:2;}
 .ps-trgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:6px;}
@@ -2938,24 +2940,6 @@ function buildSlides(D){
     ${skoTop.map(r=>`<tr><td>${esc(r.nama)}</td><td class="num">${fmtInt(r.jml)}</td><td class="num" style="font-weight:600;color:${r.pct>=100?'#1c7a4f':(r.pct>=70?'#9c7a4a':'#a3392a')}">${r.pct}%</td></tr>`).join('')||'<tr><td colspan="3">Tidak ada data</td></tr>'}
     </tbody></table>
     <div class="ps-note">SKO 10x = target <b>tahunan</b> (akumulasi 1 tahun ${skoYear}). ${skoN?`<b>Kritis:</b> baru ${skoDone} dari ${skoN} customer (${skoDonePct}%) mencapai 10 SKO; rata-rata ${skoAvg}%. ${skoDonePct<50?'Mayoritas customer belum loyal — perlu program repeat order & follow-up terjadwal.':'Loyalitas cukup baik, dorong yang mendekati 10x.'}`:'Belum ada data SKO.'}</div></div>`});
-  // 10a2. SKO PER SALES (jumlah SKO per PIC, tahunan)
-  const skoSales=(D.skoSales||[]).slice().sort((a,b)=>(b.jml||0)-(a.jml||0));
-  const skoSalesTot=skoSales.reduce((s,r)=>s+(r.jml||0),0);
-  S.push({html:head(`SKO per Sales <span class="yr">Tahun ${skoYear}</span>`)+`<div class="ps-body">
-    <div class="ps-cards c3">
-      ${pcard('Total SKO',fmtInt(skoSalesTot),`${fmtInt(skoSales.length)} sales`)}
-      ${pcard('Sales Teratas',esc((skoSales[0]||{}).pic)||'–',skoSales[0]?fmtInt(skoSales[0].jml)+' SKO':'')}
-      ${pcard('Rata-rata / Sales',fmtInt(skoSales.length?Math.round(skoSalesTot/skoSales.length):0),'SKO per sales')}
-    </div>
-    <div class="ps-two" style="grid-template-columns:1.1fr 1fr">
-      <table class="ps-tab"><thead><tr><th>Sales (PIC)</th><th class="num">Jumlah SKO</th><th class="num">Customer</th><th class="num">Omzet</th></tr></thead><tbody>
-      ${skoSales.map(r=>`<tr><td>${esc(r.pic)}</td><td class="num" style="font-weight:600">${fmtInt(r.jml)}</td><td class="num">${fmtInt(r.customer)}</td><td class="num">${formatRp(r.omzet)}</td></tr>`).join('')||'<tr><td colspan="4">Tidak ada data</td></tr>'}
-      </tbody></table>
-      <div class="ps-chartbox"><canvas></canvas></div>
-    </div>
-    <div class="ps-note">Jumlah SKO (order unik) yang ditangani tiap sales sepanjang tahun ${skoYear}.</div></div>`,
-    init:(sl)=>{ presChart(sl.querySelector('canvas'),'bar',{labels:skoSales.map(r=>r.pic),datasets:[{data:skoSales.map(r=>r.jml),backgroundColor:'#e9852b',borderRadius:5,maxBarThickness:26}]},
-      {indexAxis:'y',plugins:{legend:{display:false},title:{display:true,text:'Jumlah SKO per Sales'}},scales:{x:{ticks:{precision:0}}}}); }});
   // 10a3. SKO 10x PER SALES — customer tiap PIC (gaya achievement, scrollable)
   const skoByPic={};
   (D.sko||[]).forEach(r=>{const p=r.pic||'(tanpa PIC)'; (skoByPic[p]||(skoByPic[p]=[])).push(r);});
@@ -3125,13 +3109,13 @@ function buildSlides(D){
   const gpmC=(ti.gpm!=null&&ft.gpm!=null)?(ti.gpm>=ft.gpm?'ps-win':'ps-lose'):'', npmC=(ti.npm!=null&&ft.npm!=null)?(ti.npm>=ft.npm?'ps-win':'ps-lose'):'';
   S.push({html:head(`Capaian Financial <span class="yr">${P.label}</span>`)+`<div class="ps-body">
     <div class="ps-cards">
-      ${pcard('Revenue (Invoice)',formatRp(ti.revenue),revAch!=null?`<span class="ps-badge ${revAch>=100?'ps-win':'ps-lose'}">${revAch}% target</span>`:`target ${formatRp(ft.revenue_bulanan)}/bln`)}
-      ${pcard('Revenue (PO)',formatRp(tp.revenue),poVsInv?`selisih ${formatRp(Math.abs(poVsInv))} vs invoice`:'')}
-      ${pcard('Gross Profit (Invoice)',formatRp(ti.gross_profit),`<span class="ps-badge ${gpmC}">GPM ${ti.gpm!=null?ti.gpm+'%':'–'}</span> tgt ${ft.gpm||'–'}%`)}
-      ${pcard('Net Profit (Invoice)',formatRp(ti.net_profit),`<span class="ps-badge ${npmC}">NPM ${ti.npm!=null?ti.npm+'%':'–'}</span> tgt ${ft.npm||'–'}%`)}
+      ${pcard('Revenue (Invoice)',formatRpFull(ti.revenue),revAch!=null?`<span class="ps-badge ${revAch>=100?'ps-win':'ps-lose'}">${revAch}% target</span>`:`target ${formatRpFull(ft.revenue_bulanan)}/bln`)}
+      ${pcard('Revenue (PO)',formatRpFull(tp.revenue),poVsInv?`selisih ${formatRpFull(Math.abs(poVsInv))} vs invoice`:'')}
+      ${pcard('Gross Profit (Invoice)',formatRpFull(ti.gross_profit),`<span class="ps-badge ${gpmC}">GPM ${ti.gpm!=null?ti.gpm+'%':'–'}</span> tgt ${ft.gpm||'–'}%`)}
+      ${pcard('Net Profit (Invoice)',formatRpFull(ti.net_profit),`<span class="ps-badge ${npmC}">NPM ${ti.npm!=null?ti.npm+'%':'–'}</span> tgt ${ft.npm||'–'}%`)}
     </div>
     ${ms.length?`<table class="ps-tab"><thead><tr><th>Bulan</th><th class="num">Rev Invoice</th><th class="num">Rev PO</th><th class="num">Gross Profit (Inv)</th><th class="num">Net Profit (Inv)</th><th class="num">NPM (Inv)</th></tr></thead><tbody>
-      ${ms.map(m=>`<tr><td>${esc(m.bulan||'')}</td><td class="num">${formatRp(m.invoice.revenue)}</td><td class="num">${formatRp(m.po.revenue)}</td><td class="num">${formatRp(m.invoice.gross_profit)}</td><td class="num">${formatRp(m.invoice.net_profit)}</td><td class="num">${m.invoice.npm!=null?m.invoice.npm+'%':'–'}</td></tr>`).join('')}</tbody></table>`:'<div class="ps-note">Detail P&L per bulan tidak tersedia (cek financial_csv_url).</div>'}
+      ${ms.map(m=>`<tr><td>${esc(m.bulan||'')}</td><td class="num">${formatRpFull(m.invoice.revenue)}</td><td class="num">${formatRpFull(m.po.revenue)}</td><td class="num">${formatRpFull(m.invoice.gross_profit)}</td><td class="num">${formatRpFull(m.invoice.net_profit)}</td><td class="num">${m.invoice.npm!=null?m.invoice.npm+'%':'–'}</td></tr>`).join('')}</tbody></table>`:'<div class="ps-note">Detail P&L per bulan tidak tersedia (cek financial_csv_url).</div>'}
     <div class="ps-note"><b>Revenue</b> = pendapatan. <b>Invoice</b> = yang sudah ditagih (basis P&L). <b>PO</b> = nilai order masuk (belum tentu tertagih). <b>Gross Profit, Net Profit, GPM & NPM semuanya dihitung dari INVOICE</b> (Rev Invoice − COGS = Gross Profit; setelah opex = Net Profit). Sumber: Google Sheet P&L PT BBI.</div></div>`});
   // 16b. FINANCIAL — Analisa (kritis, PO vs Invoice + margin)
   S.push({html:head(`Analisa Financial <span class="yr">${P.label}</span>`)+`<div class="ps-body">
@@ -3229,11 +3213,11 @@ function autoConclusion(D){
 function finAnalysis(D,nMonths){
   const fn=D.financial||{}, ti=fn.total_invoice||{}, tp=fn.total_po||{}, ft=fn.targets||{}, out=[];
   const revT=(ft.revenue_bulanan||0)*nMonths;
-  if(ti.revenue!=null&&revT){ const a=Math.round(ti.revenue/revT*1000)/10; out.push(`Revenue (Invoice) <b>${formatRp(ti.revenue)}</b> = ${a}% dari target ${formatRp(revT)} — ${a>=100?'tercapai (surplus '+formatRp(ti.revenue-revT)+')':'kurang '+formatRp(revT-ti.revenue)}.`); }
+  if(ti.revenue!=null&&revT){ const a=Math.round(ti.revenue/revT*1000)/10; out.push(`Revenue (Invoice) <b>${formatRpFull(ti.revenue)}</b> = ${a}% dari target ${formatRpFull(revT)} — ${a>=100?'tercapai (surplus '+formatRpFull(ti.revenue-revT)+')':'kurang '+formatRpFull(revT-ti.revenue)}.`); }
   if(ti.gpm!=null&&ft.gpm!=null){ const g=Math.round((ti.gpm-ft.gpm)*10)/10; out.push(`Gross Profit Margin <b>${ti.gpm}%</b> vs target ${ft.gpm}% → ${g>=0?'di atas target +'+g:'di bawah target '+g} poin.`); }
-  if(ti.npm!=null&&ft.npm!=null){ const g=Math.round((ti.npm-ft.npm)*10)/10; out.push(`Net Profit Margin <b>${ti.npm}%</b> vs target ${ft.npm}% → ${g>=0?'di atas target +'+g:'di bawah target '+g} poin (net profit ${formatRp(ti.net_profit)}).`); }
-  if(tp.revenue!=null&&ti.revenue!=null){ const d=(tp.revenue||0)-(ti.revenue||0); out.push(`Revenue PO ${formatRp(tp.revenue)} vs Invoice ${formatRp(ti.revenue)} — selisih <b>${formatRp(Math.abs(d))}</b> ${d>0?'(nilai PO lebih besar: ada order belum ter-invoice/tertagih)':(d<0?'(Invoice lebih besar dari PO)':'(sama)')}.`); }
-  if(ti.cogs&&ti.revenue){ out.push(`COGS ${formatRp(ti.cogs)} = ${Math.round(ti.cogs/ti.revenue*1000)/10}% dari revenue.`); }
+  if(ti.npm!=null&&ft.npm!=null){ const g=Math.round((ti.npm-ft.npm)*10)/10; out.push(`Net Profit Margin <b>${ti.npm}%</b> vs target ${ft.npm}% → ${g>=0?'di atas target +'+g:'di bawah target '+g} poin (net profit ${formatRpFull(ti.net_profit)}).`); }
+  if(tp.revenue!=null&&ti.revenue!=null){ const d=(tp.revenue||0)-(ti.revenue||0); out.push(`Revenue PO ${formatRpFull(tp.revenue)} vs Invoice ${formatRpFull(ti.revenue)} — selisih <b>${formatRpFull(Math.abs(d))}</b> ${d>0?'(nilai PO lebih besar: ada order belum ter-invoice/tertagih)':(d<0?'(Invoice lebih besar dari PO)':'(sama)')}.`); }
+  if(ti.cogs&&ti.revenue){ out.push(`COGS ${formatRpFull(ti.cogs)} = ${Math.round(ti.cogs/ti.revenue*1000)/10}% dari revenue.`); }
   return out;
 }
 
