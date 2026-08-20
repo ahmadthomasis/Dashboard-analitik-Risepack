@@ -3672,6 +3672,33 @@ def api_financial():
                     'total_po': totals('po'),
                     'targets': cfg.get('financial_targets', {})})
 
+@app.route('/api/financial-debug')
+@manager_only
+def api_financial_debug():
+    """Dump baris blok 'Budget Planning' dari sheet P&L (dgn indeks kolom) supaya
+       struktur opex/target bisa dipetakan tepat sebelum dibuatkan grafik."""
+    cfg = load_kpi_config()
+    url = cfg.get('financial_csv_url')
+    if not url:
+        return jsonify({'_error': 'financial_csv_url belum diisi.'}), 200
+    try:
+        grid = _fetch_csv_grid(url)
+    except Exception as e:
+        return jsonify({'_error': str(e)}), 200
+    start = None
+    for i, r in enumerate(grid):
+        if any('budget planning' in str(c).strip().lower() for c in r):
+            start = i; break
+    if start is None:
+        for i, r in enumerate(grid):
+            if any(str(c).strip().lower() == 'gaji' for c in r):
+                start = max(0, i - 3); break
+    if start is None:
+        return jsonify({'_error': 'Blok Budget Planning tidak ditemukan', 'total_rows': len(grid)}), 200
+    block = [{'row': i, 'cells': [str(c).strip() for c in grid[i]]}
+             for i in range(start, min(start + 24, len(grid)))]
+    return jsonify({'start_row': start, 'total_rows': len(grid), 'block': block})
+
 
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
