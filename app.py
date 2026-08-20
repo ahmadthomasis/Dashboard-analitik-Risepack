@@ -2252,6 +2252,7 @@ def api_sko_achievement():
     cond, params = build_where(None, None, pic, divisi)
     sql = f"""
         SELECT MAX(o.nama) AS nama,
+               MAX(o.name) AS pic,
                COUNT(DISTINCT o.sko_key) AS jml
         {BASE}
         AND o.status_deal='Deal' AND o.id_customer IS NOT NULL
@@ -2262,7 +2263,7 @@ def api_sko_achievement():
         LIMIT 2000
     """
     rows = query(sql, [tahun] + params)
-    return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
+    return jsonify([{'nama': r['nama'], 'pic': r['pic'] or '(tanpa PIC)', 'jml': int(r['jml'] or 0)} for r in rows])
 
 @app.route('/api/sko-by-sales')
 @login_required
