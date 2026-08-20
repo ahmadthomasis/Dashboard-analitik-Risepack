@@ -2264,6 +2264,28 @@ def api_sko_achievement():
     rows = query(sql, [tahun] + params)
     return jsonify([{'nama': r['nama'], 'jml': int(r['jml'] or 0)} for r in rows])
 
+@app.route('/api/sko-by-sales')
+@login_required
+def api_sko_by_sales():
+    """Jumlah SKO (distinct sko_key) per SALES/PIC — tahunan (sejalan dgn SKO achievement)."""
+    tgl_dari, tgl_sampai, pic, divisi = get_args()
+    tahun = (tgl_dari or datetime.now().strftime('%Y-%m-%d'))[:4]
+    cond, params = build_where(None, None, pic, divisi)
+    sql = f"""
+        SELECT o.name AS pic,
+               COUNT(DISTINCT o.sko_key) AS jml,
+               COUNT(DISTINCT o.id_customer) AS customer,
+               SUM(o.total_harga) AS omzet
+        {BASE}
+        AND o.status_deal='Deal' AND o.name IS NOT NULL AND o.name <> ''
+        AND YEAR(o.tgl_omzet_realtime) = %s
+        {cond}
+        GROUP BY o.name ORDER BY jml DESC
+    """
+    rows = query(sql, [tahun] + params)
+    return jsonify([{'pic': r['pic'], 'jml': int(r['jml'] or 0),
+                     'customer': int(r['customer'] or 0), 'omzet': float(r['omzet'] or 0)} for r in rows])
+
 @app.route('/api/customer-margin')
 @login_required
 def api_customer_margin():
